@@ -19,22 +19,18 @@ struct 一键日历App: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
     
     var body: some Scene {
-        Window("一键日历", id: "main") {
+        Window(NSLocalizedString("app_name", comment: ""), id: "main") {
             ContentView()
-                .frame(width: 400, height: 500)
+                .frame(width: 400, height: 600)
         }
         .windowResizability(.contentSize)
         .commands {
-            CommandMenu("操作") {
-                Button("创建复习计划") {
+            CommandMenu(NSLocalizedString("command_menu", comment: "")) {
+                Button(NSLocalizedString("create_review_schedule", comment: "")) {
                     NotificationCenter.default.post(name: .createReviewSchedule, object: nil)
                 }
                 .keyboardShortcut(KeyEquivalent.return, modifiers: .command)
             }
         }
     }
-}
-
-extension Notification.Name {
-    static let createReviewSchedule = Notification.Name("createReviewSchedule")
 }

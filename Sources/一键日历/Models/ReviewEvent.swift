@@ -1,27 +1,34 @@
 import Foundation
 
-struct ReviewEvent: Identifiable {
+struct ReviewEvent: Identifiable, Codable {
     let id = UUID()
     let title: String
     let baseDate: Date
     let reviewDates: [Date]
     let notes: [String]
     
-    init(title: String, baseDate: Date) {
+    init(title: String, baseDate: Date, intervals: [Int] = [3, 7, 30]) {
         self.title = title
         self.baseDate = baseDate
-        
+        self.reviewDates = ReviewEvent.calculateReviewDates(from: baseDate, intervals: intervals)
+        self.notes = intervals.enumerated().map { index, _ in
+            "第\(index + 1)次复习"
+        }
+    }
+    
+    static func calculateReviewDates(from baseDate: Date, intervals: [Int] = [3, 7, 30]) -> [Date] {
         let calendar = Calendar.current
-        self.reviewDates = [
-            calendar.date(byAdding: .day, value: 3, to: baseDate)!,
-            calendar.date(byAdding: .day, value: 7, to: baseDate)!,
-            calendar.date(byAdding: .day, value: 30, to: baseDate)!
-        ]
+        var dates: [Date] = []
         
-        self.notes = [
-            "第1次复习",
-            "第2次复习",
-            "第3次复习"
-        ]
+        for interval in intervals {
+            if let date = calendar.date(byAdding: .day, value: interval, to: baseDate) {
+                dates.append(date)
+            } else {
+                // 如果日期计算失败，记录错误并跳过
+                print("Warning: Failed to calculate date for interval \(interval) from \(baseDate)")
+            }
+        }
+        
+        return dates
     }
 }

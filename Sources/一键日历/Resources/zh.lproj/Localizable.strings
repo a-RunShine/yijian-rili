@@ -8,6 +8,8 @@
 
 // App
 "app_name" = "一键日历";
+"command_menu" = "操作";
+"create_review_schedule" = "创建复习计划";
 
 // ContentView
 "title" = "标题";
@@ -17,12 +19,30 @@
 "create_button" = "一键创建";
 "enter_title" = "输入复习内容";
 "empty_title_error" = "请输入标题";
+"title_too_long_error" = "标题长度不能超过100个字符";
 "permission_required" = "需要日历权限才能创建日程";
 "permission_denied" = "日历权限被拒绝，请在系统设置中开启";
 "open_settings" = "打开系统设置开启权限";
-"success_message" = "成功创建3个复习日程：%@";
+"success_message" = "成功创建 %@ 个复习日程";
 "warning_message" = "创建成功！注意以下日期已有同名日程：%@";
 "error_message" = "部分创建失败：%@";
+
+// Undo
+"undo_button" = "撤销";
+"undo_success" = "成功撤销%@个日程";
+"undo_partial" = "%@个日程已被删除或不存在";
+
+// History
+"history_title" = "历史记录";
+"no_history" = "暂无历史记录";
+"clear_history" = "清除";
+
+// Interval Settings
+"interval_settings_title" = "复习间隔";
+"interval_day_label" = "第%@次";
+"save_intervals" = "保存";
+"reset_intervals" = "恢复默认";
+"interval_invalid" = "间隔必须为正整数";
 
 // CalendarManager
 "default_calendar_unavailable" = "系统默认日历不可用，请检查日历设置";
