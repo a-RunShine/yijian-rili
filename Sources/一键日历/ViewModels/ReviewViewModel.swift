@@ -14,8 +14,14 @@ class ReviewViewModel: ObservableObject {
     @Published var canUndo: Bool = false
     @Published var showHistory: Bool = false
     @Published var showIntervalSettings: Bool = false
+    @Published var currentTheme: Theme = {
+        let rawValue = UserDefaults.standard.string(forKey: "themeName") ?? Theme.light.rawValue
+        return Theme(rawValue: rawValue) ?? .light
+    }()
     
+    /// JSON 编码的复习间隔数组，默认 [3, 7, 30]
     @AppStorage("reviewIntervalsData") private var reviewIntervalsData: String = "[3,7,30]"
+    /// JSON 编码的历史记录数组
     @AppStorage("historyEntriesData") private var historyEntriesData: String = ""
     
     var reviewIntervals: [Int] {
@@ -85,6 +91,11 @@ class ReviewViewModel: ObservableObject {
         reviewDates = ReviewEvent.calculateReviewDates(from: baseDate, intervals: reviewIntervals)
     }
     
+    /// 主流程：创建复习提醒日程
+    /// 1. 校验标题（非空、≤100字符）
+    /// 2. 检查/请求日历权限
+    /// 3. 调用 CalendarManager 创建事件
+    /// 4. 处理结果并更新 UI
     func createReviewSchedule() async {
         let trimmedTitle = title.trimmingCharacters(in: .whitespaces)
         
@@ -155,6 +166,7 @@ class ReviewViewModel: ObservableObject {
         }
     }
     
+    /// 撤销最近一次创建的复习日程
     func undoReviewSchedule() async {
         let (success, deletedCount, alreadyDeletedCount) = await calendarManager.undoLastCreation()
         
@@ -210,6 +222,13 @@ class ReviewViewModel: ObservableObject {
     
     func validateIntervals(_ intervals: [Int]) -> Bool {
         return intervals.allSatisfy { $0 >= 1 }
+    }
+    
+    // MARK: - Theme
+    
+    func setTheme(_ theme: Theme) {
+        currentTheme = theme
+        UserDefaults.standard.set(theme.rawValue, forKey: "themeName")
     }
 }
 

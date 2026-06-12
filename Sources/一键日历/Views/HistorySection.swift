@@ -4,7 +4,7 @@ struct HistorySection: View {
     @ObservedObject var viewModel: ReviewViewModel
     
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 12) {
             HStack {
                 Text(NSLocalizedString("history_title", comment: ""))
                     .font(.headline)
@@ -16,6 +16,13 @@ struct HistorySection: View {
                     .buttonStyle(.borderless)
                     .controlSize(.small)
                 }
+                Button(action: {
+                    viewModel.showHistory = false
+                }) {
+                    Image(systemName: "xmark.circle.fill")
+                        .foregroundColor(.secondary)
+                }
+                .buttonStyle(.borderless)
             }
             
             if viewModel.historyEntries.isEmpty {
@@ -50,11 +57,8 @@ struct HistorySection: View {
                         }
                     }
                 }
-                .frame(maxHeight: 150)
             }
         }
         .padding()
-        .background(Color.secondary.opacity(0.1))
-        .cornerRadius(8)
     }
 }

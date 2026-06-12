@@ -45,7 +45,7 @@ struct IntervalSettingsSection: View {
             }
         }
         .padding()
-        .background(Color.secondary.opacity(0.1))
+        .background(viewModel.currentTheme.cardBackgroundColor)
         .cornerRadius(8)
         .onAppear {
             tempIntervals = viewModel.reviewIntervals.map { String($0) }

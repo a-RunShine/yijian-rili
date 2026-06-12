@@ -36,6 +36,12 @@
 "history_title" = "历史记录";
 "no_history" = "暂无历史记录";
 "clear_history" = "清除";
+"history_button" = "查看历史记录";
+
+// Theme
+"theme_light" = "浅色";
+"theme_dark" = "深色";
+"theme_letter_paper" = "信纸";
 
 // Interval Settings
 "interval_settings_title" = "复习间隔";
