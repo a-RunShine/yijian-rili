@@ -2,11 +2,11 @@ import SwiftUI
 
 struct HistorySection: View {
     @ObservedObject var viewModel: ReviewViewModel
-    
+
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
-                Text(NSLocalizedString("history_title", comment: ""))
+                Label(NSLocalizedString("history_title", comment: ""), systemImage: "clock.arrow.circlepath")
                     .font(.headline)
                 Spacer()
                 if !viewModel.historyEntries.isEmpty {
@@ -24,7 +24,7 @@ struct HistorySection: View {
                 }
                 .buttonStyle(.borderless)
             }
-            
+
             if viewModel.historyEntries.isEmpty {
                 Text(NSLocalizedString("empty_history_hint", comment: ""))
                     .font(.caption)
@@ -34,10 +34,10 @@ struct HistorySection: View {
                 TextField(NSLocalizedString("search_history", comment: ""), text: $viewModel.historySearchText)
                     .textFieldStyle(RoundedBorderTextFieldStyle())
                     .controlSize(.small)
-                
+
                 ScrollView {
-                    VStack(spacing: 8) {
-                        ForEach(viewModel.filteredHistoryEntries) { entry in
+                    VStack(spacing: 0) {
+                        ForEach(Array(viewModel.filteredHistoryEntries.enumerated()), id: \.element.id) { index, entry in
                             HStack {
                                 Button(action: {
                                     viewModel.selectHistoryEntry(entry)
@@ -57,7 +57,7 @@ struct HistorySection: View {
                                     }
                                 }
                                 .buttonStyle(PlainButtonStyle())
-                                
+
                                 Button(action: {
                                     deleteEntry(entry)
                                 }) {
@@ -67,9 +67,11 @@ struct HistorySection: View {
                                 .buttonStyle(.borderless)
                                 .help(NSLocalizedString("delete_history", comment: ""))
                             }
-                            .padding(.vertical, 4)
-                            
-                            Divider()
+                            .padding(.vertical, 6)
+
+                            if index < viewModel.filteredHistoryEntries.count - 1 {
+                                Divider()
+                            }
                         }
                     }
                 }
@@ -77,7 +79,7 @@ struct HistorySection: View {
         }
         .padding()
     }
-    
+
     private func deleteEntry(_ entry: HistoryEntry) {
         var entries = viewModel.historyEntries
         if let index = entries.firstIndex(where: { $0.id == entry.id }) {

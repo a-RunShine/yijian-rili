@@ -2,10 +2,10 @@ import SwiftUI
 
 struct ContentView: View {
     @EnvironmentObject var viewModel: ReviewViewModel
-    
+
     var body: some View {
         ScrollView {
-            VStack(spacing: 16) {
+            VStack(spacing: 14) {
                 // Title + Theme Picker
                 HStack {
                     Text(NSLocalizedString("app_name", comment: ""))
@@ -23,28 +23,29 @@ struct ContentView: View {
                     }
                     .labelsHidden()
                     .pickerStyle(.menu)
-                    .frame(width: 100)
+                    .frame(width: 110)
                 }
-                
+
                 // Today Events
                 TodayEventsSection(viewModel: viewModel)
-                
+
                 // Title Input
                 TitleInputSection(viewModel: viewModel)
-                
+
                 // Date Picker
                 DatePickerSection(viewModel: viewModel)
-                
+
                 // Review Preview
                 ReviewPreviewSection(viewModel: viewModel)
-                
-                // History Button
+
+                // History Button (card-style)
                 Button(action: {
                     viewModel.showHistory = true
                 }) {
                     HStack {
                         Image(systemName: "clock.arrow.circlepath")
                         Text(NSLocalizedString("history_button", comment: ""))
+                            .font(.subheadline)
                         Spacer()
                         if !viewModel.historyEntries.isEmpty {
                             Text("\(viewModel.historyEntries.count)")
@@ -57,12 +58,14 @@ struct ContentView: View {
                         }
                     }
                 }
-                .buttonStyle(.bordered)
-                .controlSize(.small)
-                
+                .buttonStyle(.plain)
+                .padding()
+                .background(viewModel.currentTheme.cardBackgroundColor)
+                .cornerRadius(10)
+
                 // Interval Settings
                 IntervalSettingsSection(viewModel: viewModel)
-                
+
                 // Actions
                 ActionSection(viewModel: viewModel)
             }

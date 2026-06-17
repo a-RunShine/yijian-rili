@@ -31,11 +31,11 @@ extension Theme {
     /// 卡片背景色（非 Optional，所有主题都有）
     var cardBackgroundColor: Color {
         switch self {
-        case .light: return Color.secondary.opacity(0.1)
-        case .dark: return Color.secondary.opacity(0.15)
+        case .light: return Color.secondary.opacity(0.12)
+        case .dark: return Color.secondary.opacity(0.18)
         case .letterPaper: return Color(red: 0.91, green: 0.86, blue: 0.78).opacity(0.5)
         case .claude: return Color(red: 0.980, green: 0.976, blue: 0.961)
-        case .system: return Color.secondary.opacity(0.1)
+        case .system: return Color.secondary.opacity(0.12)
         }
     }
 

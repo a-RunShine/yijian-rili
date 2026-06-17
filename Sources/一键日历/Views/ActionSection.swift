@@ -2,9 +2,9 @@ import SwiftUI
 
 struct ActionSection: View {
     @ObservedObject var viewModel: ReviewViewModel
-    
+
     var body: some View {
-        VStack(spacing: 12) {
+        VStack(spacing: 10) {
             // Create Button
             Button(action: {
                 Task {
@@ -28,31 +28,32 @@ struct ActionSection: View {
             .controlSize(.large)
             .tint(viewModel.currentTheme.accentColor ?? .accentColor)
             .disabled(viewModel.isLoading)
-            
-            // Recreate Button
-            if viewModel.canRecreate {
-                Button(action: {
-                    viewModel.recreateLastSchedule()
-                }) {
-                    Label(NSLocalizedString("recreate_button", comment: ""), systemImage: "arrow.clockwise")
-                }
-                .buttonStyle(.bordered)
-                .controlSize(.small)
-            }
-            
-            // Undo Button
-            if viewModel.canUndo {
-                Button(action: {
-                    Task {
-                        await viewModel.undoReviewSchedule()
+
+            // Recreate + Undo in a row
+            HStack(spacing: 10) {
+                if viewModel.canRecreate {
+                    Button(action: {
+                        viewModel.recreateLastSchedule()
+                    }) {
+                        Label(NSLocalizedString("recreate_button", comment: ""), systemImage: "arrow.clockwise")
                     }
-                }) {
-                    Text(NSLocalizedString("undo_button", comment: ""))
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
                 }
-                .buttonStyle(.bordered)
-                .controlSize(.small)
+
+                if viewModel.canUndo {
+                    Button(action: {
+                        Task {
+                            await viewModel.undoReviewSchedule()
+                        }
+                    }) {
+                        Label(NSLocalizedString("undo_button", comment: ""), systemImage: "arrow.uturn.backward")
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                }
             }
-            
+
             // Result Message
             if let message = viewModel.resultMessage, let type = viewModel.resultType {
                 let (icon, color, bg): (String, Color, Color) = {
@@ -62,7 +63,7 @@ struct ActionSection: View {
                     case .error: return ("xmark.circle.fill", .red, Color.red.opacity(0.1))
                     }
                 }()
-                HStack {
+                HStack(spacing: 6) {
                     Image(systemName: icon)
                     Text(message)
                         .font(.callout)
@@ -71,8 +72,9 @@ struct ActionSection: View {
                 .padding()
                 .background(bg)
                 .cornerRadius(8)
+                .transition(.opacity.combined(with: .move(edge: .bottom)))
             }
-            
+
             // Permission denied button
             if viewModel.authorizationStatus == .denied {
                 Button(NSLocalizedString("open_settings", comment: "")) {
@@ -82,5 +84,8 @@ struct ActionSection: View {
                 .controlSize(.small)
             }
         }
+        .animation(.easeInOut(duration: 0.25), value: viewModel.resultMessage != nil)
+        .animation(.easeInOut(duration: 0.25), value: viewModel.canRecreate)
+        .animation(.easeInOut(duration: 0.25), value: viewModel.canUndo)
     }
 }

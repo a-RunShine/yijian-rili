@@ -2,27 +2,34 @@ import SwiftUI
 
 struct ReviewPreviewSection: View {
     @ObservedObject var viewModel: ReviewViewModel
-    
+
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text(NSLocalizedString("review_plan", comment: ""))
+            Label(NSLocalizedString("review_plan", comment: ""), systemImage: "list.bullet.rectangle")
                 .font(.headline)
-            
+
             ForEach(Array(viewModel.reviewDates.enumerated()), id: \.element) { index, date in
                 HStack {
                     Text(String(format: NSLocalizedString("review_count", comment: ""), "\(index + 1)"))
+                        .font(.subheadline)
                     Spacer()
-                    Text("\(date.formattedChinese())（\(daysFromToday(date))）")
-                        .foregroundColor(viewModel.currentTheme.secondaryTextColor ?? .secondary)
+                    VStack(alignment: .trailing, spacing: 1) {
+                        Text(date.formattedChinese())
+                            .font(.subheadline)
+                            .fontWeight(.medium)
+                        Text(daysFromToday(date))
+                            .font(.caption2)
+                            .foregroundColor(viewModel.currentTheme.secondaryTextColor ?? .secondary)
+                    }
                 }
                 .padding(.vertical, 4)
             }
         }
         .padding()
         .background(viewModel.currentTheme.cardBackgroundColor)
-        .cornerRadius(8)
+        .cornerRadius(10)
     }
-    
+
     private func daysFromToday(_ date: Date) -> String {
         let calendar = Calendar.current
         let today = calendar.startOfDay(for: Date())
