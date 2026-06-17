@@ -44,6 +44,33 @@
 "theme_letter_paper" = "信纸";
 "theme_claude" = "Claude";
 "theme_system" = "跟随系统";
+
+// Today Events
+"today_events" = "今日日程";
+"today_no_events" = "今天暂无日程";
+"all_day" = "全天";
+"untitled" = "无标题";
+"more_events" = "还有 %@ 个日程";
+
+// Date
+"today_button" = "今天";
+"tomorrow_button" = "明天";
+"today" = "今天";
+"days_later" = "%@天后";
+"days_ago" = "%@天前";
+
+// Recreate
+"recreate_button" = "再建一个";
+
+// Interval Presets
+"preset_classic" = "经典艾宾浩斯";
+"preset_exam" = "考试冲刺";
+"preset_daily" = "日常复习";
+
+// History
+"empty_history_hint" = "还没有复习记录，创建第一个吧";
+"search_history" = "搜索历史记录";
+"delete_history" = "删除";
 "theme_claude" = "Claude";
 "theme_system" = "跟随系统";
 "theme_claude" = "Claude";

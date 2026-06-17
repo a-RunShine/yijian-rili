@@ -10,8 +10,20 @@ struct IntervalSettingsSection: View {
             Text(NSLocalizedString("interval_settings_title", comment: ""))
                 .font(.headline)
             
+            // 间隔预设
+            HStack(spacing: 8) {
+                ForEach(IntervalPreset.allCases, id: \.self) { preset in
+                    Button(preset.displayName) {
+                        viewModel.applyPreset(preset)
+                        tempIntervals = viewModel.reviewIntervals.map { String($0) }
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                }
+            }
+            
             HStack(spacing: 16) {
-                ForEach(0..<3, id: \.self) { index in
+                ForEach(0..<tempIntervals.count, id: \.self) { index in
                     VStack(spacing: 4) {
                         Text(String(format: NSLocalizedString("interval_day_label", comment: ""), "\(index + 1)"))
                             .font(.caption)
@@ -56,7 +68,7 @@ struct IntervalSettingsSection: View {
     private func saveIntervals() {
         let intervals = tempIntervals.compactMap { Int($0) }
         
-        guard intervals.count == 3, viewModel.validateIntervals(intervals) else {
+        guard !intervals.isEmpty, intervals.count == tempIntervals.count, viewModel.validateIntervals(intervals) else {
             showError = true
             return
         }

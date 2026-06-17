@@ -15,14 +15,30 @@ struct ActionSection: View {
                     ProgressView()
                         .progressViewStyle(CircularProgressViewStyle())
                 } else {
-                    Text(NSLocalizedString("create_button", comment: ""))
-                        .font(.headline)
+                    HStack(spacing: 4) {
+                        Text(NSLocalizedString("create_button", comment: ""))
+                            .font(.headline)
+                        Text("⌘↵")
+                            .font(.caption)
+                            .opacity(0.7)
+                    }
                 }
             }
             .buttonStyle(.borderedProminent)
             .controlSize(.large)
             .tint(viewModel.currentTheme.accentColor ?? .accentColor)
             .disabled(viewModel.isLoading)
+            
+            // Recreate Button
+            if viewModel.canRecreate {
+                Button(action: {
+                    viewModel.recreateLastSchedule()
+                }) {
+                    Label(NSLocalizedString("recreate_button", comment: ""), systemImage: "arrow.clockwise")
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+            }
             
             // Undo Button
             if viewModel.canUndo {
@@ -39,14 +55,21 @@ struct ActionSection: View {
             
             // Result Message
             if let message = viewModel.resultMessage, let type = viewModel.resultType {
+                let (icon, color, bg): (String, Color, Color) = {
+                    switch type {
+                    case .success: return ("checkmark.circle.fill", .green, Color.green.opacity(0.1))
+                    case .warning: return ("exclamationmark.triangle.fill", .orange, Color.orange.opacity(0.1))
+                    case .error: return ("xmark.circle.fill", .red, Color.red.opacity(0.1))
+                    }
+                }()
                 HStack {
-                    Image(systemName: type == .success ? "checkmark.circle.fill" : type == .warning ? "exclamationmark.triangle.fill" : "xmark.circle.fill")
+                    Image(systemName: icon)
                     Text(message)
                         .font(.callout)
                 }
-                .foregroundColor(type == .success ? .green : type == .warning ? .orange : .red)
+                .foregroundColor(color)
                 .padding()
-                .background(type == .success ? Color.green.opacity(0.1) : type == .warning ? Color.orange.opacity(0.1) : Color.red.opacity(0.1))
+                .background(bg)
                 .cornerRadius(8)
             }
             

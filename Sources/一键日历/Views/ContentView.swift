@@ -26,6 +26,9 @@ struct ContentView: View {
                     .frame(width: 100)
                 }
                 
+                // Today Events
+                TodayEventsSection(viewModel: viewModel)
+                
                 // Title Input
                 TitleInputSection(viewModel: viewModel)
                 

@@ -14,6 +14,13 @@ extension DateFormatter {
         formatter.locale = Locale(identifier: "zh_CN")
         return formatter
     }()
+    
+    static let timeOnly: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "HH:mm"
+        formatter.locale = Locale(identifier: "zh_CN")
+        return formatter
+    }()
 }
 
 extension Date {
@@ -25,5 +32,10 @@ extension Date {
     /// 格式化为短格式：MM-dd
     func formattedShort() -> String {
         return DateFormatter.shortDate.string(from: self)
+    }
+    
+    /// 格式化为时间：HH:mm
+    func formattedTime() -> String {
+        return DateFormatter.timeOnly.string(from: self)
     }
 }

@@ -71,6 +71,13 @@ class CalendarManager: ObservableObject {
                 event.notes = noteText
                 event.calendar = defaultCalendar
                 
+                // 当天 9:00 提醒
+                let alarm = EKAlarm()
+                if let alarmDate = self.alarmDate(for: reviewDate) {
+                    alarm.absoluteDate = alarmDate
+                    event.alarms = [alarm]
+                }
+                
                 try eventStore.save(event, span: .thisEvent)
                 created.append(reviewDate)
                 
@@ -123,10 +130,6 @@ class CalendarManager: ObservableObject {
         return (success, deletedCount, alreadyDeletedCount)
     }
     
-    func clearLastCreatedIdentifiers() {
-        lastCreatedEventIdentifiers = []
-    }
-    
     private func checkDuplicate(title: String, date: Date, notes: String) throws -> Bool {
         let calendar = Calendar.current
         let startOfDay = calendar.startOfDay(for: date)
@@ -138,6 +141,37 @@ class CalendarManager: ObservableObject {
         let events = eventStore.events(matching: predicate)
         
         return events.contains { $0.title == title && $0.notes == notes }
+    }
+    
+    /// 生成当天 9:00 的提醒时间
+    private func alarmDate(for date: Date) -> Date? {
+        let calendar = Calendar.current
+        let startOfDay = calendar.startOfDay(for: date)
+        return calendar.date(bySettingHour: 9, minute: 0, second: 0, of: startOfDay)
+    }
+    
+    /// 读取今天的事件（所有日历）
+    func fetchTodayEvents() -> [EKEvent] {
+        // 实时检查权限，不依赖缓存
+        let status = EKEventStore.authorizationStatus(for: .event)
+        guard status == .fullAccess else {
+            logger.info("fetchTodayEvents skipped: status = \(String(describing: status))")
+            return []
+        }
+        let calendar = Calendar.current
+        let startOfDay = calendar.startOfDay(for: Date())
+        guard let endOfDay = calendar.date(byAdding: .day, value: 1, to: startOfDay) else {
+            return []
+        }
+        let predicate = eventStore.predicateForEvents(withStart: startOfDay, end: endOfDay, calendars: nil)
+        let events = eventStore.events(matching: predicate)
+        logger.info("fetchTodayEvents: found \(events.count) events")
+        return events.sorted { (a, b) -> Bool in
+            if a.isAllDay != b.isAllDay {
+                return a.isAllDay && !b.isAllDay
+            }
+            return a.startDate < b.startDate
+        }
     }
 }
 

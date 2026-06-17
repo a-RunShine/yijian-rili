@@ -1,5 +1,6 @@
 import Foundation
 import SwiftUI
+import AppKit
 import EventKit
 
 @MainActor
@@ -12,12 +13,18 @@ class ReviewViewModel: ObservableObject {
     @Published var resultMessage: String?
     @Published var resultType: ResultType?
     @Published var canUndo: Bool = false
+    @Published var canRecreate: Bool = false
     @Published var showHistory: Bool = false
-    @Published var showIntervalSettings: Bool = false
+    @Published var todayEvents: [EKEvent] = []
+    @Published var historySearchText: String = ""
     @Published var currentTheme: Theme = {
         let rawValue = UserDefaults.standard.string(forKey: "themeName") ?? Theme.light.rawValue
         return Theme(rawValue: rawValue) ?? .light
     }()
+    
+    /// 最近一次创建的标题和日期，用于「再建一个」
+    private var lastCreatedTitle: String?
+    private var lastCreatedBaseDate: Date?
     
     /// JSON 编码的复习间隔数组，默认 [3, 7, 30]
     @AppStorage("reviewIntervalsData") private var reviewIntervalsData: String = "[3,7,30]"
@@ -76,6 +83,20 @@ class ReviewViewModel: ObservableObject {
         ) { [weak self] _ in
             Task {
                 await self?.createReviewSchedule()
+            }
+        }
+        
+        // 启动时请求权限并加载今天日程
+        Task { [weak self] in
+            guard let self = self else { return }
+            if self.authorizationStatus == .notDetermined {
+                let granted = await self.calendarManager.requestAccess()
+                self.authorizationStatus = self.calendarManager.checkAuthorizationStatus()
+                if granted {
+                    self.loadTodayEvents()
+                }
+            } else if self.authorizationStatus == .fullAccess {
+                self.loadTodayEvents()
             }
         }
     }
@@ -149,6 +170,13 @@ class ReviewViewModel: ObservableObject {
                 resultMessage = String(format: NSLocalizedString("success_message", comment: ""), createdDates)
                 resultType = .success
                 
+                NSHapticFeedbackManager.defaultPerformer.perform(.generic, performanceTime: .now)
+                
+                // Save for recreate
+                lastCreatedTitle = trimmedTitle
+                lastCreatedBaseDate = baseDate
+                canRecreate = true
+                
                 // Add to history
                 addHistoryEntry(title: trimmedTitle, baseDate: baseDate, reviewDates: created)
                 
@@ -159,6 +187,9 @@ class ReviewViewModel: ObservableObject {
                 title = ""
                 baseDate = Date()
                 updateReviewDates()
+                
+                // 刷新今天日程
+                loadTodayEvents()
             }
         } catch {
             resultMessage = error.localizedDescription
@@ -179,12 +210,29 @@ class ReviewViewModel: ObservableObject {
         }
         
         canUndo = false
+        loadTodayEvents()
     }
     
     func openSystemSettings() {
         if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Calendars") {
             NSWorkspace.shared.open(url)
         }
+    }
+    
+    // MARK: - Today Events
+    
+    func loadTodayEvents() {
+        todayEvents = calendarManager.fetchTodayEvents()
+    }
+    
+    // MARK: - Recreate
+    
+    func recreateLastSchedule() {
+        guard let title = lastCreatedTitle, let baseDate = lastCreatedBaseDate else { return }
+        self.title = title
+        self.baseDate = baseDate
+        updateReviewDates()
+        canRecreate = false
     }
     
     // MARK: - History
@@ -213,6 +261,24 @@ class ReviewViewModel: ObservableObject {
         historyEntries = []
     }
     
+    func deleteHistoryEntry(at offsets: IndexSet) {
+        var entries = historyEntries
+        entries.remove(atOffsets: offsets)
+        historyEntries = entries
+    }
+    
+    var filteredHistoryEntries: [HistoryEntry] {
+        guard !historySearchText.isEmpty else { return historyEntries }
+        return historyEntries.filter { $0.title.localizedCaseInsensitiveContains(historySearchText) }
+    }
+    
+    // MARK: - Interval Presets
+    
+    func applyPreset(_ preset: IntervalPreset) {
+        reviewIntervals = preset.intervals
+        updateReviewDates()
+    }
+    
     // MARK: - Interval Settings
     
     func resetIntervalsToDefault() {
@@ -221,7 +287,7 @@ class ReviewViewModel: ObservableObject {
     }
     
     func validateIntervals(_ intervals: [Int]) -> Bool {
-        return intervals.allSatisfy { $0 >= 1 }
+        return intervals.allSatisfy { $0 >= 1 && $0 <= 365 }
     }
     
     // MARK: - Theme
@@ -231,6 +297,28 @@ class ReviewViewModel: ObservableObject {
             currentTheme = theme
         }
         UserDefaults.standard.set(theme.rawValue, forKey: "themeName")
+    }
+}
+
+enum IntervalPreset: String, CaseIterable {
+    case classic
+    case exam
+    case daily
+    
+    var displayName: String {
+        switch self {
+        case .classic: return NSLocalizedString("preset_classic", comment: "")
+        case .exam: return NSLocalizedString("preset_exam", comment: "")
+        case .daily: return NSLocalizedString("preset_daily", comment: "")
+        }
+    }
+    
+    var intervals: [Int] {
+        switch self {
+        case .classic: return [1, 2, 4, 7, 15]
+        case .exam: return [1, 3, 7]
+        case .daily: return [3, 7, 30]
+        }
     }
 }
 
