@@ -7,6 +7,8 @@
     <string>zh_CN</string>
     <key>CFBundleExecutable</key>
     <string>一键日历</string>
+    <key>CFBundleIconFile</key>
+    <string>AppIcon</string>
     <key>CFBundleIdentifier</key>
     <string>com.yijianrili.app</string>
     <key>CFBundleInfoDictionaryVersion</key>
@@ -15,6 +17,8 @@
     <string>一键日历</string>
     <key>CFBundlePackageType</key>
     <string>APPL</string>
+    <key>CFBundleIconFile</key>
+    <string>AppIcon</string>
     <key>CFBundleShortVersionString</key>
     <string>1.2.0</string>
     <key>CFBundleVersion</key>
