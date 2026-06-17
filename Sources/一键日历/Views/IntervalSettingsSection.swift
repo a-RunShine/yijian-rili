@@ -35,6 +35,7 @@ struct IntervalSettingsSection: View {
                 }
                 .buttonStyle(.borderedProminent)
                 .controlSize(.small)
+                .tint(viewModel.currentTheme.accentColor ?? .accentColor)
                 
                 Button(NSLocalizedString("reset_intervals", comment: "")) {
                     viewModel.resetIntervalsToDefault()

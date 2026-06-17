@@ -42,6 +42,16 @@
 "theme_light" = "浅色";
 "theme_dark" = "深色";
 "theme_letter_paper" = "信纸";
+"theme_claude" = "Claude";
+"theme_system" = "跟随系统";
+"theme_claude" = "Claude";
+"theme_system" = "跟随系统";
+"theme_claude" = "Claude";
+"theme_system" = "跟随系统";
+"theme_claude" = "Claude";
+"theme_system" = "跟随系统";
+"theme_claude" = "Claude";
+"theme_system" = "跟随系统";
 
 // Interval Settings
 "interval_settings_title" = "复习间隔";

@@ -20,7 +20,7 @@ struct HistorySection: View {
                     viewModel.showHistory = false
                 }) {
                     Image(systemName: "xmark.circle.fill")
-                        .foregroundColor(.secondary)
+                        .foregroundColor(viewModel.currentTheme.secondaryTextColor ?? .secondary)
                 }
                 .buttonStyle(.borderless)
             }
@@ -28,7 +28,7 @@ struct HistorySection: View {
             if viewModel.historyEntries.isEmpty {
                 Text(NSLocalizedString("no_history", comment: ""))
                     .font(.caption)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(viewModel.currentTheme.secondaryTextColor ?? .secondary)
             } else {
                 ScrollView {
                     VStack(spacing: 8) {
@@ -43,11 +43,11 @@ struct HistorySection: View {
                                             .lineLimit(1)
                                         Text(entry.baseDate.formattedChinese())
                                             .font(.caption)
-                                            .foregroundColor(.secondary)
+                                            .foregroundColor(viewModel.currentTheme.secondaryTextColor ?? .secondary)
                                     }
                                     Spacer()
                                     Image(systemName: "arrow.left.circle")
-                                        .foregroundColor(.accentColor)
+                                        .foregroundColor(viewModel.currentTheme.accentColor ?? .accentColor)
                                 }
                             }
                             .buttonStyle(PlainButtonStyle())

@@ -13,7 +13,7 @@ struct ReviewPreviewSection: View {
                     Text(String(format: NSLocalizedString("review_count", comment: ""), "\(index + 1)"))
                     Spacer()
                     Text(date.formattedChinese())
-                        .foregroundColor(.secondary)
+                        .foregroundColor(viewModel.currentTheme.secondaryTextColor ?? .secondary)
                 }
                 .padding(.vertical, 4)
             }

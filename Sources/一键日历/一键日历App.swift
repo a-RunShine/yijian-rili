@@ -17,12 +17,13 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 @main
 struct 一键日历App: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
-    @AppStorage("themeName") private var themeName: String = Theme.light.rawValue
+    @StateObject private var viewModel = ReviewViewModel()
     
     var body: some Scene {
         Window(NSLocalizedString("app_name", comment: ""), id: "main") {
             ContentView()
-                .preferredColorScheme(Theme(rawValue: themeName)?.colorScheme)
+                .environmentObject(viewModel)
+                .preferredColorScheme(viewModel.currentTheme.colorScheme)
                 .frame(width: 400, height: 600)
         }
         .windowResizability(.contentSize)

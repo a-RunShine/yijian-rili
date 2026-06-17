@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct ContentView: View {
-    @StateObject private var viewModel = ReviewViewModel()
+    @EnvironmentObject var viewModel: ReviewViewModel
     
     var body: some View {
         ScrollView {
@@ -11,18 +11,19 @@ struct ContentView: View {
                     Text(NSLocalizedString("app_name", comment: ""))
                         .font(.largeTitle)
                         .fontWeight(.bold)
+                        .foregroundColor(viewModel.currentTheme.primaryTextColor)
                     Spacer()
-                    Menu {
+                    Picker("", selection: Binding(
+                        get: { viewModel.currentTheme },
+                        set: { viewModel.setTheme($0) }
+                    )) {
                         ForEach(Theme.allCases, id: \.self) { theme in
-                            Button(theme.displayName) {
-                                viewModel.setTheme(theme)
-                            }
+                            Text(theme.displayName).tag(theme)
                         }
-                    } label: {
-                        Image(systemName: "paintbrush")
                     }
-                    .menuStyle(.borderlessButton)
-                    .frame(width: 30)
+                    .labelsHidden()
+                    .pickerStyle(.menu)
+                    .frame(width: 100)
                 }
                 
                 // Title Input
@@ -48,7 +49,7 @@ struct ContentView: View {
                                 .foregroundColor(.white)
                                 .padding(.horizontal, 6)
                                 .padding(.vertical, 2)
-                                .background(Color.accentColor)
+                                .background(viewModel.currentTheme.accentColor ?? Color.accentColor)
                                 .clipShape(Capsule())
                         }
                     }
@@ -76,5 +77,6 @@ struct ContentView: View {
 struct ContentView_Previews: PreviewProvider {
     static var previews: some View {
         ContentView()
+            .environmentObject(ReviewViewModel())
     }
 }

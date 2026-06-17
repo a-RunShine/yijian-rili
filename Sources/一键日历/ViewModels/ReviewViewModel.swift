@@ -227,7 +227,9 @@ class ReviewViewModel: ObservableObject {
     // MARK: - Theme
     
     func setTheme(_ theme: Theme) {
-        currentTheme = theme
+        withAnimation(.easeInOut(duration: 0.3)) {
+            currentTheme = theme
+        }
         UserDefaults.standard.set(theme.rawValue, forKey: "themeName")
     }
 }

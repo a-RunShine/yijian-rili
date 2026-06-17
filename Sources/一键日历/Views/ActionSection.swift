@@ -21,6 +21,7 @@ struct ActionSection: View {
             }
             .buttonStyle(.borderedProminent)
             .controlSize(.large)
+            .tint(viewModel.currentTheme.accentColor ?? .accentColor)
             .disabled(viewModel.isLoading)
             
             // Undo Button
