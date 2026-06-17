@@ -2,6 +2,7 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+    <!-- 应用基础信息 -->
     <key>CFBundleDevelopmentRegion</key>
     <string>zh_CN</string>
     <key>CFBundleExecutable</key>
@@ -15,16 +16,24 @@
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleShortVersionString</key>
-    <string>1.0</string>
+    <string>1.2.0</string>
     <key>CFBundleVersion</key>
-    <string>1</string>
+    <string>3</string>
+
+    <!-- 系统要求 -->
     <key>LSMinimumSystemVersion</key>
     <string>14.0</string>
+    <key>CFBundleLocalizations</key>
+    <array>
+        <string>zh</string>
+    </array>
     <key>LSApplicationCategoryType</key>
     <string>public.app-category.productivity</string>
-    <key>NSCalendarsFullAccessUsageDescription</key>
-    <string>一键日历需要访问您的日历，以便创建复习提醒日程。我们需要完整访问权限来检测重复的日程，避免创建重复提醒。</string>
     <key>LSUIElement</key>
     <false/>
+
+    <!-- 权限声明 -->
+    <key>NSCalendarsFullAccessUsageDescription</key>
+    <string>一键日历需要访问您的日历，以便创建复习提醒日程。我们需要完整访问权限来检测重复的日程，避免创建重复提醒。</string>
 </dict>
 </plist>

@@ -2,6 +2,8 @@ import Foundation
 import EventKit
 import OSLog
 
+/// EventKit 日历服务单例
+/// 负责日历权限管理、复习事件创建、撤销及重复检测
 @MainActor
 class CalendarManager: ObservableObject {
     static let shared = CalendarManager()
@@ -9,12 +11,15 @@ class CalendarManager: ObservableObject {
     private let logger = Logger(subsystem: "com.yijianrili.app", category: "CalendarManager")
     
     @Published var authorizationStatus: EKAuthorizationStatus = .notDetermined
+    /// 最近一次创建事件的标识符列表，用于撤销
     private(set) var lastCreatedEventIdentifiers: [String] = []
     
     private init() {
         authorizationStatus = EKEventStore.authorizationStatus(for: .event)
     }
     
+    /// 请求日历完整访问权限
+    /// - Returns: 是否授权成功
     func requestAccess() async -> Bool {
         do {
             let granted = try await eventStore.requestFullAccessToEvents()
@@ -33,6 +38,12 @@ class CalendarManager: ObservableObject {
         return authorizationStatus
     }
     
+    /// 创建复习提醒日程
+    /// - Parameters:
+    ///   - title: 日程标题
+    ///   - baseDate: 基准日期
+    ///   - intervals: 复习间隔天数数组
+    /// - Returns: 元组（成功创建的日期、重复警告的日期、失败的日期及错误）
     func createReviewEvents(title: String, baseDate: Date, intervals: [Int] = [3, 7, 30]) async throws -> (created: [Date], duplicates: [Date], failed: [(Date, Error)]) {
         let reviewDates = ReviewEvent.calculateReviewDates(from: baseDate, intervals: intervals)
         
@@ -86,6 +97,8 @@ class CalendarManager: ObservableObject {
         return (created, duplicates, failed)
     }
     
+    /// 撤销最近一次创建的复习日程
+    /// - Returns: 元组（是否成功、已删除数量、已不存在数量）
     func undoLastCreation() async -> (success: Bool, deletedCount: Int, alreadyDeletedCount: Int) {
         var deletedCount = 0
         var alreadyDeletedCount = 0

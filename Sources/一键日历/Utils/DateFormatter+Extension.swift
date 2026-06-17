@@ -17,10 +17,12 @@ extension DateFormatter {
 }
 
 extension Date {
+    /// 格式化为中文长格式：yyyy年MM月dd日
     func formattedChinese() -> String {
         return DateFormatter.chineseDate.string(from: self)
     }
     
+    /// 格式化为短格式：MM-dd
     func formattedShort() -> String {
         return DateFormatter.shortDate.string(from: self)
     }

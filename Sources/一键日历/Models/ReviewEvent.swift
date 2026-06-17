@@ -23,10 +23,10 @@ struct ReviewEvent: Identifiable, Codable {
         for interval in intervals {
             if let date = calendar.date(byAdding: .day, value: interval, to: baseDate) {
                 dates.append(date)
-            } else {
-                // 如果日期计算失败，记录错误并跳过
-                print("Warning: Failed to calculate date for interval \(interval) from \(baseDate)")
-            }
+        } else {
+            // 日期计算失败时安全跳过，避免崩溃
+            print("Warning: Failed to calculate date for interval \(interval) from \(baseDate)")
+        }
         }
         
         return dates
