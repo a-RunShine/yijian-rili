@@ -11,6 +11,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             window.makeKeyAndOrderFront(nil)
             window.level = .floating
         }
+        NotificationCenter.default.post(name: .appDidBecomeActive, object: nil)
     }
 }
 

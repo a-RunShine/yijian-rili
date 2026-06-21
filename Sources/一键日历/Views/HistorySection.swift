@@ -30,10 +30,29 @@ struct HistorySection: View {
                     .font(.caption)
                     .foregroundColor(viewModel.currentTheme.secondaryTextColor ?? .secondary)
             } else {
-                // 搜索框
-                TextField(NSLocalizedString("search_history", comment: ""), text: $viewModel.historySearchText)
-                    .textFieldStyle(RoundedBorderTextFieldStyle())
-                    .controlSize(.small)
+                // 搜索框 + 清除按钮
+                HStack(spacing: 4) {
+                    Image(systemName: "magnifyingglass")
+                        .foregroundColor(viewModel.currentTheme.secondaryTextColor ?? .secondary)
+                        .font(.caption)
+                    TextField(NSLocalizedString("search_history", comment: ""), text: $viewModel.historySearchText)
+                        .textFieldStyle(.plain)
+                        .controlSize(.small)
+                    if !viewModel.historySearchText.isEmpty {
+                        Button(action: {
+                            viewModel.historySearchText = ""
+                        }) {
+                            Image(systemName: "xmark.circle.fill")
+                                .foregroundColor(viewModel.currentTheme.secondaryTextColor ?? .secondary)
+                                .font(.caption)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(viewModel.currentTheme.cardBackgroundColor)
+                .cornerRadius(6)
 
                 ScrollView {
                     VStack(spacing: 0) {
@@ -47,9 +66,17 @@ struct HistorySection: View {
                                             Text(entry.title)
                                                 .font(.subheadline)
                                                 .lineLimit(1)
-                                            Text(entry.baseDate.formattedChinese())
-                                                .font(.caption)
-                                                .foregroundColor(viewModel.currentTheme.secondaryTextColor ?? .secondary)
+                                            HStack(spacing: 4) {
+                                                Text(entry.baseDate.formattedChinese())
+                                                    .font(.caption)
+                                                    .foregroundColor(viewModel.currentTheme.secondaryTextColor ?? .secondary)
+                                                Text("·")
+                                                    .font(.caption)
+                                                    .foregroundColor(viewModel.currentTheme.secondaryTextColor ?? .secondary)
+                                                Text(String(format: NSLocalizedString("history_review_count", comment: ""), "\(entry.reviewDates.count)"))
+                                                    .font(.caption)
+                                                    .foregroundColor(viewModel.currentTheme.secondaryTextColor ?? .secondary)
+                                            }
                                         }
                                         Spacer()
                                         Image(systemName: "arrow.left.circle")

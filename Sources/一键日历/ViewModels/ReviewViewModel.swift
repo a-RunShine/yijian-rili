@@ -65,6 +65,8 @@ class ReviewViewModel: ObservableObject {
     
     private let calendarManager = CalendarManager.shared
     private var notificationToken: Any?
+    private var activeToken: Any?
+    private var resultDismissTask: Task<Void, Never>?
     
     enum ResultType {
         case success
@@ -86,8 +88,21 @@ class ReviewViewModel: ObservableObject {
             }
         }
         
+        activeToken = NotificationCenter.default.addObserver(
+            forName: .appDidBecomeActive,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                guard let self = self else { return }
+                if self.authorizationStatus == .fullAccess {
+                    self.loadTodayEvents()
+                }
+            }
+        }
+        
         // 启动时请求权限并加载今天日程
-        Task { [weak self] in
+        Task { @MainActor [weak self] in
             guard let self = self else { return }
             if self.authorizationStatus == .notDetermined {
                 let granted = await self.calendarManager.requestAccess()
@@ -104,6 +119,9 @@ class ReviewViewModel: ObservableObject {
     @MainActor
     deinit {
         if let token = notificationToken {
+            NotificationCenter.default.removeObserver(token)
+        }
+        if let token = activeToken {
             NotificationCenter.default.removeObserver(token)
         }
     }
@@ -195,14 +213,21 @@ class ReviewViewModel: ObservableObject {
             resultMessage = error.localizedDescription
             resultType = .error
         }
+        
+        scheduleResultDismissal()
     }
     
     /// 撤销最近一次创建的复习日程
     func undoReviewSchedule() async {
         let (success, deletedCount, alreadyDeletedCount) = await calendarManager.undoLastCreation()
+        let title = lastCreatedTitle ?? ""
         
         if success {
-            resultMessage = String(format: NSLocalizedString("undo_success", comment: ""), "\(deletedCount)")
+            if title.isEmpty {
+                resultMessage = String(format: NSLocalizedString("undo_success", comment: ""), "\(deletedCount)")
+            } else {
+                resultMessage = String(format: NSLocalizedString("undo_success_with_title", comment: ""), title, "\(deletedCount)")
+            }
             resultType = .success
         } else {
             resultMessage = String(format: NSLocalizedString("undo_partial", comment: ""), "\(alreadyDeletedCount)")
@@ -210,7 +235,9 @@ class ReviewViewModel: ObservableObject {
         }
         
         canUndo = false
+        canRecreate = false
         loadTodayEvents()
+        scheduleResultDismissal()
     }
     
     func openSystemSettings() {
@@ -223,6 +250,22 @@ class ReviewViewModel: ObservableObject {
     
     func loadTodayEvents() {
         todayEvents = calendarManager.fetchTodayEvents()
+    }
+    
+    // MARK: - Result Auto-Dismiss
+    
+    /// 成功/警告提示 4 秒后自动消失，错误提示保留
+    private func scheduleResultDismissal() {
+        resultDismissTask?.cancel()
+        guard resultType == .success || resultType == .warning else { return }
+        resultDismissTask = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: 4_000_000_000)
+            guard !Task.isCancelled else { return }
+            await MainActor.run {
+                self?.resultMessage = nil
+                self?.resultType = nil
+            }
+        }
     }
     
     // MARK: - Recreate
@@ -324,4 +367,5 @@ enum IntervalPreset: String, CaseIterable {
 
 extension Notification.Name {
     static let createReviewSchedule = Notification.Name("createReviewSchedule")
+    static let appDidBecomeActive = Notification.Name("appDidBecomeActive")
 }

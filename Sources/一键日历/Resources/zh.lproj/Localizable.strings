@@ -30,6 +30,7 @@
 // Undo
 "undo_button" = "撤销";
 "undo_success" = "成功撤销%@个日程";
+"undo_success_with_title" = "已撤销「%@」的%@个日程";
 "undo_partial" = "%@个日程已被删除或不存在";
 
 // History
@@ -51,6 +52,7 @@
 "all_day" = "全天";
 "untitled" = "无标题";
 "more_events" = "还有 %@ 个日程";
+"collapse" = "收起";
 
 // Date
 "today_button" = "今天";
@@ -58,6 +60,8 @@
 "today" = "今天";
 "days_later" = "%@天后";
 "days_ago" = "%@天前";
+"past_date_warning" = "所选日期已过，复习将设在过去";
+"past_date_warning" = "所选日期已过，复习将在过去日期创建";
 
 // Recreate
 "recreate_button" = "再建一个";
@@ -71,6 +75,7 @@
 "empty_history_hint" = "还没有复习记录，创建第一个吧";
 "search_history" = "搜索历史记录";
 "delete_history" = "删除";
+"history_review_count" = "%@ 个复习";
 "theme_claude" = "Claude";
 "theme_system" = "跟随系统";
 "theme_claude" = "Claude";

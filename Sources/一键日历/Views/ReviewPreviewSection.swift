@@ -24,6 +24,17 @@ struct ReviewPreviewSection: View {
                 }
                 .padding(.vertical, 4)
             }
+
+            if viewModel.reviewDates.allSatisfy({ Calendar.current.startOfDay(for: $0) < Calendar.current.startOfDay(for: Date()) }) {
+                HStack(spacing: 4) {
+                    Image(systemName: "exclamationmark.triangle")
+                        .font(.caption2)
+                    Text(NSLocalizedString("past_date_warning", comment: ""))
+                        .font(.caption2)
+                }
+                .foregroundColor(.orange)
+                .padding(.top, 2)
+            }
         }
         .padding()
         .background(viewModel.currentTheme.cardBackgroundColor)
