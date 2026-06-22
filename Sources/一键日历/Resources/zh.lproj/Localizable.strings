@@ -94,3 +94,37 @@
 
 // CalendarManager
 "default_calendar_unavailable" = "系统默认日历不可用，请检查日历设置";
+
+// Calendar Picker
+"calendar_picker_title" = "写入日历";
+"calendar_picker_hint" = "云账户（iCloud / Google / Outlook / 163 / 139）会同步到手机";
+"calendar_local_warning" = "本地日历事件不会同步到手机";
+"calendar_default_label" = "系统默认";
+"calendar_no_cloud_hint" = "未检测到云日历账户，手机无法同步";
+"calendar_selection_invalid" = "之前选中的日历已失效，已回退到系统默认";
+
+// First Run Guide
+"first_run_guide_title" = "配置手机日历同步";
+"first_run_guide_subtitle" = "想让一加 12 看到复习日程，按以下三步配置";
+"first_run_guide_step1_provider" = "在 %@ 开启 CalDAV";
+"first_run_guide_step2" = "在 Mac 日历 App 添加账户";
+"first_run_guide_step3" = "在一加 12 日历 App 添加账户";
+"first_run_guide_step1_detail_163" = "登录 mail.163.com → 设置 → 账户 → POP3/IMAP/SMTP/Exchange/CardDAV/CalDAV 服务 → 开启 CalDAV → 生成授权码（不是登录密码）";
+"first_run_guide_step2_detail_163" = "日历 → 添加账户 → 其他 CalDAV 账户 → 用户名 163 邮箱 / 密码授权码 / 服务器 caldav.163.com / 端口 443 SSL";
+"first_run_guide_step3_detail_163" = "日历 → 我的 → 添加日历 → CalDAV 账号 → 同一套 163 邮箱和授权码、服务器 caldav.163.com";
+"first_run_guide_step1_detail_139" = "登录 mail.10086.cn → 设置 → 常规设置 → 账号与安全 → 邮箱协议设置 → 勾「开启 IMAP/SMTP 服务」→ 保存 → 短信验证 → 同页面点「获取授权码」→ 再短信验证 → 复制授权码（90 天有效）";
+"first_run_guide_step2_detail_139" = "日历 → 添加账户 → 其他 CalDAV 账户 → 用户名 手机号@139.com / 密码授权码 / 服务器 cal.caiyun.mail.10086.cn / 端口 443 SSL";
+"first_run_guide_step3_detail_139" = "日历 → 我的 → 添加日历 → CalDAV 账号 → 同一套 139 邮箱和授权码、服务器 cal.caiyun.mail.10086.cn。ColorOS 16 端是轮询同步（15-60 分钟），下拉刷新可立即拉取";
+"first_run_guide_tip_139" = "ColorOS 16 CalDAV 只能查看不能编辑。想在手机端可编辑，需用 Exchange 协议（服务器 ex.mail.10086.cn），但会顺带同步邮件";
+"first_run_guide_dismiss" = "知道了";
+"first_run_guide_open_163" = "打开 163 邮箱";
+"first_run_guide_open_139" = "打开 139 邮箱";
+"first_run_guide_open_mail_app" = "打开 Mac 日历";
+"first_run_guide_alternatives" = "其他可选：阿里云企业邮箱（caldav.mxhichina.com）、iCloud、Google、Outlook 等";
+
+// Provider
+"provider_163" = "网易 163";
+"provider_139" = "移动 139";
+
+// Help
+"help_button_tooltip" = "查看手机同步帮助";

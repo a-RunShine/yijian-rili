@@ -6,13 +6,23 @@ struct ContentView: View {
     var body: some View {
         ScrollView {
             VStack(spacing: 14) {
-                // Title + Theme Picker
+                // Title + Theme Picker + Help
                 HStack {
                     Text(NSLocalizedString("app_name", comment: ""))
                         .font(.largeTitle)
                         .fontWeight(.bold)
                         .foregroundColor(viewModel.currentTheme.primaryTextColor)
                     Spacer()
+                    Button(action: {
+                        viewModel.openHelpGuide()
+                    }) {
+                        Image(systemName: "questionmark.circle")
+                            .font(.system(size: 16))
+                            .foregroundColor(viewModel.currentTheme.secondaryTextColor ?? .secondary)
+                    }
+                    .buttonStyle(.plain)
+                    .help(NSLocalizedString("help_button_tooltip", comment: ""))
+
                     Picker("", selection: Binding(
                         get: { viewModel.currentTheme },
                         set: { viewModel.setTheme($0) }
@@ -37,6 +47,9 @@ struct ContentView: View {
 
                 // Review Preview
                 ReviewPreviewSection(viewModel: viewModel)
+
+                // Calendar Picker
+                CalendarPickerSection(viewModel: viewModel)
 
                 // History Button (card-style)
                 Button(action: {
@@ -76,6 +89,19 @@ struct ContentView: View {
         .sheet(isPresented: $viewModel.showHistory) {
             HistorySection(viewModel: viewModel)
                 .frame(width: 340, height: 420)
+        }
+        .sheet(isPresented: $viewModel.showFirstRunGuide) {
+            FirstRunGuideView(viewModel: viewModel) {
+                viewModel.dismissFirstRunGuide()
+            }
+        }
+        .sheet(isPresented: $viewModel.showHelpGuide) {
+            FirstRunGuideView(viewModel: viewModel) {
+                viewModel.showHelpGuide = false
+            }
+        }
+        .onAppear {
+            viewModel.scheduleFirstRunGuideIfNeeded()
         }
     }
 }

@@ -2,6 +2,7 @@ import Foundation
 import SwiftUI
 import AppKit
 import EventKit
+import Combine
 
 @MainActor
 class ReviewViewModel: ObservableObject {
@@ -15,12 +16,18 @@ class ReviewViewModel: ObservableObject {
     @Published var canUndo: Bool = false
     @Published var canRecreate: Bool = false
     @Published var showHistory: Bool = false
+    @Published var showFirstRunGuide: Bool = false
+    @Published var showHelpGuide: Bool = false
     @Published var todayEvents: [EKEvent] = []
     @Published var historySearchText: String = ""
     @Published var currentTheme: Theme = {
         let rawValue = UserDefaults.standard.string(forKey: "themeName") ?? Theme.light.rawValue
         return Theme(rawValue: rawValue) ?? .light
     }()
+    
+    /// 桥接 CalendarManager 的日历列表（按 source 分组，本地排最后）
+    @Published var availableCalendars: [EKCalendar] = []
+    @Published var hasCloudCalendar: Bool = false
     
     /// 最近一次创建的标题和日期，用于「再建一个」
     private var lastCreatedTitle: String?
@@ -30,6 +37,10 @@ class ReviewViewModel: ObservableObject {
     @AppStorage("reviewIntervalsData") private var reviewIntervalsData: String = "[3,7,30]"
     /// JSON 编码的历史记录数组
     @AppStorage("historyEntriesData") private var historyEntriesData: String = ""
+    /// 用户选中的目标日历 identifier（空字符串 = 跟随系统默认）
+    @AppStorage("selectedCalendarIdentifier") var selectedCalendarIdentifier: String = ""
+    /// 是否已经展示过首次启动引导
+    @AppStorage("hasShownFirstRunGuide") private var hasShownFirstRunGuide: Bool = false
     
     var reviewIntervals: [Int] {
         get {
@@ -67,6 +78,24 @@ class ReviewViewModel: ObservableObject {
     private var notificationToken: Any?
     private var activeToken: Any?
     private var resultDismissTask: Task<Void, Never>?
+    private var cancellables = Set<AnyCancellable>()
+    
+    /// 当前选中的日历（identifier 失效时返回 nil，会回退到系统默认）
+    var selectedCalendar: EKCalendar? {
+        guard !selectedCalendarIdentifier.isEmpty else { return nil }
+        return calendarManager.calendar(withIdentifier: selectedCalendarIdentifier)
+    }
+    
+    /// 当前选中的是否是本地日历（用于 UI 警告）
+    var isSelectedCalendarLocal: Bool {
+        selectedCalendar?.source.sourceType == .local
+    }
+    
+    /// 选中的日历显示名（identifier 为空时显示"系统默认"）
+    var selectedCalendarDisplayName: String {
+        if let cal = selectedCalendar { return "\(cal.source.title) → \(cal.title)" }
+        return NSLocalizedString("calendar_default_label", comment: "")
+    }
     
     enum ResultType {
         case success
@@ -77,6 +106,22 @@ class ReviewViewModel: ObservableObject {
     init() {
         authorizationStatus = calendarManager.checkAuthorizationStatus()
         updateReviewDates()
+        
+        // 桥接 CalendarManager 的日历列表
+        availableCalendars = calendarManager.availableCalendars
+        hasCloudCalendar = calendarManager.hasCloudCalendar
+        calendarManager.$availableCalendars
+            .receive(on: DispatchQueue.main)
+            .assign(to: &$availableCalendars)
+        calendarManager.$hasCloudCalendar
+            .receive(on: DispatchQueue.main)
+            .assign(to: &$hasCloudCalendar)
+        
+        // 若用户之前选中的日历已失效（如被删除/账户注销），自动清空
+        if !selectedCalendarIdentifier.isEmpty,
+           calendarManager.calendar(withIdentifier: selectedCalendarIdentifier) == nil {
+            selectedCalendarIdentifier = ""
+        }
         
         notificationToken = NotificationCenter.default.addObserver(
             forName: .createReviewSchedule,
@@ -95,6 +140,8 @@ class ReviewViewModel: ObservableObject {
         ) { [weak self] _ in
             Task { @MainActor [weak self] in
                 guard let self = self else { return }
+                // 用户在系统设置里改了账户后，回来重新扫描
+                self.calendarManager.refreshAvailableCalendars()
                 if self.authorizationStatus == .fullAccess {
                     self.loadTodayEvents()
                 }
@@ -169,10 +216,20 @@ class ReviewViewModel: ObservableObject {
         }
         
         do {
+            let targetCalendar = selectedCalendar
+            // 选中失效的 identifier 时回退到系统默认，并提示
+            if !selectedCalendarIdentifier.isEmpty && targetCalendar == nil {
+                resultMessage = NSLocalizedString("calendar_selection_invalid", comment: "")
+                resultType = .warning
+                selectedCalendarIdentifier = ""
+                scheduleResultDismissal()
+                return
+            }
             let (created, duplicates, failed) = try await calendarManager.createReviewEvents(
                 title: trimmedTitle,
                 baseDate: baseDate,
-                intervals: reviewIntervals
+                intervals: reviewIntervals,
+                calendar: targetCalendar
             )
             
             if !failed.isEmpty {
@@ -331,6 +388,32 @@ class ReviewViewModel: ObservableObject {
     
     func validateIntervals(_ intervals: [Int]) -> Bool {
         return intervals.allSatisfy { $0 >= 1 && $0 <= 365 }
+    }
+    
+    // MARK: - First Run Guide
+    
+    /// 启动 3 秒后若没有云日历且未引导过，自动弹出引导
+    func scheduleFirstRunGuideIfNeeded() {
+        guard !hasShownFirstRunGuide else { return }
+        guard authorizationStatus == .fullAccess else { return }
+        guard !hasCloudCalendar else { return }
+        
+        Task { @MainActor [weak self] in
+            try? await Task.sleep(nanoseconds: 3_000_000_000)
+            guard let self = self, !Task.isCancelled else { return }
+            // 再次校验（3s 内用户可能已经手动加账户）
+            guard !self.hasShownFirstRunGuide, !self.hasCloudCalendar else { return }
+            self.showFirstRunGuide = true
+        }
+    }
+    
+    func dismissFirstRunGuide() {
+        showFirstRunGuide = false
+        hasShownFirstRunGuide = true
+    }
+    
+    func openHelpGuide() {
+        showHelpGuide = true
     }
     
     // MARK: - Theme

@@ -92,13 +92,16 @@ Sources/一键日历/
 │   ├── TitleInputSection.swift    # 标题输入（TextField）
 │   ├── DatePickerSection.swift    # 日期选择（DatePicker，onChange 刷新预览）
 │   ├── ReviewPreviewSection.swift # 复习预览（ForEach 显示日期列表）
+│   ├── CalendarPickerSection.swift # 日历账户选择（Picker 按 source 分组）
+│   ├── FirstRunGuideView.swift    # 首次启动引导 sheet（3 步配置云日历）
 │   ├── ActionSection.swift        # 操作按钮（创建/撤销/结果提示/权限设置）
 │   ├── HistorySection.swift       # 历史记录（ScrollView 最大高度 150）
-│   └── IntervalSettingsSection.swift # 间隔设置（3 个 TextField + 校验）
+│   ├── IntervalSettingsSection.swift # 间隔设置（3 个 TextField + 校验）
+│   └── TodayEventsSection.swift   # 今日日程（卡片列表）
 ├── ViewModels/
 │   └── ReviewViewModel.swift      # 业务逻辑 + AppStorage 读写 + 通知监听
 ├── Services/
-│   └── CalendarManager.swift      # EventKit 单例封装（创建/撤销/重复检测）
+│   └── CalendarManager.swift      # EventKit 单例封装（创建/撤销/重复检测/日历列表）
 ├── Utils/
 │   └── DateFormatter+Extension.swift  # 日期格式化（中文长格式 + 短格式）
 └── Resources/zh.lproj/
@@ -119,3 +122,39 @@ Info.plist                         # 应用元数据 + 权限声明
 - **`IntervalSettingsSection` 的 `tempIntervals` 是本地 `@State`**，保存时才写入 `viewModel.reviewIntervals`
 - **重复检测是在创建时实时读取日历**，不是创建前批量检测，因此可能部分成功部分警告
 - **根目录的 `一键日历.app` 是预构建产物**，修改代码后需重新 build 并手动替换
+
+## 手机日历同步
+
+App 用 `eventStore.defaultCalendarForNewEvents` 写入事件。`defaultCalendarForNewEvents` = 用户在 macOS「日历」App 设的默认日历所属账户。所以"事件同步到手机"取决于**事件写到了哪个云账户**。
+
+### 推荐配置：网易 163 邮箱（CalDAV）
+
+1. **163 邮箱开 CalDAV**：登录 [mail.163.com](https://mail.163.com) → 设置 → 账户 → CalDAV 服务 → 开启 → 生成授权码
+2. **macOS 加账户**：打开「日历」App → 菜单「日历 → 添加账户」→ 选「其他 CalDAV 账户」→ 手动：
+   - 用户名：`xxx@163.com`
+   - 密码：刚生成的授权码
+   - 服务器：`caldav.163.com`
+   - 端口：`443` / SSL 启用
+3. **一加 12 加账户**：ColorOS 16「日历 → 我的 → 添加日历 → CalDAV 账号」→ 同一套
+4. **设为默认**：macOS「日历」App 选中 163 账户下的某个日历 → 右键 → 设为默认
+
+### 备选 CalDAV 源（按推荐度）
+
+| 服务 | 服务器 | 备注 |
+|---|---|---|
+| 网易 163 个人邮箱 | `caldav.163.com:443` | ⭐⭐⭐ 免费、稳定，需隐藏路径开启 |
+| 中国移动 139 邮箱 | `cal.caiyun.mail.10086.cn:443` | ⭐⭐⭐ 手机号即邮箱，零门槛（授权码 90 天有效）|
+| 阿里云企业邮箱 | `caldav.mxhichina.com` | ⭐⭐ 收费版稳定 |
+| iCloud | `https://caldav.icloud.com` | ⭐⭐ 中国大陆区 Apple ID 需代理 |
+| Google Calendar | 系统自动 | ⭐⭐ 一加 12 需装 Google Play Services |
+| Outlook.com | `s.outlook.com:443` EAS | ⭐⭐ ColorOS 16 系统入口有 TLS 坑，建议装 Outlook App |
+| QQ 邮箱 | ❌ 不支持 | 不支持 CalDAV，桌面 Exchange 同步有 bug |
+
+### App 内的日历选择
+
+- App 主界面有「**写入日历**」Section，可选具体日历账户
+- 选中「本地」时黄色警告"本地事件不会同步到手机"，但允许创建
+- 首次启动若未配置云日历，3s 后自动弹引导
+- 主界面右上角「?」按钮可随时重看引导
+- `@AppStorage("selectedCalendarIdentifier")` 持久化用户选择
+- 若选中的日历被删/账户注销，App 自动回退到系统默认并提示

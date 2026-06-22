@@ -11,11 +11,35 @@ class CalendarManager: ObservableObject {
     private let logger = Logger(subsystem: "com.yijianrili.app", category: "CalendarManager")
     
     @Published var authorizationStatus: EKAuthorizationStatus = .notDetermined
+    /// 所有可写日历（含本地），按 source.title 排序，本地排最后
+    @Published private(set) var availableCalendars: [EKCalendar] = []
+    /// 是否存在至少一个非本地的可写日历（云账户），用于判断是否需要首次启动引导
+    @Published private(set) var hasCloudCalendar: Bool = false
     /// 最近一次创建事件的标识符列表，用于撤销
     private(set) var lastCreatedEventIdentifiers: [String] = []
     
     private init() {
         authorizationStatus = EKEventStore.authorizationStatus(for: .event)
+        refreshAvailableCalendars()
+    }
+    
+    /// 重新扫描可写日历（账户变化后调用）
+    func refreshAvailableCalendars() {
+        let writable = eventStore.calendars(for: .event)
+            .filter { $0.allowsContentModifications }
+        hasCloudCalendar = writable.contains { $0.source.sourceType != .local }
+        availableCalendars = writable.sorted { lhs, rhs in
+            // 本地日历排最后
+            if lhs.source.sourceType == .local && rhs.source.sourceType != .local { return false }
+            if lhs.source.sourceType != .local && rhs.source.sourceType == .local { return true }
+            if lhs.source.title != rhs.source.title { return lhs.source.title < rhs.source.title }
+            return lhs.title < rhs.title
+        }
+    }
+    
+    /// 根据 identifier 取日历（取不到说明该账户被删/注销）
+    func calendar(withIdentifier identifier: String) -> EKCalendar? {
+        return eventStore.calendar(withIdentifier: identifier)
     }
     
     /// 请求日历完整访问权限
@@ -24,6 +48,7 @@ class CalendarManager: ObservableObject {
         do {
             let granted = try await eventStore.requestFullAccessToEvents()
             authorizationStatus = EKEventStore.authorizationStatus(for: .event)
+            refreshAvailableCalendars()
             logger.info("Calendar access granted: \(granted)")
             return granted
         } catch {
@@ -43,11 +68,17 @@ class CalendarManager: ObservableObject {
     ///   - title: 日程标题
     ///   - baseDate: 基准日期
     ///   - intervals: 复习间隔天数数组
+    ///   - calendar: 写入的目标日历，nil 时使用系统默认日历
     /// - Returns: 元组（成功创建的日期、重复警告的日期、失败的日期及错误）
-    func createReviewEvents(title: String, baseDate: Date, intervals: [Int] = [3, 7, 30]) async throws -> (created: [Date], duplicates: [Date], failed: [(Date, Error)]) {
+    func createReviewEvents(title: String, baseDate: Date, intervals: [Int] = [3, 7, 30], calendar: EKCalendar? = nil) async throws -> (created: [Date], duplicates: [Date], failed: [(Date, Error)]) {
         let reviewDates = ReviewEvent.calculateReviewDates(from: baseDate, intervals: intervals)
         
-        guard let defaultCalendar = eventStore.defaultCalendarForNewEvents else {
+        let targetCalendar: EKCalendar
+        if let chosen = calendar, chosen.allowsContentModifications {
+            targetCalendar = chosen
+        } else if let defaultCalendar = eventStore.defaultCalendarForNewEvents {
+            targetCalendar = defaultCalendar
+        } else {
             logger.error("Default calendar is unavailable")
             throw CalendarError.defaultCalendarUnavailable
         }
@@ -60,8 +91,8 @@ class CalendarManager: ObservableObject {
         for (index, reviewDate) in reviewDates.enumerated() {
             let noteText = "第\(index + 1)次复习"
             do {
-                // Check for duplicates
-                let hasDuplicate = try checkDuplicate(title: title, date: reviewDate, notes: noteText)
+                // Check for duplicates in target calendar only
+                let hasDuplicate = try checkDuplicate(title: title, date: reviewDate, notes: noteText, in: targetCalendar)
                 
                 let event = EKEvent(eventStore: eventStore)
                 event.title = title
@@ -69,7 +100,7 @@ class CalendarManager: ObservableObject {
                 event.endDate = reviewDate
                 event.isAllDay = true
                 event.notes = noteText
-                event.calendar = defaultCalendar
+                event.calendar = targetCalendar
                 
                 // 当天 9:00 提醒
                 let alarm = EKAlarm()
@@ -89,7 +120,7 @@ class CalendarManager: ObservableObject {
                     duplicates.append(reviewDate)
                 }
                 
-                logger.info("Created event for \(reviewDate.formattedChinese())")
+                logger.info("Created event for \(reviewDate.formattedChinese()) in calendar \(targetCalendar.title)")
             } catch {
                 failed.append((reviewDate, error))
                 logger.error("Failed to create event for \(reviewDate.formattedChinese()): \(error.localizedDescription)")
@@ -130,14 +161,14 @@ class CalendarManager: ObservableObject {
         return (success, deletedCount, alreadyDeletedCount)
     }
     
-    private func checkDuplicate(title: String, date: Date, notes: String) throws -> Bool {
-        let calendar = Calendar.current
-        let startOfDay = calendar.startOfDay(for: date)
-        guard let endOfDay = calendar.date(byAdding: .day, value: 1, to: startOfDay) else {
+    private func checkDuplicate(title: String, date: Date, notes: String, in calendar: EKCalendar) throws -> Bool {
+        let cal = Calendar.current
+        let startOfDay = cal.startOfDay(for: date)
+        guard let endOfDay = cal.date(byAdding: .day, value: 1, to: startOfDay) else {
             return false
         }
         
-        let predicate = eventStore.predicateForEvents(withStart: startOfDay, end: endOfDay, calendars: nil)
+        let predicate = eventStore.predicateForEvents(withStart: startOfDay, end: endOfDay, calendars: [calendar])
         let events = eventStore.events(matching: predicate)
         
         return events.contains { $0.title == title && $0.notes == notes }
