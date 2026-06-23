@@ -13,3 +13,5 @@ AppIcon.iconset/
 .vscode/
 releases/*.zip
 releases/*.dmg
+
+retrospectives/
