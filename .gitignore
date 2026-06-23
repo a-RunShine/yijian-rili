@@ -9,10 +9,7 @@ DerivedData/
 一键日历.app/
 .codegraph/daemon.pid
 .codegraph/
-.codegraph/
-.codegraph/
-.codegraph/
-.codegraph/
 AppIcon.iconset/
 .vscode/
 releases/*.zip
+releases/*.dmg
