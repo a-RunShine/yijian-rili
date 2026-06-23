@@ -48,7 +48,11 @@
 
 // Today Events
 "today_events" = "今日日程";
+"yesterday_events" = "昨日日程";
+"tomorrow_events" = "明日日程";
 "today_no_events" = "今天暂无日程";
+"yesterday_no_events" = "昨天暂无日程";
+"tomorrow_no_events" = "明天暂无日程";
 "all_day" = "全天";
 "untitled" = "无标题";
 "more_events" = "还有 %@ 个日程";
@@ -56,6 +60,7 @@
 
 // Date
 "today_button" = "今天";
+"yesterday_button" = "昨天";
 "tomorrow_button" = "明天";
 "today" = "今天";
 "days_later" = "%@天后";

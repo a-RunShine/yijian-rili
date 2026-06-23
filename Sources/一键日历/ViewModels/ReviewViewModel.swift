@@ -18,7 +18,7 @@ class ReviewViewModel: ObservableObject {
     @Published var showHistory: Bool = false
     @Published var showFirstRunGuide: Bool = false
     @Published var showHelpGuide: Bool = false
-    @Published var todayEvents: [EKEvent] = []
+    @Published var displayedEvents: [EKEvent] = []
     @Published var historySearchText: String = ""
     @Published var currentTheme: Theme = {
         let rawValue = UserDefaults.standard.string(forKey: "themeName") ?? Theme.light.rawValue
@@ -143,7 +143,7 @@ class ReviewViewModel: ObservableObject {
                 // 用户在系统设置里改了账户后，回来重新扫描
                 self.calendarManager.refreshAvailableCalendars()
                 if self.authorizationStatus == .fullAccess {
-                    self.loadTodayEvents()
+                    self.loadDisplayedDayEvents()
                 }
             }
         }
@@ -155,10 +155,10 @@ class ReviewViewModel: ObservableObject {
                 let granted = await self.calendarManager.requestAccess()
                 self.authorizationStatus = self.calendarManager.checkAuthorizationStatus()
                 if granted {
-                    self.loadTodayEvents()
+                    self.loadDisplayedDayEvents()
                 }
             } else if self.authorizationStatus == .fullAccess {
-                self.loadTodayEvents()
+                self.loadDisplayedDayEvents()
             }
         }
     }
@@ -263,8 +263,8 @@ class ReviewViewModel: ObservableObject {
                 baseDate = Date()
                 updateReviewDates()
                 
-                // 刷新今天日程
-                loadTodayEvents()
+                // 刷新当前查看的日程
+                loadDisplayedDayEvents()
             }
         } catch {
             resultMessage = error.localizedDescription
@@ -293,7 +293,7 @@ class ReviewViewModel: ObservableObject {
         
         canUndo = false
         canRecreate = false
-        loadTodayEvents()
+        loadDisplayedDayEvents()
         scheduleResultDismissal()
     }
     
@@ -303,10 +303,68 @@ class ReviewViewModel: ObservableObject {
         }
     }
     
-    // MARK: - Today Events
+    // MARK: - Day Events
     
-    func loadTodayEvents() {
-        todayEvents = calendarManager.fetchTodayEvents()
+    enum DayType: String, CaseIterable, Identifiable {
+        case yesterday
+        case today
+        case tomorrow
+        
+        var id: String { rawValue }
+        
+        var label: String {
+            switch self {
+            case .yesterday: return NSLocalizedString("yesterday_button", comment: "")
+            case .today: return NSLocalizedString("today_button", comment: "")
+            case .tomorrow: return NSLocalizedString("tomorrow_button", comment: "")
+            }
+        }
+        
+        var dayOffset: Int {
+            switch self {
+            case .yesterday: return -1
+            case .today: return 0
+            case .tomorrow: return 1
+            }
+        }
+        
+        var sectionTitle: String {
+            switch self {
+            case .yesterday: return NSLocalizedString("yesterday_events", comment: "")
+            case .today: return NSLocalizedString("today_events", comment: "")
+            case .tomorrow: return NSLocalizedString("tomorrow_events", comment: "")
+            }
+        }
+        
+        var emptyHint: String {
+            switch self {
+            case .yesterday: return NSLocalizedString("yesterday_no_events", comment: "")
+            case .today: return NSLocalizedString("today_no_events", comment: "")
+            case .tomorrow: return NSLocalizedString("tomorrow_no_events", comment: "")
+            }
+        }
+    }
+    
+    /// 当前查看的日期类型（默认今天，不持久化）
+    @Published var selectedDayType: DayType = .today
+    
+    /// 当前查看的日期（由 selectedDayType 计算）
+    var displayedDate: Date {
+        date(for: selectedDayType)
+    }
+    
+    func date(for dayType: DayType) -> Date {
+        Calendar.current.date(byAdding: .day, value: dayType.dayOffset, to: Date()) ?? Date()
+    }
+    
+    func loadDisplayedDayEvents() {
+        displayedEvents = calendarManager.fetchEvents(on: displayedDate)
+    }
+    
+    /// 用户切换日期按钮时调用
+    func selectDayType(_ dayType: DayType) {
+        selectedDayType = dayType
+        loadDisplayedDayEvents()
     }
     
     // MARK: - Result Auto-Dismiss

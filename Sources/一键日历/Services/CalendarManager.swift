@@ -181,22 +181,21 @@ class CalendarManager: ObservableObject {
         return calendar.date(bySettingHour: 9, minute: 0, second: 0, of: startOfDay)
     }
     
-    /// 读取今天的事件（所有日历）
-    func fetchTodayEvents() -> [EKEvent] {
-        // 实时检查权限，不依赖缓存
+    /// 读取指定日期的事件（所有日历），按「全天优先 + 开始时间」排序
+    func fetchEvents(on date: Date) -> [EKEvent] {
         let status = EKEventStore.authorizationStatus(for: .event)
         guard status == .fullAccess else {
-            logger.info("fetchTodayEvents skipped: status = \(String(describing: status))")
+            logger.info("fetchEvents skipped: status = \(String(describing: status))")
             return []
         }
         let calendar = Calendar.current
-        let startOfDay = calendar.startOfDay(for: Date())
+        let startOfDay = calendar.startOfDay(for: date)
         guard let endOfDay = calendar.date(byAdding: .day, value: 1, to: startOfDay) else {
             return []
         }
         let predicate = eventStore.predicateForEvents(withStart: startOfDay, end: endOfDay, calendars: nil)
         let events = eventStore.events(matching: predicate)
-        logger.info("fetchTodayEvents: found \(events.count) events")
+        logger.info("fetchEvents on \(startOfDay.formattedChinese()): found \(events.count) events")
         return events.sorted { (a, b) -> Bool in
             if a.isAllDay != b.isAllDay {
                 return a.isAllDay && !b.isAllDay

@@ -8,30 +8,21 @@ struct TodayEventsSection: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Label(NSLocalizedString("today_events", comment: ""), systemImage: "sun.max")
+            HStack(spacing: 8) {
+                Label(viewModel.selectedDayType.sectionTitle, systemImage: "sun.max")
                     .font(.headline)
-                Spacer()
-                if !viewModel.todayEvents.isEmpty {
-                    Text("\(viewModel.todayEvents.count)")
-                        .font(.caption2)
-                        .foregroundColor(.white)
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 2)
-                        .background(viewModel.currentTheme.accentColor ?? Color.accentColor)
-                        .clipShape(Capsule())
-                }
+                Spacer(minLength: 4)
+                daySwitcher
             }
 
-            if viewModel.todayEvents.isEmpty {
-                Text(NSLocalizedString("today_no_events", comment: ""))
+            if viewModel.displayedEvents.isEmpty {
+                Text(viewModel.selectedDayType.emptyHint)
                     .font(.caption)
                     .foregroundColor(viewModel.currentTheme.secondaryTextColor ?? .secondary)
             } else {
-                let displayCount = isExpanded ? viewModel.todayEvents.count : min(viewModel.todayEvents.count, collapsedLimit)
-                ForEach(Array(viewModel.todayEvents.prefix(displayCount).enumerated()), id: \.offset) { index, event in
+                let displayCount = isExpanded ? viewModel.displayedEvents.count : min(viewModel.displayedEvents.count, collapsedLimit)
+                ForEach(Array(viewModel.displayedEvents.prefix(displayCount).enumerated()), id: \.offset) { index, event in
                     HStack(spacing: 6) {
-                        // 日历颜色标识
                         Circle()
                             .fill(Color(cgColor: event.calendar.cgColor))
                             .frame(width: 6, height: 6)
@@ -62,7 +53,7 @@ struct TodayEventsSection: View {
                         Divider()
                     }
                 }
-                if viewModel.todayEvents.count > collapsedLimit {
+                if viewModel.displayedEvents.count > collapsedLimit {
                     Button(action: {
                         withAnimation(.easeInOut(duration: 0.25)) {
                             isExpanded.toggle()
@@ -73,7 +64,7 @@ struct TodayEventsSection: View {
                                 .font(.caption2)
                             Text(isExpanded
                                  ? NSLocalizedString("collapse", comment: "")
-                                 : String(format: NSLocalizedString("more_events", comment: ""), "\(viewModel.todayEvents.count - collapsedLimit)"))
+                                 : String(format: NSLocalizedString("more_events", comment: ""), "\(viewModel.displayedEvents.count - collapsedLimit)"))
                                 .font(.caption2)
                         }
                         .foregroundColor(viewModel.currentTheme.accentColor ?? .accentColor)
@@ -86,5 +77,44 @@ struct TodayEventsSection: View {
         .padding()
         .background(viewModel.currentTheme.cardBackgroundColor)
         .cornerRadius(10)
+    }
+
+    private var daySwitcher: some View {
+        HStack(spacing: 2) {
+            ForEach(ReviewViewModel.DayType.allCases) { dayType in
+                Button {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        viewModel.selectDayType(dayType)
+                    }
+                } label: {
+                    VStack(spacing: 1) {
+                        Text(dayType.label)
+                            .font(.caption2)
+                            .fontWeight(.medium)
+                        Text(viewModel.date(for: dayType).formattedShort())
+                            .font(.system(size: 9))
+                            .opacity(0.75)
+                    }
+                    .frame(minWidth: 42)
+                    .padding(.vertical, 3)
+                    .padding(.horizontal, 4)
+                    .background(
+                        viewModel.selectedDayType == dayType
+                            ? (viewModel.currentTheme.accentColor ?? .accentColor)
+                            : Color.clear
+                    )
+                    .foregroundColor(
+                        viewModel.selectedDayType == dayType
+                            ? .white
+                            : (viewModel.currentTheme.secondaryTextColor ?? .secondary)
+                    )
+                    .cornerRadius(5)
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(2)
+        .background((viewModel.currentTheme.secondaryTextColor ?? .secondary).opacity(0.1))
+        .cornerRadius(7)
     }
 }
