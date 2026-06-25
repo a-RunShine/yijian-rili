@@ -203,6 +203,38 @@ class CalendarManager: ObservableObject {
             return a.startDate < b.startDate
         }
     }
+
+    /// 在从今天起指定天数内，跨所有日历搜索标题包含关键词的事件
+    /// - Parameters:
+    ///   - query: 搜索关键词（空字符串返回空数组）
+    ///   - daysAhead: 向后搜索的天数，默认 90
+    /// - Returns: 匹配的事件，按开始时间升序
+    func searchEvents(query: String, daysAhead: Int = 90) -> [EKEvent] {
+        let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return [] }
+
+        let status = EKEventStore.authorizationStatus(for: .event)
+        guard status == .fullAccess else {
+            logger.info("searchEvents skipped: status = \(String(describing: status))")
+            return []
+        }
+
+        let calendar = Calendar.current
+        let startOfToday = calendar.startOfDay(for: Date())
+        guard let endDate = calendar.date(byAdding: .day, value: daysAhead, to: startOfToday) else {
+            return []
+        }
+
+        let predicate = eventStore.predicateForEvents(withStart: startOfToday, end: endDate, calendars: nil)
+        let events = eventStore.events(matching: predicate)
+
+        let matches = events.filter { event in
+            guard let title = event.title else { return false }
+            return title.localizedCaseInsensitiveContains(trimmed)
+        }
+        logger.info("searchEvents query=\(trimmed) daysAhead=\(daysAhead): \(matches.count)/\(events.count) matched")
+        return matches.sorted { $0.startDate < $1.startDate }
+    }
 }
 
 enum CalendarError: LocalizedError {

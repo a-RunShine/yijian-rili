@@ -1,4 +1,10 @@
 import SwiftUI
+import EventKit
+
+private struct SearchResultWrapper: Identifiable {
+    let event: EKEvent
+    var id: String { event.eventIdentifier ?? "" }
+}
 
 struct ContentView: View {
     @EnvironmentObject var viewModel: ReviewViewModel
@@ -13,6 +19,16 @@ struct ContentView: View {
                         .fontWeight(.bold)
                         .foregroundColor(viewModel.currentTheme.primaryTextColor)
                     Spacer()
+                    Button(action: {
+                        viewModel.showSearch = true
+                    }) {
+                        Image(systemName: "magnifyingglass")
+                            .font(.system(size: 16))
+                            .foregroundColor(viewModel.currentTheme.secondaryTextColor ?? .secondary)
+                    }
+                    .buttonStyle(.plain)
+                    .help(NSLocalizedString("search_button_tooltip", comment: ""))
+
                     Button(action: {
                         viewModel.openHelpGuide()
                     }) {
@@ -79,6 +95,9 @@ struct ContentView: View {
                 // Interval Settings
                 IntervalSettingsSection(viewModel: viewModel)
 
+                // Window Settings
+                WindowSettingsSection(viewModel: viewModel)
+
                 // Actions
                 ActionSection(viewModel: viewModel)
             }
@@ -100,8 +119,25 @@ struct ContentView: View {
                 viewModel.showHelpGuide = false
             }
         }
+        .sheet(isPresented: $viewModel.showSearch, onDismiss: {
+            viewModel.resetSearch()
+        }) {
+            SearchSheetView(viewModel: viewModel)
+                .frame(width: 380, height: 460)
+        }
+        .sheet(item: Binding(
+            get: { viewModel.selectedSearchResult.map { SearchResultWrapper(event: $0) } },
+            set: { newValue in viewModel.selectedSearchResult = newValue?.event }
+        )) { wrapper in
+            SearchResultDetailView(viewModel: viewModel, event: wrapper.event)
+                .frame(width: 360, height: 320)
+        }
         .onAppear {
             viewModel.scheduleFirstRunGuideIfNeeded()
+            viewModel.applyWindowLevel()
+        }
+        .onChange(of: viewModel.windowFloating) { _, _ in
+            viewModel.applyWindowLevel()
         }
     }
 }

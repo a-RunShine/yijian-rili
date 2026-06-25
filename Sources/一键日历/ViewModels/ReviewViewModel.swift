@@ -18,6 +18,10 @@ class ReviewViewModel: ObservableObject {
     @Published var showHistory: Bool = false
     @Published var showFirstRunGuide: Bool = false
     @Published var showHelpGuide: Bool = false
+    @Published var showSearch: Bool = false
+    @Published var searchText: String = ""
+    @Published var searchResults: [EKEvent] = []
+    @Published var selectedSearchResult: EKEvent?
     @Published var displayedEvents: [EKEvent] = []
     @Published var historySearchText: String = ""
     @Published var currentTheme: Theme = {
@@ -448,6 +452,19 @@ class ReviewViewModel: ObservableObject {
         return intervals.allSatisfy { $0 >= 1 && $0 <= 365 }
     }
     
+    // MARK: - Window Settings
+    
+    /// 窗口是否置顶（浮动层级）。默认 true，老用户行为不变
+    @Published var windowFloating: Bool = UserDefaults.standard.object(forKey: "windowFloating") as? Bool ?? true {
+        didSet { UserDefaults.standard.set(windowFloating, forKey: "windowFloating") }
+    }
+    
+    /// 把当前 windowFloating 偏好应用到所有窗口
+    func applyWindowLevel() {
+        let level: NSWindow.Level = windowFloating ? .floating : .normal
+        NSApp.windows.forEach { $0.level = level }
+    }
+    
     // MARK: - First Run Guide
     
     /// 启动 3 秒后若没有云日历且未引导过，自动弹出引导
@@ -475,12 +492,31 @@ class ReviewViewModel: ObservableObject {
     }
     
     // MARK: - Theme
-    
+
     func setTheme(_ theme: Theme) {
         withAnimation(.easeInOut(duration: 0.3)) {
             currentTheme = theme
         }
         UserDefaults.standard.set(theme.rawValue, forKey: "themeName")
+    }
+
+    // MARK: - Search
+
+    /// 在未来 90 天内搜索标题包含关键词的事件
+    func performSearch() {
+        let trimmed = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else {
+            searchResults = []
+            return
+        }
+        searchResults = calendarManager.searchEvents(query: trimmed, daysAhead: 90)
+    }
+
+    /// 关闭搜索 sheet 时重置状态
+    func resetSearch() {
+        searchText = ""
+        searchResults = []
+        selectedSearchResult = nil
     }
 }
 

@@ -97,6 +97,10 @@
 "reset_intervals" = "恢复默认";
 "interval_invalid" = "间隔必须为正整数";
 
+// Window Settings
+"window_settings_title" = "窗口设置";
+"window_floating_hint" = "开启后窗口会浮在其他应用之上";
+
 // CalendarManager
 "default_calendar_unavailable" = "系统默认日历不可用，请检查日历设置";
 
@@ -133,3 +137,16 @@
 
 // Help
 "help_button_tooltip" = "查看手机同步帮助";
+
+// Search
+"search_button_tooltip" = "搜索日程";
+"search_sheet_title" = "搜索日程";
+"search_placeholder" = "输入日程标题";
+"search_empty_hint" = "输入关键词，搜索未来 90 天的日程";
+"search_no_results" = "没有找到匹配的日程";
+"search_result_count" = "找到 %@ 个日程";
+"search_result_detail" = "日程详情";
+"search_result_date" = "日期";
+"search_result_time" = "时间";
+"search_result_calendar" = "所属日历";
+"search_result_notes" = "备注";
