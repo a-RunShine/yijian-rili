@@ -4,7 +4,7 @@ struct IntervalSettingsSection: View {
     @ObservedObject var viewModel: ReviewViewModel
     @State private var tempIntervals: [String] = ["3", "7", "30"]
     @State private var showError: Bool = false
-    @State private var isExpanded: Bool = false
+    @AppStorage("intervalSettingsExpanded") private var isExpanded: Bool = false
 
     private var activePreset: IntervalPreset? {
         let current = viewModel.reviewIntervals

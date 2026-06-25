@@ -66,10 +66,25 @@ struct ContentView: View {
                             ))
                     }
 
-                    // Calendar Picker
+                    // Actions（紧跟输入流，符合"输入→确认→提交"流程）
+                    ActionSection(viewModel: viewModel)
+
+                    // Calendar Picker（折叠）
                     CalendarPickerSection(viewModel: viewModel)
 
-                    // History Button (card-style)
+                    // Interval Settings（折叠，仅复习模式显示）
+                    if viewModel.scheduleMode == .review {
+                        IntervalSettingsSection(viewModel: viewModel)
+                            .transition(.asymmetric(
+                                insertion: .opacity.combined(with: .scale(scale: 0.95)),
+                                removal: .opacity
+                            ))
+                    }
+
+                    // Window Settings（折叠）
+                    WindowSettingsSection(viewModel: viewModel)
+
+                    // History Button (card-style，按钮直接进 sheet，不需要折叠)
                     Button(action: {
                         viewModel.showHistory = true
                     }) {
@@ -93,21 +108,6 @@ struct ContentView: View {
                     .padding()
                     .background(viewModel.currentTheme.cardBackgroundColor)
                     .cornerRadius(10)
-
-                    // Interval Settings（仅复习模式显示）
-                    if viewModel.scheduleMode == .review {
-                        IntervalSettingsSection(viewModel: viewModel)
-                            .transition(.asymmetric(
-                                insertion: .opacity.combined(with: .scale(scale: 0.95)),
-                                removal: .opacity
-                            ))
-                    }
-
-                    // Window Settings
-                    WindowSettingsSection(viewModel: viewModel)
-
-                    // Actions
-                    ActionSection(viewModel: viewModel)
                 }
                 .padding()
                 .animation(.easeInOut(duration: 0.25), value: viewModel.scheduleMode)

@@ -100,6 +100,8 @@
 // Window Settings
 "window_settings_title" = "窗口设置";
 "window_floating_hint" = "开启后窗口会浮在其他应用之上";
+"window_floating_on" = "置顶";
+"window_floating_off" = "普通";
 
 // CalendarManager
 "default_calendar_unavailable" = "系统默认日历不可用，请检查日历设置";

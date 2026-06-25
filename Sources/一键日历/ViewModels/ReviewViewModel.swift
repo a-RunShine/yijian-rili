@@ -46,6 +46,12 @@ class ReviewViewModel: ObservableObject {
     @AppStorage("selectedCalendarIdentifier") var selectedCalendarIdentifier: String = ""
     /// 是否已经展示过首次启动引导
     @AppStorage("hasShownFirstRunGuide") private var hasShownFirstRunGuide: Bool = false
+    /// 写入日历 Section 折叠状态（默认折叠，展开后记住）
+    @AppStorage("calendarPickerExpanded") var calendarPickerExpanded: Bool = false
+    /// 复习间隔 Section 折叠状态（默认折叠，展开后记住）
+    @AppStorage("intervalSettingsExpanded") var intervalSettingsExpanded: Bool = false
+    /// 窗口设置 Section 折叠状态（默认折叠，展开后记住）
+    @AppStorage("windowSettingsExpanded") var windowSettingsExpanded: Bool = false
     
     var reviewIntervals: [Int] {
         get {
