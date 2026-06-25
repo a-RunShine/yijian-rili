@@ -7,15 +7,23 @@ struct SearchSheetView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            if let event = viewModel.selectedSearchResult {
-                detailHeader
-                SearchResultDetailView(viewModel: viewModel, event: event)
-            } else {
-                searchHeader
-                searchField
-                searchBody
+            Group {
+                if let event = viewModel.selectedSearchResult {
+                    detailHeader
+                    SearchResultDetailView(viewModel: viewModel, event: event)
+                } else {
+                    searchHeader
+                    searchField
+                    searchBody
+                }
             }
+            .transition(.asymmetric(
+                insertion: .move(edge: .trailing).combined(with: .opacity),
+                removal: .move(edge: .leading).combined(with: .opacity)
+            ))
+            Spacer(minLength: 0)
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .padding()
         .onAppear {
             isFieldFocused = viewModel.selectedSearchResult == nil
@@ -40,7 +48,9 @@ struct SearchSheetView: View {
     private var detailHeader: some View {
         HStack {
             Button {
-                viewModel.selectedSearchResult = nil
+                withAnimation(.spring(response: 0.4, dampingFraction: 0.85)) {
+                    viewModel.selectedSearchResult = nil
+                }
             } label: {
                 Label(NSLocalizedString("search_back", comment: ""), systemImage: "chevron.left")
                     .font(.headline)
@@ -119,13 +129,13 @@ struct SearchSheetView: View {
                 }
             }
         }
-
-        Spacer(minLength: 0)
     }
 
     private func searchRow(_ event: EKEvent) -> some View {
         Button {
-            viewModel.selectedSearchResult = event
+            withAnimation(.spring(response: 0.4, dampingFraction: 0.85)) {
+                viewModel.selectedSearchResult = event
+            }
         } label: {
             HStack(spacing: 8) {
                 Circle()
