@@ -43,15 +43,16 @@ make run         # swift run
 
 ### 视图结构
 
-- **主窗口**：固定 400x600，浮动层级（`window.level = .floating`），不可调整大小
+- **主窗口**：固定 400x600，不可调整大小；窗口层级（浮动/普通）由用户通过 `WindowSettingsSection` 的开关控制，默认浮动
 - **快捷键**：Cmd+Enter 通过 `NotificationCenter` 触发 `createReviewSchedule`，不是 SwiftUI 原生 `keyboardShortcut`
   - 通知名：`Notification.Name.createReviewSchedule`
   - 发送方：`一键日历App.swift` 中的 `CommandMenu`
   - 接收方：`ReviewViewModel.init()` 中注册的观察者
-- **视图拆分**：10 个子视图，主容器是 `ContentView`
+- **视图拆分**：11 个子视图，主容器是 `ContentView`
   - 输入/预览类：`TitleInputSection` / `DatePickerSection` / `ReviewPreviewSection` / `IntervalSettingsSection`
   - 操作/反馈类：`ActionSection` / `HistorySection`（sheet）
   - 日历/权限类：`CalendarPickerSection` / `FirstRunGuideView`（sheet，3 步配置云日历）
+  - 窗口设置类：`WindowSettingsSection`（Toggle 控制 `windowFloating`）
   - 日程展示类：`TodayEventsSection`（昨天/今天/明天三段切换 + 卡片列表）
 - **`IntervalSettingsSection` 的 `tempIntervals` 是本地 `@State`**，保存时才写入 `viewModel.reviewIntervals`
 
@@ -60,6 +61,7 @@ make run         # swift run
 - **存储方式**：`@AppStorage` 存 JSON 字符串，不是原生 plist
   - `reviewIntervalsData`：默认 `[3, 7, 30]`，可自定义
   - `historyEntriesData`：上限 20 条，超出自动截断
+- **`windowFloating`**（`@Published` + `didSet` 写 `UserDefaults`）：窗口是否置顶，默认 `true`；切换后 `ContentView.onChange` 调用 `applyWindowLevel()` 立即生效
 - **修改后必须调用 `updateReviewDates()`** 刷新预览
 - 历史记录直接存 JSON 到 `UserDefaults`，不是文件系统
 
@@ -108,6 +110,7 @@ Sources/一键日历/
 │   ├── ActionSection.swift        # 操作按钮（创建/撤销/结果提示/权限设置）
 │   ├── HistorySection.swift       # 历史记录（ScrollView 最大高度 150）
 │   ├── IntervalSettingsSection.swift # 间隔设置（3 个 TextField + 校验）
+│   ├── WindowSettingsSection.swift   # 窗口置顶开关（Toggle）
 │   └── TodayEventsSection.swift   # 今日日程（卡片列表）
 ├── ViewModels/
 │   └── ReviewViewModel.swift      # 业务逻辑 + AppStorage 读写 + 通知监听

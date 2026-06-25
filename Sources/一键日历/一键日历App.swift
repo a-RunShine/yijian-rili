@@ -9,7 +9,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidBecomeActive(_ notification: Notification) {
         if let window = NSApplication.shared.mainWindow {
             window.makeKeyAndOrderFront(nil)
-            window.level = .floating
         }
         NotificationCenter.default.post(name: .appDidBecomeActive, object: nil)
     }
