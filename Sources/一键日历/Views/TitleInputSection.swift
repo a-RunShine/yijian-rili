@@ -29,7 +29,6 @@ struct TitleInputSection: View {
         .padding()
         .background(viewModel.currentTheme.cardBackgroundColor)
         .cornerRadius(10)
-        .id("titleInput")
         .onAppear {
             isFocused = true
         }

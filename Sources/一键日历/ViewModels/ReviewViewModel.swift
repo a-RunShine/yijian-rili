@@ -432,16 +432,12 @@ class ReviewViewModel: ObservableObject {
     
     // MARK: - Recreate
 
-    /// 每次点"再建一个"递增，View 端监听此值触发 ScrollView 滚到输入框
-    @Published var scrollToInputCounter: Int = 0
-
     func recreateLastSchedule() {
         guard let title = lastCreatedTitle, let baseDate = lastCreatedBaseDate else { return }
         self.title = title
         self.baseDate = baseDate
         updateReviewDates()
         canRecreate = false
-        scrollToInputCounter &+= 1
     }
     
     // MARK: - History

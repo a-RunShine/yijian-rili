@@ -5,7 +5,7 @@ struct ActionSection: View {
 
     var body: some View {
         VStack(spacing: 10) {
-            // Create Button
+            // Create Button（主操作，固定在 Footer）
             Button(action: {
                 Task {
                     await viewModel.createReviewSchedule()
@@ -30,31 +30,7 @@ struct ActionSection: View {
             .controlSize(.large)
             .tint(viewModel.currentTheme.accentColor ?? .accentColor)
             .disabled(viewModel.isLoading)
-
-            // Recreate + Undo in a row
-            HStack(spacing: 10) {
-                if viewModel.canRecreate {
-                    Button(action: {
-                        viewModel.recreateLastSchedule()
-                    }) {
-                        Label(NSLocalizedString("recreate_button", comment: ""), systemImage: "arrow.clockwise")
-                    }
-                    .buttonStyle(.bordered)
-                    .controlSize(.small)
-                }
-
-                if viewModel.canUndo {
-                    Button(action: {
-                        Task {
-                            await viewModel.undoReviewSchedule()
-                        }
-                    }) {
-                        Label(NSLocalizedString("undo_button", comment: ""), systemImage: "arrow.uturn.backward")
-                    }
-                    .buttonStyle(.bordered)
-                    .controlSize(.small)
-                }
-            }
+            .frame(maxWidth: .infinity)
 
             // Result Message
             if let message = viewModel.resultMessage, let type = viewModel.resultType {
@@ -72,6 +48,7 @@ struct ActionSection: View {
                 }
                 .foregroundColor(color)
                 .padding()
+                .frame(maxWidth: .infinity)
                 .background(bg)
                 .cornerRadius(8)
                 .transition(.opacity.combined(with: .move(edge: .bottom)))
@@ -87,7 +64,5 @@ struct ActionSection: View {
             }
         }
         .animation(.easeInOut(duration: 0.25), value: viewModel.resultMessage != nil)
-        .animation(.easeInOut(duration: 0.25), value: viewModel.canRecreate)
-        .animation(.easeInOut(duration: 0.25), value: viewModel.canUndo)
     }
 }

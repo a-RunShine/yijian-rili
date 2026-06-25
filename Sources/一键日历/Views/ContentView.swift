@@ -5,9 +5,8 @@ struct ContentView: View {
     @EnvironmentObject var viewModel: ReviewViewModel
 
     var body: some View {
-        ScrollViewReader { proxy in
-            ScrollView {
-                VStack(spacing: 14) {
+        ScrollView {
+            VStack(spacing: 14) {
                     // Title + Theme Picker + Help
                     HStack {
                         Text(NSLocalizedString("app_name", comment: ""))
@@ -54,6 +53,11 @@ struct ContentView: View {
                     // Title Input (含模式切换 Picker)
                     TitleInputSection(viewModel: viewModel)
 
+                    // 撤销 / 再建一个（"上次操作的后续"紧跟标题输入，符合操作直觉）
+                    if viewModel.canUndo || viewModel.canRecreate {
+                        RecreateUndoSection(viewModel: viewModel)
+                    }
+
                     // Date Picker
                     DatePickerSection(viewModel: viewModel)
 
@@ -65,9 +69,6 @@ struct ContentView: View {
                                 removal: .opacity
                             ))
                     }
-
-                    // Actions（紧跟输入流，符合"输入→确认→提交"流程）
-                    ActionSection(viewModel: viewModel)
 
                     // Calendar Picker（折叠）
                     CalendarPickerSection(viewModel: viewModel)
@@ -113,6 +114,14 @@ struct ContentView: View {
                 .animation(.easeInOut(duration: 0.25), value: viewModel.scheduleMode)
             }
             .background(viewModel.currentTheme.windowBackgroundColor)
+            .safeAreaInset(edge: .bottom, spacing: 0) {
+                VStack(spacing: 0) {
+                    Divider()
+                    ActionSection(viewModel: viewModel)
+                        .padding(12)
+                }
+                .background(viewModel.currentTheme.cardBackgroundColor)
+            }
             .frame(width: 400, height: 600)
             .sheet(isPresented: $viewModel.showHistory) {
                 HistorySection(viewModel: viewModel)
@@ -144,12 +153,6 @@ struct ContentView: View {
             .onChange(of: viewModel.scheduleMode) { _, _ in
                 viewModel.updateReviewDates()
             }
-            .onChange(of: viewModel.scrollToInputCounter) { _, _ in
-                withAnimation(.easeInOut(duration: 0.3)) {
-                    proxy.scrollTo("titleInput", anchor: .top)
-                }
-            }
-        }
     }
 }
 
