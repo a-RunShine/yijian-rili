@@ -16,7 +16,9 @@ struct ActionSection: View {
                         .progressViewStyle(CircularProgressViewStyle())
                 } else {
                     HStack(spacing: 4) {
-                        Text(NSLocalizedString("create_button", comment: ""))
+                        Text(viewModel.scheduleMode == .single
+                             ? NSLocalizedString("single_create_button", comment: "")
+                             : NSLocalizedString("create_button", comment: ""))
                             .font(.headline)
                         Text("⌘↵")
                             .font(.caption)

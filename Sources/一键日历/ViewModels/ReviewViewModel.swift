@@ -24,6 +24,7 @@ class ReviewViewModel: ObservableObject {
     @Published var selectedSearchResult: EKEvent?
     @Published var displayedEvents: [EKEvent] = []
     @Published var historySearchText: String = ""
+    @Published var scheduleMode: ScheduleMode = .review
     @Published var currentTheme: Theme = {
         let rawValue = UserDefaults.standard.string(forKey: "themeName") ?? Theme.light.rawValue
         return Theme(rawValue: rawValue) ?? .light
@@ -106,7 +107,22 @@ class ReviewViewModel: ObservableObject {
         case warning
         case error
     }
-    
+
+    /// 日程创建模式：艾宾浩斯复习计划（默认） 或 单次日程
+    enum ScheduleMode: String, CaseIterable, Identifiable {
+        case review
+        case single
+
+        var id: String { rawValue }
+
+        var displayName: String {
+            switch self {
+            case .review: return NSLocalizedString("schedule_mode_review", comment: "")
+            case .single: return NSLocalizedString("schedule_mode_single", comment: "")
+            }
+        }
+    }
+
     init() {
         authorizationStatus = calendarManager.checkAuthorizationStatus()
         updateReviewDates()
@@ -178,7 +194,12 @@ class ReviewViewModel: ObservableObject {
     }
     
     func updateReviewDates() {
-        reviewDates = ReviewEvent.calculateReviewDates(from: baseDate, intervals: reviewIntervals)
+        switch scheduleMode {
+        case .review:
+            reviewDates = ReviewEvent.calculateReviewDates(from: baseDate, intervals: reviewIntervals)
+        case .single:
+            reviewDates = [baseDate]
+        }
     }
     
     /// 主流程：创建复习提醒日程
@@ -229,13 +250,24 @@ class ReviewViewModel: ObservableObject {
                 scheduleResultDismissal()
                 return
             }
-            let (created, duplicates, failed) = try await calendarManager.createReviewEvents(
-                title: trimmedTitle,
-                baseDate: baseDate,
-                intervals: reviewIntervals,
-                calendar: targetCalendar
-            )
-            
+
+            let (created, duplicates, failed): ([Date], [Date], [(Date, Error)])
+            switch scheduleMode {
+            case .review:
+                (created, duplicates, failed) = try await calendarManager.createReviewEvents(
+                    title: trimmedTitle,
+                    baseDate: baseDate,
+                    intervals: reviewIntervals,
+                    calendar: targetCalendar
+                )
+            case .single:
+                (created, duplicates, failed) = try await calendarManager.createSingleEvent(
+                    title: trimmedTitle,
+                    date: baseDate,
+                    calendar: targetCalendar
+                )
+            }
+
             if !failed.isEmpty {
                 let failedDates = failed.map { $0.0.formattedChinese() }.joined(separator: "、")
                 resultMessage = String(format: NSLocalizedString("error_message", comment: ""), failedDates)
@@ -245,28 +277,33 @@ class ReviewViewModel: ObservableObject {
                 resultMessage = String(format: NSLocalizedString("warning_message", comment: ""), dupDates)
                 resultType = .warning
             } else {
-                let createdDates = created.map { $0.formattedChinese() }.joined(separator: "、")
-                resultMessage = String(format: NSLocalizedString("success_message", comment: ""), createdDates)
+                if scheduleMode == .single {
+                    let dateString = baseDate.formattedChinese()
+                    resultMessage = String(format: NSLocalizedString("single_success_message", comment: ""), dateString)
+                } else {
+                    let createdDates = created.map { $0.formattedChinese() }.joined(separator: "、")
+                    resultMessage = String(format: NSLocalizedString("success_message", comment: ""), createdDates)
+                }
                 resultType = .success
-                
+
                 NSHapticFeedbackManager.defaultPerformer.perform(.generic, performanceTime: .now)
-                
+
                 // Save for recreate
                 lastCreatedTitle = trimmedTitle
                 lastCreatedBaseDate = baseDate
                 canRecreate = true
-                
+
                 // Add to history
                 addHistoryEntry(title: trimmedTitle, baseDate: baseDate, reviewDates: created)
-                
+
                 // Enable undo
                 canUndo = true
-                
+
                 // Clear inputs after success
                 title = ""
                 baseDate = Date()
                 updateReviewDates()
-                
+
                 // 刷新当前查看的日程
                 loadDisplayedDayEvents()
             }
@@ -274,7 +311,7 @@ class ReviewViewModel: ObservableObject {
             resultMessage = error.localizedDescription
             resultType = .error
         }
-        
+
         scheduleResultDismissal()
     }
     
@@ -388,13 +425,17 @@ class ReviewViewModel: ObservableObject {
     }
     
     // MARK: - Recreate
-    
+
+    /// 每次点"再建一个"递增，View 端监听此值触发 ScrollView 滚到输入框
+    @Published var scrollToInputCounter: Int = 0
+
     func recreateLastSchedule() {
         guard let title = lastCreatedTitle, let baseDate = lastCreatedBaseDate else { return }
         self.title = title
         self.baseDate = baseDate
         updateReviewDates()
         canRecreate = false
+        scrollToInputCounter &+= 1
     }
     
     // MARK: - History

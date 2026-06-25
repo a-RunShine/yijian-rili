@@ -138,6 +138,12 @@
 // Help
 "help_button_tooltip" = "查看手机同步帮助";
 
+// Schedule Mode
+"schedule_mode_review" = "复习计划";
+"schedule_mode_single" = "单次日程";
+"single_create_button" = "创建日程";
+"single_success_message" = "成功创建日程：%@";
+
 // Search
 "search_button_tooltip" = "搜索日程";
 "search_sheet_title" = "搜索日程";

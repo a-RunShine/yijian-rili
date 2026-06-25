@@ -131,7 +131,73 @@ class CalendarManager: ObservableObject {
         if !createdIdentifiers.isEmpty {
             lastCreatedEventIdentifiers = createdIdentifiers
         }
-        
+
+        return (created, duplicates, failed)
+    }
+
+    /// 创建单次日程（非复习计划）
+    /// notes 固定为空字符串，复用 `checkDuplicate` 逻辑：
+    /// - 同日同 title 且同为单次日程（notes 为空）会被判重
+    /// - 与有「第N次复习」notes 的复习日程不会误判
+    /// - Parameters:
+    ///   - title: 日程标题
+    ///   - date: 所选日期
+    ///   - calendar: 写入的目标日历，nil 时使用系统默认日历
+    /// - Returns: 元组（成功日期、重复警告日期、失败日期及错误）
+    func createSingleEvent(title: String, date: Date, calendar: EKCalendar? = nil) async throws -> (created: [Date], duplicates: [Date], failed: [(Date, Error)]) {
+        let targetCalendar: EKCalendar
+        if let chosen = calendar, chosen.allowsContentModifications {
+            targetCalendar = chosen
+        } else if let defaultCalendar = eventStore.defaultCalendarForNewEvents {
+            targetCalendar = defaultCalendar
+        } else {
+            logger.error("Default calendar is unavailable")
+            throw CalendarError.defaultCalendarUnavailable
+        }
+
+        var created: [Date] = []
+        var duplicates: [Date] = []
+        var failed: [(Date, Error)] = []
+        var createdIdentifiers: [String] = []
+
+        do {
+            let hasDuplicate = try checkDuplicate(title: title, date: date, notes: "", in: targetCalendar)
+
+            let event = EKEvent(eventStore: eventStore)
+            event.title = title
+            event.startDate = date
+            event.endDate = date
+            event.isAllDay = true
+            event.notes = ""
+            event.calendar = targetCalendar
+
+            let alarm = EKAlarm()
+            if let alarmDate = self.alarmDate(for: date) {
+                alarm.absoluteDate = alarmDate
+                event.alarms = [alarm]
+            }
+
+            try eventStore.save(event, span: .thisEvent)
+            created.append(date)
+
+            if let identifier = event.eventIdentifier {
+                createdIdentifiers.append(identifier)
+            }
+
+            if hasDuplicate {
+                duplicates.append(date)
+            }
+
+            logger.info("Created single event for \(date.formattedChinese()) in calendar \(targetCalendar.title)")
+        } catch {
+            failed.append((date, error))
+            logger.error("Failed to create single event for \(date.formattedChinese()): \(error.localizedDescription)")
+        }
+
+        if !createdIdentifiers.isEmpty {
+            lastCreatedEventIdentifiers = createdIdentifiers
+        }
+
         return (created, duplicates, failed)
     }
     
