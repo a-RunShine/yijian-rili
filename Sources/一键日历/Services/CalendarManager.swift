@@ -270,6 +270,20 @@ class CalendarManager: ObservableObject {
         }
     }
 
+    /// 删除单条日程（同步，EventKit.remove 是同步操作）
+    /// - Returns: 是否删除成功
+    @discardableResult
+    func deleteEvent(_ event: EKEvent) -> Bool {
+        do {
+            try eventStore.remove(event, span: .thisEvent)
+            logger.info("Deleted event \(event.eventIdentifier ?? "?") for \(event.startDate.formattedChinese())")
+            return true
+        } catch {
+            logger.error("Failed to delete event: \(error.localizedDescription)")
+            return false
+        }
+    }
+
     /// 在从今天起指定天数内，跨所有日历搜索标题包含关键词的事件
     /// - Parameters:
     ///   - query: 搜索关键词（空字符串返回空数组）

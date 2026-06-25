@@ -553,6 +553,16 @@ class ReviewViewModel: ObservableObject {
         searchResults = calendarManager.searchEvents(query: trimmed, daysAhead: 90)
     }
 
+    /// 删除搜索到的单条日程，成功后从 searchResults 移除
+    @discardableResult
+    func deleteSearchResult(_ event: EKEvent) -> Bool {
+        let success = calendarManager.deleteEvent(event)
+        if success {
+            searchResults.removeAll { ($0.eventIdentifier ?? "") == (event.eventIdentifier ?? "") }
+        }
+        return success
+    }
+
     /// 关闭搜索 sheet 时重置状态
     func resetSearch() {
         searchText = ""

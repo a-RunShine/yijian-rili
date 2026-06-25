@@ -4,29 +4,69 @@ import EventKit
 struct SearchSheetView: View {
     @ObservedObject var viewModel: ReviewViewModel
     @FocusState private var isFieldFocused: Bool
+    @State private var eventPendingDelete: EKEvent?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Group {
-                if let event = viewModel.selectedSearchResult {
+            if let event = viewModel.selectedSearchResult {
+                Group {
                     detailHeader
                     SearchResultDetailView(viewModel: viewModel, event: event)
-                } else {
+                }
+                .id("search-detail")
+                .transition(.asymmetric(
+                    insertion: .move(edge: .trailing).combined(with: .opacity),
+                    removal: .move(edge: .leading).combined(with: .opacity)
+                ))
+            } else {
+                Group {
                     searchHeader
                     searchField
                     searchBody
                 }
+                .id("search-list")
+                .transition(.asymmetric(
+                    insertion: .move(edge: .leading).combined(with: .opacity),
+                    removal: .move(edge: .trailing).combined(with: .opacity)
+                ))
             }
-            .transition(.asymmetric(
-                insertion: .move(edge: .trailing).combined(with: .opacity),
-                removal: .move(edge: .leading).combined(with: .opacity)
-            ))
             Spacer(minLength: 0)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .padding()
+        .animation(.spring(response: 0.4, dampingFraction: 0.85), value: viewModel.selectedSearchResult)
         .onAppear {
             isFieldFocused = viewModel.selectedSearchResult == nil
+        }
+        .alert(
+            NSLocalizedString("search_delete_confirm_title", comment: ""),
+            isPresented: Binding(
+                get: { eventPendingDelete != nil },
+                set: { if !$0 { eventPendingDelete = nil } }
+            ),
+            presenting: eventPendingDelete
+        ) { event in
+            Button(NSLocalizedString("search_delete_cancel", comment: ""), role: .cancel) {
+                eventPendingDelete = nil
+            }
+            Button(NSLocalizedString("search_delete_confirm_action", comment: ""), role: .destructive) {
+                performDelete(event)
+            }
+        } message: { event in
+            Text(String(
+                format: NSLocalizedString("search_delete_confirm_message", comment: ""),
+                event.title ?? NSLocalizedString("untitled", comment: "")
+            ))
+        }
+    }
+
+    private func performDelete(_ event: EKEvent) {
+        eventPendingDelete = nil
+        let success = viewModel.deleteSearchResult(event)
+        if success, viewModel.selectedSearchResult?.eventIdentifier == event.eventIdentifier {
+            withAnimation(.spring(response: 0.4, dampingFraction: 0.85)) {
+                viewModel.selectedSearchResult = nil
+            }
         }
     }
 
@@ -57,6 +97,16 @@ struct SearchSheetView: View {
             }
             .buttonStyle(.borderless)
             Spacer()
+            if let event = viewModel.selectedSearchResult {
+                Button {
+                    eventPendingDelete = event
+                } label: {
+                    Image(systemName: "trash")
+                        .foregroundColor(.red)
+                }
+                .buttonStyle(.borderless)
+                .help(NSLocalizedString("search_delete_button", comment: ""))
+            }
             Button {
                 viewModel.showSearch = false
             } label: {
@@ -132,46 +182,59 @@ struct SearchSheetView: View {
     }
 
     private func searchRow(_ event: EKEvent) -> some View {
-        Button {
-            withAnimation(.spring(response: 0.4, dampingFraction: 0.85)) {
-                viewModel.selectedSearchResult = event
-            }
-        } label: {
-            HStack(spacing: 8) {
-                Circle()
-                    .fill(Color(cgColor: event.calendar.cgColor))
-                    .frame(width: 8, height: 8)
+        HStack(spacing: 4) {
+            Button {
+                withAnimation(.spring(response: 0.4, dampingFraction: 0.85)) {
+                    viewModel.selectedSearchResult = event
+                }
+            } label: {
+                HStack(spacing: 8) {
+                    Circle()
+                        .fill(Color(cgColor: event.calendar.cgColor))
+                        .frame(width: 8, height: 8)
 
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(event.title ?? NSLocalizedString("untitled", comment: ""))
-                        .font(.subheadline)
-                        .lineLimit(1)
-                    HStack(spacing: 4) {
-                        Text(event.startDate.formattedChinese())
-                            .font(.caption)
-                            .foregroundColor(viewModel.currentTheme.secondaryTextColor ?? .secondary)
-                        Text("·")
-                            .font(.caption)
-                            .foregroundColor(viewModel.currentTheme.secondaryTextColor ?? .secondary)
-                        if event.isAllDay {
-                            Text(NSLocalizedString("all_day", comment: ""))
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(event.title ?? NSLocalizedString("untitled", comment: ""))
+                            .font(.subheadline)
+                            .lineLimit(1)
+                        HStack(spacing: 4) {
+                            Text(event.startDate.formattedChinese())
                                 .font(.caption)
                                 .foregroundColor(viewModel.currentTheme.secondaryTextColor ?? .secondary)
-                        } else {
-                            Text(event.startDate.formattedTime())
+                            Text("·")
                                 .font(.caption)
                                 .foregroundColor(viewModel.currentTheme.secondaryTextColor ?? .secondary)
+                            if event.isAllDay {
+                                Text(NSLocalizedString("all_day", comment: ""))
+                                    .font(.caption)
+                                    .foregroundColor(viewModel.currentTheme.secondaryTextColor ?? .secondary)
+                            } else {
+                                Text(event.startDate.formattedTime())
+                                    .font(.caption)
+                                    .foregroundColor(viewModel.currentTheme.secondaryTextColor ?? .secondary)
+                            }
                         }
                     }
+                    Spacer()
+                    Image(systemName: "chevron.right")
+                        .font(.caption2)
+                        .foregroundColor(viewModel.currentTheme.secondaryTextColor ?? .secondary)
                 }
-                Spacer()
-                Image(systemName: "chevron.right")
-                    .font(.caption2)
-                    .foregroundColor(viewModel.currentTheme.secondaryTextColor ?? .secondary)
+                .contentShape(Rectangle())
             }
-            .padding(.vertical, 6)
-            .contentShape(Rectangle())
+            .buttonStyle(.plain)
+
+            Button {
+                eventPendingDelete = event
+            } label: {
+                Image(systemName: "trash")
+                    .foregroundColor(.red)
+                    .frame(width: 24, height: 24)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .help(NSLocalizedString("search_delete_button", comment: ""))
         }
-        .buttonStyle(.plain)
+        .padding(.vertical, 6)
     }
 }
