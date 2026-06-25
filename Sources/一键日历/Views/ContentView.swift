@@ -1,11 +1,6 @@
 import SwiftUI
 import EventKit
 
-private struct SearchResultWrapper: Identifiable {
-    let event: EKEvent
-    var id: String { event.eventIdentifier ?? "" }
-}
-
 struct ContentView: View {
     @EnvironmentObject var viewModel: ReviewViewModel
 
@@ -138,13 +133,6 @@ struct ContentView: View {
             }) {
                 SearchSheetView(viewModel: viewModel)
                     .frame(width: 380, height: 460)
-            }
-            .sheet(item: Binding(
-                get: { viewModel.selectedSearchResult.map { SearchResultWrapper(event: $0) } },
-                set: { newValue in viewModel.selectedSearchResult = newValue?.event }
-            )) { wrapper in
-                SearchResultDetailView(viewModel: viewModel, event: wrapper.event)
-                    .frame(width: 360, height: 320)
             }
             .onAppear {
                 viewModel.scheduleFirstRunGuideIfNeeded()

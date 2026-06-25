@@ -147,6 +147,7 @@
 // Search
 "search_button_tooltip" = "搜索日程";
 "search_sheet_title" = "搜索日程";
+"search_back" = "返回";
 "search_placeholder" = "输入日程标题";
 "search_empty_hint" = "输入关键词，搜索未来 90 天的日程";
 "search_no_results" = "没有找到匹配的日程";
