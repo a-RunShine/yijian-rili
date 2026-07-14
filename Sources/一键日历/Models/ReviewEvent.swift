@@ -20,7 +20,7 @@ struct ReviewEvent: Identifiable, Codable {
         self.reviewDates = dates
         // notes 数量与 reviewDates 对齐，而非 intervals
         self.notes = dates.enumerated().map { index, _ in
-            "第\(index + 1)次复习"
+            String(format: NSLocalizedString("review_count", comment: ""), "\(index + 1)")
         }
     }
 

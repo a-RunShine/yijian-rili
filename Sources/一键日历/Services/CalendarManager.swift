@@ -89,7 +89,7 @@ class CalendarManager: ObservableObject {
         var createdIdentifiers: [String] = []
         
         for (index, reviewDate) in reviewDates.enumerated() {
-            let noteText = "第\(index + 1)次复习"
+            let noteText = String(format: NSLocalizedString("review_count", comment: ""), "\(index + 1)")
             do {
                 // Check for duplicates in target calendar only
                 let hasDuplicate = try checkDuplicate(title: title, date: reviewDate, notes: noteText, in: targetCalendar)

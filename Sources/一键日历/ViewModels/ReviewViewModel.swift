@@ -38,8 +38,6 @@ class ReviewViewModel: ObservableObject {
     private var lastCreatedTitle: String?
     private var lastCreatedBaseDate: Date?
     
-    /// JSON 编码的复习间隔数组，默认 [3, 7, 30]
-    @AppStorage("reviewIntervalsData") private var reviewIntervalsData: String = "[3,7,30]"
     /// JSON 编码的历史记录数组
     @AppStorage("historyEntriesData") private var historyEntriesData: String = ""
     /// 用户选中的目标日历 identifier（空字符串 = 跟随系统默认）
@@ -48,27 +46,44 @@ class ReviewViewModel: ObservableObject {
     @AppStorage("hasShownFirstRunGuide") private var hasShownFirstRunGuide: Bool = false
     /// 写入日历 Section 折叠状态（默认折叠，展开后记住）
     @AppStorage("calendarPickerExpanded") var calendarPickerExpanded: Bool = false
-    /// 复习间隔 Section 折叠状态（默认折叠，展开后记住）
-    @AppStorage("intervalSettingsExpanded") var intervalSettingsExpanded: Bool = false
     /// 窗口设置 Section 折叠状态（默认折叠，展开后记住）
     @AppStorage("windowSettingsExpanded") var windowSettingsExpanded: Bool = false
     
-    var reviewIntervals: [Int] {
-        get {
-            guard let data = reviewIntervalsData.data(using: .utf8),
-                  let intervals = try? JSONDecoder().decode([Int].self, from: data) else {
-                return [3, 7, 30]
-            }
-            return intervals
+    /// 复习间隔数组，默认 [3, 7, 30]，通过 @Published 触发 SwiftUI 刷新
+    @Published var reviewIntervals: [Int] = {
+        let raw = UserDefaults.standard.string(forKey: "reviewIntervalsData") ?? "[3,7,30]"
+        guard let data = raw.data(using: .utf8),
+              let intervals = try? JSONDecoder().decode([Int].self, from: data) else {
+            return [3, 7, 30]
         }
-        set {
-            if let data = try? JSONEncoder().encode(newValue),
+        return intervals
+    }() {
+        didSet {
+            if let data = try? JSONEncoder().encode(reviewIntervals),
                let string = String(data: data, encoding: .utf8) {
-                reviewIntervalsData = string
+                UserDefaults.standard.set(string, forKey: "reviewIntervalsData")
             }
         }
     }
     
+    /// 自定义预设数组，通过 @Published 触发 SwiftUI 刷新
+    @Published var customPresets: [CustomPreset] = {
+        let raw = UserDefaults.standard.string(forKey: "customPresetsData") ?? "[]"
+        guard let data = raw.data(using: .utf8),
+              let presets = try? JSONDecoder().decode([CustomPreset].self, from: data) else {
+            return []
+        }
+        return presets
+    }() {
+        didSet {
+            if let data = try? JSONEncoder().encode(customPresets),
+               let string = String(data: data, encoding: .utf8) {
+                UserDefaults.standard.set(string, forKey: "customPresetsData")
+            }
+        }
+    }
+    
+
     var historyEntries: [HistoryEntry] {
         get {
             guard let data = historyEntriesData.data(using: .utf8),
@@ -492,7 +507,36 @@ class ReviewViewModel: ObservableObject {
     }
     
     func validateIntervals(_ intervals: [Int]) -> Bool {
+        guard !intervals.isEmpty else { return false }
+        guard intervals.count <= 10 else { return false }
         return intervals.allSatisfy { $0 >= 1 && $0 <= 365 }
+    }
+
+    // MARK: - Custom Presets
+
+    func saveCustomPreset(name: String) {
+        let trimmed = name.trimmingCharacters(in: .whitespaces)
+        guard !trimmed.isEmpty else { return }
+        // 防止重名
+        guard !customPresets.contains(where: { $0.name == trimmed }) else { return }
+        let preset = CustomPreset(name: trimmed, intervals: reviewIntervals)
+        var presets = customPresets
+        presets.append(preset)
+        customPresets = presets
+    }
+
+    func applyCustomPreset(_ preset: CustomPreset) {
+        reviewIntervals = preset.intervals
+        updateReviewDates()
+    }
+
+    func deleteCustomPreset(id: UUID) {
+        customPresets = customPresets.filter { $0.id != id }
+    }
+
+    func hasDuplicatePresetName(_ name: String) -> Bool {
+        let trimmed = name.trimmingCharacters(in: .whitespaces)
+        return customPresets.contains(where: { $0.name == trimmed })
     }
     
     // MARK: - Window Settings
@@ -570,6 +614,19 @@ class ReviewViewModel: ObservableObject {
         searchText = ""
         searchResults = []
         selectedSearchResult = nil
+    }
+}
+
+/// 用户自定义预设方案
+struct CustomPreset: Codable, Identifiable, Equatable {
+    let id: UUID
+    let name: String
+    let intervals: [Int]
+
+    init(id: UUID = UUID(), name: String, intervals: [Int]) {
+        self.id = id
+        self.name = name
+        self.intervals = intervals
     }
 }
 

@@ -51,9 +51,11 @@ final class 一键日历Tests: XCTestCase {
         XCTAssertEqual(event.title, "Test")
         XCTAssertEqual(event.reviewDates.count, 3)
         XCTAssertEqual(event.notes.count, 3)
-        XCTAssertEqual(event.notes[0], "第1次复习")
-        XCTAssertEqual(event.notes[1], "第2次复习")
-        XCTAssertEqual(event.notes[2], "第3次复习")
+        // 测试环境中 NSLocalizedString 回退为 key，notes 格式为 "review_count"
+        let expectedNote = String(format: NSLocalizedString("review_count", comment: ""), "1")
+        XCTAssertEqual(event.notes[0], expectedNote)
+        XCTAssertEqual(event.notes[1], String(format: NSLocalizedString("review_count", comment: ""), "2"))
+        XCTAssertEqual(event.notes[2], String(format: NSLocalizedString("review_count", comment: ""), "3"))
     }
     
     func testReviewEventWithCustomIntervals() throws {
@@ -63,9 +65,9 @@ final class 一键日历Tests: XCTestCase {
         XCTAssertEqual(event.title, "Custom")
         XCTAssertEqual(event.reviewDates.count, 3)
         XCTAssertEqual(event.notes.count, 3)
-        XCTAssertEqual(event.notes[0], "第1次复习")
-        XCTAssertEqual(event.notes[1], "第2次复习")
-        XCTAssertEqual(event.notes[2], "第3次复习")
+        XCTAssertEqual(event.notes[0], String(format: NSLocalizedString("review_count", comment: ""), "1"))
+        XCTAssertEqual(event.notes[1], String(format: NSLocalizedString("review_count", comment: ""), "2"))
+        XCTAssertEqual(event.notes[2], String(format: NSLocalizedString("review_count", comment: ""), "3"))
     }
     
     func testReviewEventSafeDateCalculation() throws {
@@ -134,5 +136,107 @@ final class 一键日历Tests: XCTestCase {
         XCTAssertTrue(viewModel.validateIntervals([3, 7, 30]))
         XCTAssertFalse(viewModel.validateIntervals([0, 3, 7]))
         XCTAssertFalse(viewModel.validateIntervals([3, -1, 7]))
+        // 空数组不合法
+        XCTAssertFalse(viewModel.validateIntervals([]))
+        // 超过 365 不合法
+        XCTAssertFalse(viewModel.validateIntervals([1, 366]))
+        // 单个间隔合法
+        XCTAssertTrue(viewModel.validateIntervals([7]))
+        // 多个间隔合法
+        XCTAssertTrue(viewModel.validateIntervals([1, 2, 4, 7, 15]))
+    }
+
+    @MainActor
+    func testMaxIntervalCountExceeded() {
+        let viewModel = ReviewViewModel()
+
+        // 10 个间隔（上限）——全部合法
+        XCTAssertTrue(viewModel.validateIntervals([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]))
+
+        // 11 个间隔——超过上限，应被拒绝
+        XCTAssertFalse(viewModel.validateIntervals([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]))
+    }
+
+    @MainActor
+    func testDynamicIntervalCount() {
+        let viewModel = ReviewViewModel()
+
+        // 设置 1 个间隔
+        viewModel.reviewIntervals = [5]
+        viewModel.updateReviewDates()
+        XCTAssertEqual(viewModel.reviewDates.count, 1)
+
+        // 设置 5 个间隔
+        viewModel.reviewIntervals = [1, 2, 4, 7, 15]
+        viewModel.updateReviewDates()
+        XCTAssertEqual(viewModel.reviewDates.count, 5)
+
+        // 边界: 10 个间隔
+        viewModel.reviewIntervals = [1, 2, 3, 5, 7, 10, 14, 21, 30, 60]
+        viewModel.updateReviewDates()
+        XCTAssertEqual(viewModel.reviewDates.count, 10)
+    }
+
+    @MainActor
+    func testCustomPresetSaveAndApply() {
+        // 先清空再创建 ViewModel
+        UserDefaults.standard.set("[]", forKey: "customPresetsData")
+        let viewModel = ReviewViewModel()
+
+        // 初始无自定义预设
+        XCTAssertEqual(viewModel.customPresets.count, 0)
+
+        // 保存一个自定义预设
+        viewModel.reviewIntervals = [1, 3, 7]
+        viewModel.saveCustomPreset(name: "我的方案")
+        XCTAssertEqual(viewModel.customPresets.count, 1)
+        XCTAssertEqual(viewModel.customPresets[0].name, "我的方案")
+        XCTAssertEqual(viewModel.customPresets[0].intervals, [1, 3, 7])
+
+        // 应用自定义预设
+        viewModel.reviewIntervals = [3, 7, 30]
+        viewModel.applyCustomPreset(viewModel.customPresets[0])
+        XCTAssertEqual(viewModel.reviewIntervals, [1, 3, 7])
+
+        // 删除自定义预设
+        let presetId = viewModel.customPresets[0].id
+        viewModel.deleteCustomPreset(id: presetId)
+        XCTAssertEqual(viewModel.customPresets.count, 0)
+
+        // 清理
+        UserDefaults.standard.set("[]", forKey: "customPresetsData")
+    }
+
+    @MainActor
+    func testCustomPresetDuplicateName() {
+        UserDefaults.standard.set("[]", forKey: "customPresetsData")
+        let viewModel = ReviewViewModel()
+
+        viewModel.reviewIntervals = [1, 3, 7]
+        viewModel.saveCustomPreset(name: "测试")
+        XCTAssertEqual(viewModel.customPresets.count, 1)
+
+        // 重名不会重复添加
+        viewModel.reviewIntervals = [2, 5, 10]
+        viewModel.saveCustomPreset(name: "测试")
+        XCTAssertEqual(viewModel.customPresets.count, 1)
+        XCTAssertEqual(viewModel.customPresets[0].intervals, [1, 3, 7]) // 仍是原来的
+
+        XCTAssertTrue(viewModel.hasDuplicatePresetName("测试"))
+        XCTAssertFalse(viewModel.hasDuplicatePresetName("其他"))
+
+        // 清理
+        UserDefaults.standard.set("[]", forKey: "customPresetsData")
+    }
+
+    func testCustomPresetCoding() throws {
+        let preset = CustomPreset(name: "考试", intervals: [1, 3, 7])
+        let data = try JSONEncoder().encode([preset])
+        let decoded = try JSONDecoder().decode([CustomPreset].self, from: data)
+
+        XCTAssertEqual(decoded.count, 1)
+        XCTAssertEqual(decoded[0].id, preset.id)
+        XCTAssertEqual(decoded[0].name, "考试")
+        XCTAssertEqual(decoded[0].intervals, [1, 3, 7])
     }
 }
