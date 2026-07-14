@@ -50,6 +50,8 @@ class ReviewViewModel: ObservableObject {
     @AppStorage("calendarPickerExpanded") var calendarPickerExpanded: Bool = false
     /// 复习间隔 Section 折叠状态（默认折叠，展开后记住）
     @AppStorage("intervalSettingsExpanded") var intervalSettingsExpanded: Bool = false
+    /// 自定义预设 JSON 编码
+    @AppStorage("customPresetsData") private var customPresetsData: String = "[]"
     /// 窗口设置 Section 折叠状态（默认折叠，展开后记住）
     @AppStorage("windowSettingsExpanded") var windowSettingsExpanded: Bool = false
     
@@ -69,6 +71,22 @@ class ReviewViewModel: ObservableObject {
         }
     }
     
+    var customPresets: [CustomPreset] {
+        get {
+            guard let data = customPresetsData.data(using: .utf8),
+                  let presets = try? JSONDecoder().decode([CustomPreset].self, from: data) else {
+                return []
+            }
+            return presets
+        }
+        set {
+            if let data = try? JSONEncoder().encode(newValue),
+               let string = String(data: data, encoding: .utf8) {
+                customPresetsData = string
+            }
+        }
+    }
+
     var historyEntries: [HistoryEntry] {
         get {
             guard let data = historyEntriesData.data(using: .utf8),
@@ -492,7 +510,35 @@ class ReviewViewModel: ObservableObject {
     }
     
     func validateIntervals(_ intervals: [Int]) -> Bool {
+        guard !intervals.isEmpty else { return false }
         return intervals.allSatisfy { $0 >= 1 && $0 <= 365 }
+    }
+
+    // MARK: - Custom Presets
+
+    func saveCustomPreset(name: String) {
+        let trimmed = name.trimmingCharacters(in: .whitespaces)
+        guard !trimmed.isEmpty else { return }
+        // 防止重名
+        guard !customPresets.contains(where: { $0.name == trimmed }) else { return }
+        let preset = CustomPreset(name: trimmed, intervals: reviewIntervals)
+        var presets = customPresets
+        presets.append(preset)
+        customPresets = presets
+    }
+
+    func applyCustomPreset(_ preset: CustomPreset) {
+        reviewIntervals = preset.intervals
+        updateReviewDates()
+    }
+
+    func deleteCustomPreset(id: UUID) {
+        customPresets = customPresets.filter { $0.id != id }
+    }
+
+    func hasDuplicatePresetName(_ name: String) -> Bool {
+        let trimmed = name.trimmingCharacters(in: .whitespaces)
+        return customPresets.contains(where: { $0.name == trimmed })
     }
     
     // MARK: - Window Settings
@@ -570,6 +616,19 @@ class ReviewViewModel: ObservableObject {
         searchText = ""
         searchResults = []
         selectedSearchResult = nil
+    }
+}
+
+/// 用户自定义预设方案
+struct CustomPreset: Codable, Identifiable, Equatable {
+    let id: UUID
+    let name: String
+    let intervals: [Int]
+
+    init(id: UUID = UUID(), name: String, intervals: [Int]) {
+        self.id = id
+        self.name = name
+        self.intervals = intervals
     }
 }
 

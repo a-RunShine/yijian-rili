@@ -96,6 +96,21 @@
 "save_intervals" = "保存";
 "reset_intervals" = "恢复默认";
 "interval_invalid" = "间隔必须为正整数";
+"interval_min_error" = "至少需要一个间隔";
+"add_interval" = "添加间隔";
+"remove_interval" = "删除";
+
+// Custom Presets
+"save_as_preset" = "保存为预设";
+"preset_name_placeholder" = "预设名称";
+"preset_name_title" = "保存预设";
+"preset_name_message" = "为当前间隔方案输入名称";
+"preset_save" = "保存";
+"preset_cancel" = "取消";
+"preset_delete" = "删除预设";
+"custom_presets_label" = "自定义";
+"preset_name_empty" = "预设名称不能为空";
+"preset_name_duplicate" = "预设名称已存在";
 
 // Window Settings
 "window_settings_title" = "窗口设置";
