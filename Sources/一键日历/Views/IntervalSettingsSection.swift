@@ -8,16 +8,49 @@ struct IntervalSettingsSection: View {
     @State private var showSavePresetAlert: Bool = false
     @State private var newPresetName: String = ""
     @State private var presetAlertError: String? = nil
+    /// 记住用户上次手动保存的间隔，用于「恢复已保存」（持久化为 JSON 字符串）
+    @AppStorage("savedIntervalsSnapshot") private var savedSnapshotJSON: String = ""
+    @State private var showDeletePresetConfirm: Bool = false
+    @State private var presetToDelete: CustomPreset? = nil
     @AppStorage("intervalSettingsExpanded") private var isExpanded: Bool = false
 
+    /// 最大间隔数量限制
+    private let maxIntervalCount = 10
+
+    /// 从持久化存储读取快照
+    private var savedSnapshot: [Int] {
+        guard let data = savedSnapshotJSON.data(using: .utf8),
+              let arr = try? JSONDecoder().decode([Int].self, from: data) else {
+            return []
+        }
+        return arr
+    }
+
+    /// 将快照写入持久化存储
+    private func saveSnapshot(_ intervals: [Int]) {
+        if let data = try? JSONEncoder().encode(intervals),
+           let str = String(data: data, encoding: .utf8) {
+            savedSnapshotJSON = str
+        }
+    }
+
+    /// 当前是否匹配某个自定义预设（优先于内置预设检查）
+    private var activeCustomPreset: CustomPreset? {
+        let current = viewModel.reviewIntervals
+        return viewModel.customPresets.first { $0.intervals == current }
+    }
+
+    /// 当前是否匹配某个内置预设（仅在无自定义预设匹配时生效）
     private var activePreset: IntervalPreset? {
+        // 如果匹配自定义预设，则不显示内置预设高亮
+        if activeCustomPreset != nil { return nil }
         let current = viewModel.reviewIntervals
         return IntervalPreset.allCases.first { $0.intervals == current }
     }
 
-    private var activeCustomPreset: CustomPreset? {
-        let current = viewModel.reviewIntervals
-        return viewModel.customPresets.first { $0.intervals == current }
+    /// 是否有可恢复的「已保存」快照（与当前值不同）
+    private var canRestoreSaved: Bool {
+        !savedSnapshot.isEmpty && savedSnapshot != viewModel.reviewIntervals
     }
 
     var body: some View {
@@ -32,12 +65,12 @@ struct IntervalSettingsSection: View {
                     Label(NSLocalizedString("interval_settings_title", comment: ""), systemImage: "slider.horizontal.3")
                         .font(.headline)
                     Spacer()
-                    if let preset = activePreset {
-                        Text(preset.displayName)
+                    if let custom = activeCustomPreset {
+                        Text(custom.name)
                             .font(.caption)
                             .foregroundColor(viewModel.currentTheme.secondaryTextColor ?? .secondary)
-                    } else if let custom = activeCustomPreset {
-                        Text(custom.name)
+                    } else if let preset = activePreset {
+                        Text(preset.displayName)
                             .font(.caption)
                             .foregroundColor(viewModel.currentTheme.secondaryTextColor ?? .secondary)
                     }
@@ -51,55 +84,73 @@ struct IntervalSettingsSection: View {
 
             if isExpanded {
                 VStack(alignment: .leading, spacing: 10) {
-                    // ── 内置预设 ──
+                    // ── 内置预设 + 恢复已保存 ──
                     HStack(spacing: 6) {
                         ForEach(IntervalPreset.allCases, id: \.self) { preset in
                             Button(preset.displayName) {
                                 viewModel.applyPreset(preset)
-                                tempIntervals = viewModel.reviewIntervals.map { String($0) }
+                                let mapped = viewModel.reviewIntervals.map { String($0) }
+                                tempIntervals = mapped
                             }
                             .buttonStyle(.bordered)
                             .controlSize(.small)
                             .tint(activePreset == preset ? (viewModel.currentTheme.accentColor ?? .accentColor) : .secondary)
                         }
-                    }
 
-                    // ── 自定义预设 ──
-                    if !viewModel.customPresets.isEmpty || true {
-                        HStack(spacing: 6) {
-                            Text(NSLocalizedString("custom_presets_label", comment: ""))
-                                .font(.caption)
-                                .foregroundColor(viewModel.currentTheme.secondaryTextColor ?? .secondary)
-
-                            ForEach(viewModel.customPresets) { preset in
-                                Button(preset.name) {
-                                    viewModel.applyCustomPreset(preset)
-                                    tempIntervals = viewModel.reviewIntervals.map { String($0) }
-                                }
-                                .buttonStyle(.bordered)
-                                .controlSize(.small)
-                                .tint(activeCustomPreset?.id == preset.id ? (viewModel.currentTheme.accentColor ?? .accentColor) : .secondary)
-                                .contextMenu {
-                                    Button(role: .destructive) {
-                                        viewModel.deleteCustomPreset(id: preset.id)
-                                    } label: {
-                                        Label(NSLocalizedString("preset_delete", comment: ""), systemImage: "trash")
-                                    }
-                                }
-                            }
-
-                            Button {
-                                newPresetName = ""
-                                presetAlertError = nil
-                                showSavePresetAlert = true
-                            } label: {
-                                Image(systemName: "plus.circle")
-                                    .font(.caption)
+                        // 「恢复已保存」按钮：恢复到用户上次手动保存的间隔
+                        if canRestoreSaved {
+                            Button(NSLocalizedString("restore_saved", comment: "")) {
+                                viewModel.reviewIntervals = savedSnapshot
+                                tempIntervals = savedSnapshot.map { String($0) }
+                                viewModel.updateReviewDates()
                             }
                             .buttonStyle(.bordered)
                             .controlSize(.small)
-                            .help(NSLocalizedString("save_as_preset", comment: ""))
+                            .tint(viewModel.currentTheme.accentColor ?? .accentColor)
                         }
+                    }
+
+                    // ── 自定义预设 ──
+                    HStack(spacing: 6) {
+                        Text(NSLocalizedString("custom_presets_label", comment: ""))
+                            .font(.caption)
+                            .foregroundColor(viewModel.currentTheme.secondaryTextColor ?? .secondary)
+
+                        if viewModel.customPresets.isEmpty {
+                            Text(NSLocalizedString("custom_presets_empty", comment: ""))
+                                .font(.caption)
+                                .foregroundColor(viewModel.currentTheme.secondaryTextColor ?? .secondary)
+                        }
+
+                        ForEach(viewModel.customPresets) { preset in
+                            Button(preset.name) {
+                                viewModel.applyCustomPreset(preset)
+                                tempIntervals = viewModel.reviewIntervals.map { String($0) }
+                            }
+                            .buttonStyle(.bordered)
+                            .controlSize(.small)
+                            .tint(activeCustomPreset?.id == preset.id ? (viewModel.currentTheme.accentColor ?? .accentColor) : .secondary)
+                            .contextMenu {
+                                Button(role: .destructive) {
+                                    presetToDelete = preset
+                                    showDeletePresetConfirm = true
+                                } label: {
+                                    Label(NSLocalizedString("preset_delete", comment: ""), systemImage: "trash")
+                                }
+                            }
+                        }
+
+                        Button {
+                            newPresetName = ""
+                            presetAlertError = nil
+                            showSavePresetAlert = true
+                        } label: {
+                            Image(systemName: "plus.circle")
+                                .font(.caption)
+                        }
+                        .buttonStyle(.bordered)
+                        .controlSize(.small)
+                        .help(NSLocalizedString("save_as_preset", comment: ""))
                     }
 
                     Divider()
@@ -117,7 +168,7 @@ struct IntervalSettingsSection: View {
                                     .frame(width: 56)
                                     .multilineTextAlignment(.center)
 
-                                Text("天")
+                                Text(NSLocalizedString("interval_unit_day", comment: ""))
                                     .font(.caption)
                                     .foregroundColor(viewModel.currentTheme.secondaryTextColor ?? .secondary)
 
@@ -147,6 +198,7 @@ struct IntervalSettingsSection: View {
                     }
                     .buttonStyle(.bordered)
                     .controlSize(.small)
+                    .disabled(tempIntervals.count >= maxIntervalCount)
 
                     // ── 错误提示 ──
                     if showError {
@@ -181,7 +233,12 @@ struct IntervalSettingsSection: View {
         .background(viewModel.currentTheme.cardBackgroundColor)
         .cornerRadius(10)
         .onAppear {
-            tempIntervals = viewModel.reviewIntervals.map { String($0) }
+            let current = viewModel.reviewIntervals
+            tempIntervals = current.map { String($0) }
+            // 从 @AppStorage 读取快照；首次使用时用当前 reviewIntervals 初始化
+            if savedSnapshot.isEmpty {
+                saveSnapshot(current)
+            }
         }
         .alert(NSLocalizedString("preset_name_title", comment: ""), isPresented: $showSavePresetAlert) {
             TextField(NSLocalizedString("preset_name_placeholder", comment: ""), text: $newPresetName)
@@ -201,12 +258,33 @@ struct IntervalSettingsSection: View {
                 Text(NSLocalizedString("preset_name_message", comment: ""))
             }
         }
+        .alert(NSLocalizedString("preset_delete_confirm_title", comment: ""), isPresented: $showDeletePresetConfirm) {
+            Button(NSLocalizedString("preset_delete_confirm_action", comment: ""), role: .destructive) {
+                if let preset = presetToDelete {
+                    viewModel.deleteCustomPreset(id: preset.id)
+                }
+                presetToDelete = nil
+            }
+            Button(NSLocalizedString("preset_delete_cancel", comment: ""), role: .cancel) {
+                presetToDelete = nil
+            }
+        } message: {
+            if let preset = presetToDelete {
+                Text(String(format: NSLocalizedString("preset_delete_confirm_message", comment: ""), preset.name))
+            }
+        }
     }
 
     private func saveIntervals() {
         // 检查是否为空
         guard !tempIntervals.isEmpty else {
             errorMessage = NSLocalizedString("interval_min_error", comment: "")
+            showError = true
+            return
+        }
+
+        guard tempIntervals.count <= maxIntervalCount else {
+            errorMessage = NSLocalizedString("interval_max_error", comment: "")
             showError = true
             return
         }
@@ -222,6 +300,10 @@ struct IntervalSettingsSection: View {
         showError = false
         errorMessage = ""
         viewModel.reviewIntervals = intervals
+        // 保存后同步 tempIntervals，确保 UI 与存储一致
+        tempIntervals = intervals.map { String($0) }
+        // 记录快照到持久化存储，供「恢复已保存」使用
+        saveSnapshot(intervals)
         viewModel.updateReviewDates()
     }
 

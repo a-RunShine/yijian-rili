@@ -51,9 +51,11 @@ final class 一键日历Tests: XCTestCase {
         XCTAssertEqual(event.title, "Test")
         XCTAssertEqual(event.reviewDates.count, 3)
         XCTAssertEqual(event.notes.count, 3)
-        XCTAssertEqual(event.notes[0], "第1次复习")
-        XCTAssertEqual(event.notes[1], "第2次复习")
-        XCTAssertEqual(event.notes[2], "第3次复习")
+        // 测试环境中 NSLocalizedString 回退为 key，notes 格式为 "review_count"
+        let expectedNote = String(format: NSLocalizedString("review_count", comment: ""), "1")
+        XCTAssertEqual(event.notes[0], expectedNote)
+        XCTAssertEqual(event.notes[1], String(format: NSLocalizedString("review_count", comment: ""), "2"))
+        XCTAssertEqual(event.notes[2], String(format: NSLocalizedString("review_count", comment: ""), "3"))
     }
     
     func testReviewEventWithCustomIntervals() throws {
@@ -63,9 +65,9 @@ final class 一键日历Tests: XCTestCase {
         XCTAssertEqual(event.title, "Custom")
         XCTAssertEqual(event.reviewDates.count, 3)
         XCTAssertEqual(event.notes.count, 3)
-        XCTAssertEqual(event.notes[0], "第1次复习")
-        XCTAssertEqual(event.notes[1], "第2次复习")
-        XCTAssertEqual(event.notes[2], "第3次复习")
+        XCTAssertEqual(event.notes[0], String(format: NSLocalizedString("review_count", comment: ""), "1"))
+        XCTAssertEqual(event.notes[1], String(format: NSLocalizedString("review_count", comment: ""), "2"))
+        XCTAssertEqual(event.notes[2], String(format: NSLocalizedString("review_count", comment: ""), "3"))
     }
     
     func testReviewEventSafeDateCalculation() throws {
@@ -142,6 +144,17 @@ final class 一键日历Tests: XCTestCase {
         XCTAssertTrue(viewModel.validateIntervals([7]))
         // 多个间隔合法
         XCTAssertTrue(viewModel.validateIntervals([1, 2, 4, 7, 15]))
+    }
+
+    @MainActor
+    func testMaxIntervalCountExceeded() {
+        let viewModel = ReviewViewModel()
+
+        // 10 个间隔（上限）——全部合法
+        XCTAssertTrue(viewModel.validateIntervals([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]))
+
+        // 11 个间隔——超过上限，应被拒绝
+        XCTAssertFalse(viewModel.validateIntervals([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]))
     }
 
     @MainActor
