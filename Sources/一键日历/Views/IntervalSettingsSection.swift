@@ -1,8 +1,14 @@
 import SwiftUI
 
+/// 带稳定 ID 的间隔条目，避免 ForEach 使用 index 作 id 导致的视图身份错乱
+struct IntervalEntry: Identifiable {
+    let id = UUID()
+    var value: String
+}
+
 struct IntervalSettingsSection: View {
     @ObservedObject var viewModel: ReviewViewModel
-    @State private var tempIntervals: [String] = ["3", "7", "30"]
+    @State private var tempIntervals: [IntervalEntry] = [IntervalEntry(value: "3"), IntervalEntry(value: "7"), IntervalEntry(value: "30")]
     @State private var showError: Bool = false
     @State private var errorMessage: String = ""
     @State private var showSavePresetAlert: Bool = false
@@ -13,6 +19,8 @@ struct IntervalSettingsSection: View {
     @State private var showDeletePresetConfirm: Bool = false
     @State private var presetToDelete: CustomPreset? = nil
     @AppStorage("intervalSettingsExpanded") private var isExpanded: Bool = false
+    /// 标记是否已完成首次初始化，防止折叠展开时重复重置编辑态
+    @State private var hasInitialized: Bool = false
 
     /// 最大间隔数量限制
     private let maxIntervalCount = 10
@@ -89,8 +97,7 @@ struct IntervalSettingsSection: View {
                         ForEach(IntervalPreset.allCases, id: \.self) { preset in
                             Button(preset.displayName) {
                                 viewModel.applyPreset(preset)
-                                let mapped = viewModel.reviewIntervals.map { String($0) }
-                                tempIntervals = mapped
+                                tempIntervals = viewModel.reviewIntervals.map { IntervalEntry(value: String($0)) }
                             }
                             .buttonStyle(.bordered)
                             .controlSize(.small)
@@ -101,7 +108,7 @@ struct IntervalSettingsSection: View {
                         if canRestoreSaved {
                             Button(NSLocalizedString("restore_saved", comment: "")) {
                                 viewModel.reviewIntervals = savedSnapshot
-                                tempIntervals = savedSnapshot.map { String($0) }
+                                tempIntervals = savedSnapshot.map { IntervalEntry(value: String($0)) }
                                 viewModel.updateReviewDates()
                             }
                             .buttonStyle(.bordered)
@@ -125,7 +132,7 @@ struct IntervalSettingsSection: View {
                         ForEach(viewModel.customPresets) { preset in
                             Button(preset.name) {
                                 viewModel.applyCustomPreset(preset)
-                                tempIntervals = viewModel.reviewIntervals.map { String($0) }
+                                tempIntervals = viewModel.reviewIntervals.map { IntervalEntry(value: String($0)) }
                             }
                             .buttonStyle(.bordered)
                             .controlSize(.small)
@@ -157,16 +164,22 @@ struct IntervalSettingsSection: View {
 
                     // ── 间隔输入列表 ──
                     VStack(spacing: 6) {
-                        ForEach(0..<tempIntervals.count, id: \.self) { index in
+                        ForEach(Array(tempIntervals.enumerated()), id: \.element.id) { index, entry in
+                            let parsed = Int(entry.value.trimmingCharacters(in: .whitespaces))
+                            let isInvalid = parsed == nil || parsed! < 1 || parsed! > 365
                             HStack(spacing: 8) {
                                 Text(String(format: NSLocalizedString("interval_day_label", comment: ""), "\(index + 1)"))
                                     .font(.caption)
                                     .frame(width: 40, alignment: .leading)
 
-                                TextField("", text: $tempIntervals[index])
+                                TextField("", text: $tempIntervals[index].value)
                                     .textFieldStyle(RoundedBorderTextFieldStyle())
                                     .frame(width: 56)
                                     .multilineTextAlignment(.center)
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 5)
+                                            .stroke(isInvalid ? Color.red : Color.clear, lineWidth: 1)
+                                    )
 
                                 Text(NSLocalizedString("interval_unit_day", comment: ""))
                                     .font(.caption)
@@ -175,7 +188,7 @@ struct IntervalSettingsSection: View {
                                 Spacer()
 
                                 Button {
-                                    tempIntervals.remove(at: index)
+                                    tempIntervals.removeAll { $0.id == entry.id }
                                 } label: {
                                     Image(systemName: "minus.circle.fill")
                                         .foregroundColor(.red.opacity(0.7))
@@ -184,14 +197,16 @@ struct IntervalSettingsSection: View {
                                 .buttonStyle(.plain)
                                 .disabled(tempIntervals.count <= 1)
                                 .opacity(tempIntervals.count <= 1 ? 0.3 : 1.0)
+                                .accessibilityLabel(String(format: NSLocalizedString("remove_interval_at", comment: ""), "\(index + 1)"))
                             }
                         }
                     }
 
                     // ── 添加间隔 ──
                     Button {
-                        let lastValue = tempIntervals.last ?? "30"
-                        tempIntervals.append(lastValue)
+                        // 取最后一个有效值作为默认值，避免传播空字符串
+                        let lastValid = tempIntervals.last(where: { Int($0.value.trimmingCharacters(in: .whitespaces)) != nil })?.value ?? "7"
+                        tempIntervals.append(IntervalEntry(value: lastValid))
                     } label: {
                         Label(NSLocalizedString("add_interval", comment: ""), systemImage: "plus.circle")
                             .font(.caption)
@@ -218,7 +233,7 @@ struct IntervalSettingsSection: View {
 
                         Button(NSLocalizedString("reset_intervals", comment: "")) {
                             viewModel.resetIntervalsToDefault()
-                            tempIntervals = viewModel.reviewIntervals.map { String($0) }
+                            tempIntervals = viewModel.reviewIntervals.map { IntervalEntry(value: String($0)) }
                             showError = false
                         }
                         .buttonStyle(.bordered)
@@ -233,8 +248,11 @@ struct IntervalSettingsSection: View {
         .background(viewModel.currentTheme.cardBackgroundColor)
         .cornerRadius(10)
         .onAppear {
+            // 仅在首次出现时初始化，防止折叠/展开重建覆盖用户未保存的编辑
+            guard !hasInitialized else { return }
+            hasInitialized = true
             let current = viewModel.reviewIntervals
-            tempIntervals = current.map { String($0) }
+            tempIntervals = current.map { IntervalEntry(value: String($0)) }
             // 从 @AppStorage 读取快照；首次使用时用当前 reviewIntervals 初始化
             if savedSnapshot.isEmpty {
                 saveSnapshot(current)
@@ -289,9 +307,28 @@ struct IntervalSettingsSection: View {
             return
         }
 
-        let intervals = tempIntervals.compactMap { Int($0) }
+        // 逐个校验并定位错误字段，提供精准的错误提示
+        var intervals: [Int] = []
+        for (i, entry) in tempIntervals.enumerated() {
+            let trimmed = entry.value.trimmingCharacters(in: .whitespaces)
+            guard let val = Int(trimmed), val >= 1, val <= 365 else {
+                errorMessage = String(format: NSLocalizedString("interval_invalid_at", comment: ""), "\(i + 1)")
+                showError = true
+                return
+            }
+            intervals.append(val)
+        }
 
-        guard intervals.count == tempIntervals.count, viewModel.validateIntervals(intervals) else {
+        // 校验递增顺序（不允许时间倒退）
+        guard viewModel.validateIntervals(intervals) else {
+            // 找到第一个违反递增的位置
+            for i in 1..<intervals.count {
+                if intervals[i] <= intervals[i - 1] {
+                    errorMessage = String(format: NSLocalizedString("interval_not_increasing_at", comment: ""), "\(i + 1)")
+                    showError = true
+                    return
+                }
+            }
             errorMessage = NSLocalizedString("interval_invalid", comment: "")
             showError = true
             return
@@ -301,7 +338,7 @@ struct IntervalSettingsSection: View {
         errorMessage = ""
         viewModel.reviewIntervals = intervals
         // 保存后同步 tempIntervals，确保 UI 与存储一致
-        tempIntervals = intervals.map { String($0) }
+        tempIntervals = intervals.map { IntervalEntry(value: String($0)) }
         // 记录快照到持久化存储，供「恢复已保存」使用
         saveSnapshot(intervals)
         viewModel.updateReviewDates()
@@ -317,6 +354,16 @@ struct IntervalSettingsSection: View {
             presetAlertError = NSLocalizedString("preset_name_duplicate", comment: "")
             return
         }
+        // 保存预设前必须先校验当前编辑中的 tempIntervals，
+        // 校验不通过则阻断保存并提示用户
+        let currentIntervals = tempIntervals.compactMap { Int($0.value.trimmingCharacters(in: .whitespaces)) }
+        guard currentIntervals.count == tempIntervals.count,
+              viewModel.validateIntervals(currentIntervals) else {
+            presetAlertError = NSLocalizedString("preset_save_invalid_intervals", comment: "")
+            return
+        }
+        viewModel.reviewIntervals = currentIntervals
+        viewModel.updateReviewDates()
         viewModel.saveCustomPreset(name: trimmed)
         showSavePresetAlert = false
     }

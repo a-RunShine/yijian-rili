@@ -509,7 +509,13 @@ class ReviewViewModel: ObservableObject {
     func validateIntervals(_ intervals: [Int]) -> Bool {
         guard !intervals.isEmpty else { return false }
         guard intervals.count <= 10 else { return false }
-        return intervals.allSatisfy { $0 >= 1 && $0 <= 365 }
+        // 每个间隔必须在 1~365 范围内
+        guard intervals.allSatisfy({ $0 >= 1 && $0 <= 365 }) else { return false }
+        // 间隔必须严格递增（不允许时间倒退的复习计划）
+        for i in 1..<intervals.count {
+            if intervals[i] <= intervals[i - 1] { return false }
+        }
+        return true
     }
 
     // MARK: - Custom Presets

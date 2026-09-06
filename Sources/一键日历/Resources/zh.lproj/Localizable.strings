@@ -87,10 +87,14 @@
 "interval_day_label" = "第%@次";
 "save_intervals" = "保存";
 "reset_intervals" = "恢复默认";
-"interval_invalid" = "间隔必须为正整数";
+"interval_invalid" = "间隔必须为 1~365 的正整数";
+"interval_invalid_at" = "第%@个间隔无效，请输入 1~365 的正整数";
+"interval_not_increasing_at" = "第%@个间隔必须大于前一个间隔";
 "interval_min_error" = "至少需要一个间隔";
 "add_interval" = "添加间隔";
 "remove_interval" = "删除";
+"remove_interval_at" = "删除第%@个间隔";
+"preset_save_invalid_intervals" = "当前间隔配置无效，请先修正后再保存预设";
 "restore_saved" = "已保存";
 "interval_unit_day" = "天";
 "interval_max_error" = "最多支持10个间隔";

@@ -144,6 +144,13 @@ final class 一键日历Tests: XCTestCase {
         XCTAssertTrue(viewModel.validateIntervals([7]))
         // 多个间隔合法
         XCTAssertTrue(viewModel.validateIntervals([1, 2, 4, 7, 15]))
+        // 非递增序列不合法（时间倒退）
+        XCTAssertFalse(viewModel.validateIntervals([30, 7, 3]))
+        XCTAssertFalse(viewModel.validateIntervals([7, 7, 30]))
+        XCTAssertFalse(viewModel.validateIntervals([10, 5]))
+        // 边界：严格递增合法
+        XCTAssertTrue(viewModel.validateIntervals([1, 2, 3]))
+        XCTAssertTrue(viewModel.validateIntervals([1, 365]))
     }
 
     @MainActor
