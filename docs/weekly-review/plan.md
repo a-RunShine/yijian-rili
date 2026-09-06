@@ -76,6 +76,11 @@ struct WeeklyEntry: Identifiable, Codable, Equatable {
     // 直接复用 HistoryEntry.ScheduleType，不重复定义 enum，保证语义一致。
     let scheduleType: HistoryEntry.ScheduleType
     let creationDate: Date         // 用于按周归属 + 按日期分组
+    /// 周末复习计划双份规则下的"下一周预占位"标记
+    /// - false: 本周（创建所在周）真实条目
+    /// - true : 下一周周一的预占位副本（仅复习计划；spec F10-F13）
+    /// 解码缺省值为 false（spec 旧数据兼容）。
+    let isPreOccupiedNextWeek: Bool
 }
 ```
 
@@ -139,6 +144,8 @@ struct HistoryEntry: Identifiable, Codable {
 | `weeklyEntriesData` | JSON `[WeeklyEntry]` | `[]` | 无上限 |
 | `weeklyReviewStateData` | JSON `[UUID]`（已勾选 id 列表） | `[]` | 用数组持久化 Set |
 | `weeklyNotesData` | JSON `WeeklyNotes` | `{"byWeek":{}}` | key = `weekKey` |
+| `weeklyEntriesHistoryMigrationDone` | Bool | `false` | 历史记录一次性迁移完成标记 |
+| `weeklyEntriesWeekendMigrationDone` | Bool | `false` | 周末预占位条目迁移完成标记（spec F13） |
 
 ---
 
@@ -168,6 +175,13 @@ enum WeekCalculator {
 
     /// 周一 ± 7 天，返回新周一的 00:00:00.000
     static func addingWeeks(_ n: Int, to mondayStart: Date) -> Date
+
+    /// 是否是周六或周日（spec F10 周末复习计划双份判定）
+    static func isWeekend(_ date: Date) -> Bool
+
+    /// 返回 date 之后**下一个日历周**周一的 00:00:00.000（spec F10）
+    /// - 周一 → +7 天；周二至周日 → 跳到下周周一
+    static func nextWeekMonday(after date: Date) -> Date
 }
 ```
 
@@ -224,6 +238,9 @@ final class WeeklyReviewViewModel: ObservableObject {
     func isReviewed(_ id: UUID) -> Bool
 
     func updateNote(_ text: String)        // 每次 onChange 调用，无防抖（spec F7）
+
+    /// 周末复习计划预占位条目迁移（spec F13）。幂等，由独立 migration key 保护。
+    func performWeekendMigrationIfNeeded()
 }
 ```
 
@@ -245,10 +262,125 @@ private func addHistoryEntry(title: String, baseDate: Date,
     historyEntries = entries
 
     appendWeeklyEntry(from: newEntry)    // ← 新增：写入 weeklyEntriesData
+    // appendWeeklyEntry 内部已实现 spec F10 周末复习计划双份规则
 }
 ```
 
 `createReviewSchedule()` 的成功分支按 `scheduleMode` 传入 `.review` / `.single`；`undoReviewSchedule()` 不动 weekly 数据（撤销仅删除日历事件，不回滚本地条目 — 保留"曾创建"的记录）。
+
+### 3.4 `WeeklyEntry.appendWeeklyEntry` 周末双份规则（spec F10-F12）
+
+```swift
+func appendWeeklyEntry(from historyEntry: HistoryEntry) {
+    var entries = weeklyEntries
+    // 避免重复（同一 id：可能由迁移或重复触发产生）
+    entries.removeAll { $0.id == historyEntry.id }
+
+    let primary = WeeklyEntry(
+        id: historyEntry.id, title: historyEntry.title,
+        baseDate: historyEntry.baseDate, scheduleType: historyEntry.type,
+        creationDate: historyEntry.creationDate,
+        isPreOccupiedNextWeek: false
+    )
+    entries.append(primary)
+
+    // 周末复习计划双份：写入下一周周一的预占位副本
+    if historyEntry.type == .review,
+       WeekCalculator.isWeekend(historyEntry.creationDate) {
+        let nextMonday = WeekCalculator.nextWeekMonday(after: historyEntry.creationDate)
+        // 防止同 id + 同 creationDate 出现两条（防御性）
+        if !entries.contains(where: { $0.id == historyEntry.id && $0.creationDate == nextMonday }) {
+            let placeholder = WeeklyEntry(
+                id: historyEntry.id, title: historyEntry.title,
+                baseDate: historyEntry.baseDate, scheduleType: historyEntry.type,
+                creationDate: nextMonday,
+                isPreOccupiedNextWeek: true   // UI 用以显示"下周复习"标签
+            )
+            entries.append(placeholder)
+        }
+    }
+
+    persistWeeklyEntries(entries)
+    revision &+= 1
+}
+```
+
+### 3.5 周末预占位迁移（spec F13）
+
+```swift
+func performWeekendMigrationIfNeeded() {
+    guard !defaults.bool(forKey: WeeklyReviewViewModel.weekendMigrationKey) else { return }
+
+    let entries = weeklyEntries
+    guard !entries.isEmpty else {
+        defaults.set(true, forKey: WeeklyReviewViewModel.weekendMigrationKey)
+        return
+    }
+
+    var result = entries
+    var changed = false
+    for entry in entries where !entry.isPreOccupiedNextWeek {
+        guard entry.scheduleType == .review,
+              WeekCalculator.isWeekend(entry.creationDate) else { continue }
+        let nextMonday = WeekCalculator.nextWeekMonday(after: entry.creationDate)
+        let exists = entries.contains(where: {
+            $0.id == entry.id && $0.creationDate == nextMonday && $0.isPreOccupiedNextWeek
+        })
+        if exists { continue }
+        result.append(WeeklyEntry(
+            id: entry.id, title: entry.title, baseDate: entry.baseDate,
+            scheduleType: entry.scheduleType, creationDate: nextMonday,
+            isPreOccupiedNextWeek: true
+        ))
+        changed = true
+    }
+
+    if changed {
+        persistWeeklyEntries(result)
+        revision &+= 1
+    }
+    defaults.set(true, forKey: WeeklyReviewViewModel.weekendMigrationKey)
+}
+```
+
+> 触发场景：
+> 1. 1.5.1 之前版本已存在的 `WeeklyEntry`（无 `isPreOccupiedNextWeek` 字段），
+>    当时创建时间恰好是周六/日但只写了一条。
+> 2. 历史记录清理后再次迁移会引入单条，本方法会再补一份预占位。
+
+### 3.6 预占位条目不计 X/Y（spec F14）
+
+`totalCount` / `reviewedCount` 仅基于本周**真实条目**（`isPreOccupiedNextWeek == false`）。
+
+```swift
+/// 仅本周真实条目（不含预占位条目）。预占位条目不计 X / Y。
+var realEntriesInCurrentWeek: [WeeklyEntry] {
+    entriesInCurrentWeek.filter { !$0.isPreOccupiedNextWeek }
+}
+
+var reviewedCount: Int {
+    let entries = realEntriesInCurrentWeek
+    let reviewed = reviewedIds
+    return entries.filter { reviewed.contains($0.id) }.count
+}
+
+var totalCount: Int {
+    realEntriesInCurrentWeek.count
+}
+```
+
+> 设计要点：
+> - `reviewedIds` 仍是全局 `Set<UUID>`：勾选预占位条目仍会写入；真实条目（同 id）在另一周勾选状态自动同步。
+> - 但进度条 X / Y 只看 `realEntriesInCurrentWeek` 与 `reviewedIds` 的交集：预占位条目本身的勾选不计入进度。
+> - 副标题：预占位条目显示 `创建于 X · Y 所在周开始复习`，其中 X = 预占位条目 `creationDate` 中文格式、Y = 归档周周一（原创建所在周周一 = X - 7 天）；真实条目显示原本的 `baseDate · 类型`。
+
+### 3.7 本地化文案（spec F11 修订）
+
+| Key | 中文 | 用途 |
+|---|---|---|
+| ~~`weekly_review_next_week_tag`~~ | ~~"下周复习"~~ | **删除**：被 `weekly_review_pre_occupied_tag` 取代 |
+| `weekly_review_pre_occupied_tag` | "上周周末创建" | 预占位条目右侧标签（`.secondary` 颜色，`.caption2`） |
+| `weekly_review_pre_occupied_subtitle` | "创建于 %@ · %@ 所在周开始复习" | 预占位条目副标题（占位符：X = 创建日期，Y = 归档周周一） |
 
 ---
 
@@ -372,6 +504,11 @@ Tests/一键日历Tests/
 | **F7** 自动保存笔记 + 按周独立 | `Views/WeeklyReviewView.swift`（TextEditor onChange）<br>`ViewModels/WeeklyReviewViewModel.swift` | `updateNote(_:) → notesJSON`<br>`currentWeekKey` 作字典 key |
 | **F8** 永久本地 + 不受 20 上限影响 | `Sources/一键日历/Views/...` 数据写入路径 | `weeklyEntriesData / weeklyReviewStateData / weeklyNotesData` 三 key 都不截断 |
 | **F9** 旧 history 兼容读取 | `Models/HistoryEntry.swift`（自定义解码） | `init(from:)` 缺 `type` 字段默认 `.review` |
+| **F10** 周末复习计划双份 | `WeeklyReviewViewModel.appendWeeklyEntry` | `WeekCalculator.isWeekend` + `nextWeekMonday` |
+| **F11** "上周周末创建"标签 + `.secondary` 颜色 + 副标题 | `Views/WeeklyReviewView.swift`（entryRow） | `entry.isPreOccupiedNextWeek` → 标签；`entry.creationDate` + `WeekCalculator.addingWeeks(-1, to:)` → 副标题 |
+| **F12** 单次日程 / 周一至周五不复制 | `WeeklyReviewViewModel.appendWeeklyEntry` | 类型 + 周几判定 |
+| **F13** 旧 WeeklyEntry 补预占位迁移 | `WeeklyReviewViewModel.performWeekendMigrationIfNeeded` | `weekendMigrationKey` 幂等保护 |
+| **F14** 预占位条目不计 X / Y | `WeeklyReviewViewModel.realEntriesInCurrentWeek` | `totalCount` / `reviewedCount` 仅过滤 `isPreOccupiedNextWeek == false` |
 
 ### 非功能需求映射
 
@@ -394,6 +531,14 @@ Tests/一键日历Tests/
 4. `testHistoryEntryBackwardCompatMissingType` — JSON 不带 type → 解码为 `.review`。
 5. `testWeeklyReviewToggleAndPersist` — `toggleReviewed` 改变 reviewedIds；模拟持久化往返。
 6. `testWeeklyReviewWeekBoundary` — 当前周切换后 `entriesInCurrentWeek` 过滤正确；不包含其他周的条目。
+7. `testWeekendReviewSaturdayAppendsNextWeekEntry` — spec F10：周六创建复习计划 → 双份，第二条 creationDate = 下一周周一 00:00 且 isPreOccupiedNextWeek = true；下周页面可查到同 id 条目。
+8. `testWeekendReviewSundayAppendsNextWeekEntry` — spec F10：周日创建复习计划 → 双份，creationDate 同样跳到下一周周一。
+9. `testSingleScheduleNotDuplicatedOnWeekend` — spec F12：单次日程不双份；下周页面查不到。
+10. `testWeekdayReviewNotDuplicated` — spec F12：周五/周一复习计划不双份。
+11. `testWeekendMigrationBackfillsNextWeekEntry` — spec F13：旧 WeeklyEntry（创建时间周六/日 + .review）由一次性迁移补一份预占位；幂等。
+12. `testPreOccupiedEntryNotCountedInTotalAndReviewedCount` — spec F14：周六复习计划在创建所在周产生双份；本周 `totalCount == 1`（不含预占位），勾选后 `reviewedCount == 1`。
+13. `testPreOccupiedEntryCountedSeparatelyOnNextWeek` — spec F14：跳到"周六所在周的下一周"页面时仅含预占位条目；`totalCount == 0`，勾选不影响 `reviewedCount`。
+14. `testMixedRealAndPreOccupiedProgress` — spec F14：本周混合 3 条真实条目 + 1 条预占位时，`totalCount == 3`，勾选预占位不计入 `reviewedCount`。
 
 > ViewModel 测试统一 `@MainActor` 隔离（与现有 `testViewModelValidation` 一致）。
 

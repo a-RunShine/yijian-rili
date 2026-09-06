@@ -17,6 +17,8 @@ final class WeeklyReviewViewModel: ObservableObject {
     static let weeklyNotesKey = "weeklyNotesData"
     /// 历史记录一次性迁移完成标记（避免重复执行）
     static let historyMigrationKey = "weeklyEntriesHistoryMigrationDone"
+    /// 周末预占位条目迁移完成标记（避免重复执行）
+    static let weekendMigrationKey = "weeklyEntriesWeekendMigrationDone"
     /// `ReviewViewModel.historyEntriesData` 的存储 key（迁移时读取）
     static let legacyHistoryEntriesKey = "historyEntriesData"
 
@@ -59,6 +61,9 @@ final class WeeklyReviewViewModel: ObservableObject {
         // 一次性迁移：把 `historyEntriesData` 里尚未存在于 weeklyEntriesData 的
         // HistoryEntry 转成 WeeklyEntry。幂等，由 migration key 保护。
         performHistoryMigrationIfNeeded()
+        // 一次性迁移：为已存在的"创建时间落在周六/日"且 type=.review 的 WeeklyEntry
+        // 补一份下一周周一的预占位副本。幂等，由 migration key 保护。
+        performWeekendMigrationIfNeeded()
         // 初始化草稿
         reloadDraftForCurrentWeek()
     }
@@ -118,17 +123,28 @@ final class WeeklyReviewViewModel: ObservableObject {
             .sorted { $0.date > $1.date }
     }
 
+    /// 仅本周真实条目（不含预占位）。预占位条目（`isPreOccupiedNextWeek == true`）
+    /// 不计入 X/Y 进度（spec F6 + F11 修正）。
+    var realEntriesInCurrentWeek: [WeeklyEntry] {
+        entriesInCurrentWeek.filter { !$0.isPreOccupiedNextWeek }
+    }
+
     var reviewedCount: Int {
-        let entries = entriesInCurrentWeek
+        let entries = realEntriesInCurrentWeek
         let reviewed = reviewedIds
         return entries.filter { reviewed.contains($0.id) }.count
     }
 
     var totalCount: Int {
-        entriesInCurrentWeek.count
+        realEntriesInCurrentWeek.count
     }
 
-    /// 仅当 currentWeekStart 严格早于"本周周一（实时计算）"时为 true（spec F5）
+    /// 仅当 `currentWeekStart` 严格早于"本周周一（实时计算）"时为 true（spec F5）。
+    ///
+    /// 该规则防止用户越过当前周进入未来空周。周末复习计划的预占位条目虽然
+    /// `creationDate` 落在下一周，但本规则不为其放宽条件；预占位条目仍可通过
+    /// `weeklyEntries` / `entriesInCurrentWeek`（以 `currentWeekStart` 为锚点）
+    /// 查询，下方"回到本周"按钮的 disabled 状态由 View 层独立判断。
     var canGoToNextWeek: Bool {
         let thisMonday = WeekCalculator.weekStart(for: Date())
         return currentWeekStart < thisMonday
@@ -212,19 +228,48 @@ final class WeeklyReviewViewModel: ObservableObject {
 
     // MARK: - 写入 weekly entry（由 ReviewViewModel 在 addHistoryEntry 时调用）
 
-    /// 追加一条 weekly entry，使用 historyEntry.id 作为关联 id
+    /// 追加一条 weekly entry，使用 historyEntry.id 作为关联 id。
+    ///
+    /// **周末复习计划双份规则**（plan §X 新需求）：
+    /// - 当 `historyEntry.type == .review` 且 `creationDate` 落在周六/周日时，
+    ///   写入两条 WeeklyEntry：第二条 `creationDate` 改为下一周周一 00:00，
+    ///   并标记 `isPreOccupiedNextWeek = true`，UI 用以显示"下周复习"标签。
+    /// - 单次日程（`.single`）不复制。
+    /// - 周一至周五创建不复制。
+    /// - 已存在同 id 的条目会被先剔除，避免重复（同一 historyEntry 重复调用安全）。
     func appendWeeklyEntry(from historyEntry: HistoryEntry) {
         var entries = weeklyEntries
-        // 避免重复（同一 id）
+        // 避免重复（同一 id：可能由迁移或重复触发产生）
         entries.removeAll { $0.id == historyEntry.id }
-        let weekly = WeeklyEntry(
+
+        let primary = WeeklyEntry(
             id: historyEntry.id,
             title: historyEntry.title,
             baseDate: historyEntry.baseDate,
             scheduleType: historyEntry.type,
-            creationDate: historyEntry.creationDate
+            creationDate: historyEntry.creationDate,
+            isPreOccupiedNextWeek: false
         )
-        entries.append(weekly)
+        entries.append(primary)
+
+        // 周末复习计划双份：写入下一周周一的预占位副本
+        if historyEntry.type == .review,
+           WeekCalculator.isWeekend(historyEntry.creationDate) {
+            let nextMonday = WeekCalculator.nextWeekMonday(after: historyEntry.creationDate)
+            // 避免同一对 (id, creationDate) 出现两条（防御性，正常路径不会）
+            if !entries.contains(where: { $0.id == historyEntry.id && $0.creationDate == nextMonday }) {
+                let placeholder = WeeklyEntry(
+                    id: historyEntry.id,
+                    title: historyEntry.title,
+                    baseDate: historyEntry.baseDate,
+                    scheduleType: historyEntry.type,
+                    creationDate: nextMonday,
+                    isPreOccupiedNextWeek: true
+                )
+                entries.append(placeholder)
+            }
+        }
+
         persistWeeklyEntries(entries)
         revision &+= 1
     }
@@ -286,6 +331,77 @@ final class WeeklyReviewViewModel: ObservableObject {
         defaults.set(true, forKey: WeeklyReviewViewModel.historyMigrationKey)
     }
 
+    // MARK: - 周末复习计划预占位条目迁移
+
+    /// 首次初始化时检查所有 WeeklyEntry：
+    /// - 若 `scheduleType == .review` 且 `creationDate` 落在周六/周日，
+    ///   且**同一 id 不存在**下一周周一 00:00 的预占位副本（`isPreOccupiedNextWeek = true`），
+    ///   则补一条。
+    ///
+    /// 由 `weekendMigrationKey` 防止重复执行。
+    ///
+    /// 触发场景：
+    /// 1. 1.5.1 之前版本已存在的 WeeklyEntry（无 `isPreOccupiedNextWeek` 字段），
+    ///    当时创建时间恰好是周六/日但只写了一条。
+    /// 2. 用户清理了 `weeklyEntriesData` 但已存在的历史记录仍在 `historyEntriesData`，
+    ///    历史迁移会再次引入单条，本方法会再补一份预占位。
+    ///
+    /// 幂等：重复调用不会重复补，预占位条目已存在则跳过。
+    func performWeekendMigrationIfNeeded() {
+        // 已迁移过：直接返回
+        guard !defaults.bool(forKey: WeeklyReviewViewModel.weekendMigrationKey) else {
+            return
+        }
+
+        let entries = weeklyEntries
+        guard !entries.isEmpty else {
+            // 无 entries 时也直接置位，避免每次启动扫描
+            defaults.set(true, forKey: WeeklyReviewViewModel.weekendMigrationKey)
+            return
+        }
+
+        var changed = false
+        var result: [WeeklyEntry] = entries
+
+        // 只扫描"本周（创建所在周）的真实条目"：
+        // 已经是预占位的条目不再重复扫描；同 id 的非预占位条目作为补一份的锚点。
+        for entry in entries where !entry.isPreOccupiedNextWeek {
+            // 仅处理复习计划 + 创建时间落在周末
+            guard entry.scheduleType == .review,
+                  WeekCalculator.isWeekend(entry.creationDate) else {
+                continue
+            }
+            let nextMonday = WeekCalculator.nextWeekMonday(after: entry.creationDate)
+            // 检查同 id 是否已存在一条 creationDate == nextMonday 的预占位
+            let exists = entries.contains(where: { existing in
+                existing.id == entry.id &&
+                existing.creationDate == nextMonday &&
+                existing.isPreOccupiedNextWeek
+            })
+            if exists { continue }
+
+            // 补一份预占位条目
+            let placeholder = WeeklyEntry(
+                id: entry.id,
+                title: entry.title,
+                baseDate: entry.baseDate,
+                scheduleType: entry.scheduleType,
+                creationDate: nextMonday,
+                isPreOccupiedNextWeek: true
+            )
+            result.append(placeholder)
+            changed = true
+        }
+
+        if changed {
+            persistWeeklyEntries(result)
+            revision &+= 1
+        }
+
+        // 标记完成，防止重复执行（即便没有可补内容也设置，避免每次启动反复扫描）
+        defaults.set(true, forKey: WeeklyReviewViewModel.weekendMigrationKey)
+    }
+
     // MARK: - Notes 编解码
 
     private func decodeNotes() -> WeeklyNotes {
@@ -309,6 +425,9 @@ final class WeeklyReviewViewModel: ObservableObject {
         notesJSON = "{\"byWeek\":{}}"
         noteDraft = ""
         currentWeekStart = WeekCalculator.weekStart(for: Date())
+        // 清除迁移标记以便重新构造 VM 时能再次触发迁移
+        defaults.removeObject(forKey: WeeklyReviewViewModel.historyMigrationKey)
+        defaults.removeObject(forKey: WeeklyReviewViewModel.weekendMigrationKey)
         revision &+= 1
     }
 }

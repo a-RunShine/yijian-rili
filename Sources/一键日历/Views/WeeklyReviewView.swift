@@ -190,28 +190,61 @@ struct WeeklyReviewView: View {
                   : NSLocalizedString("weekly_review_mark_reviewed", comment: ""))
 
             VStack(alignment: .leading, spacing: 4) {
-                Text(entry.title)
-                    .font(.subheadline)
-                    .strikethrough(reviewed, color: theme.secondaryTextColor ?? .secondary)
-                    .foregroundColor(reviewed
-                                     ? (theme.secondaryTextColor ?? .secondary)
-                                     : (theme.primaryTextColor ?? .primary))
-                    .lineLimit(2)
+                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                    Text(entry.title)
+                        .font(.subheadline)
+                        .strikethrough(reviewed, color: theme.secondaryTextColor ?? .secondary)
+                        .foregroundColor(reviewed
+                                         ? (theme.secondaryTextColor ?? .secondary)
+                                         : (theme.primaryTextColor ?? .primary))
+                        .lineLimit(2)
+                    // 周末复习计划预占位标签（spec F11：UI 在条目右侧加
+                    // "上周周末创建" 标签，用 .secondary 颜色区分预占位，
+                    // 不改变勾选/笔记行为）
+                    if entry.isPreOccupiedNextWeek {
+                        Text(NSLocalizedString("weekly_review_pre_occupied_tag", comment: ""))
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                            .padding(.horizontal, 5)
+                            .padding(.vertical, 1)
+                            .background(Color.secondary.opacity(0.12))
+                            .cornerRadius(4)
+                    }
+                    Spacer(minLength: 0)
+                }
 
-                HStack(spacing: 6) {
-                    Text(entry.baseDate.formattedChinese())
+                // 副标题：
+                // - 真实条目：baseDate · 类型
+                // - 预占位条目（spec F11）："创建于 X · Y 所在周开始复习"
+                //   X = entry.creationDate 中文格式（= 下一周周一）
+                //   Y = 归档周周一（原创建所在周的周一 = 当前周一 - 7 天）
+                if entry.isPreOccupiedNextWeek {
+                    let creationText = entry.creationDate.formattedChinese()
+                    let archivedMonday = WeekCalculator.addingWeeks(-1, to: entry.creationDate)
+                    let archivedText = archivedMonday.formattedChinese()
+                    let subtitle = String(
+                        format: NSLocalizedString("weekly_review_pre_occupied_subtitle", comment: ""),
+                        creationText, archivedText
+                    )
+                    Text(subtitle)
                         .font(.caption)
                         .foregroundColor(theme.secondaryTextColor ?? .secondary)
-                    Text("·")
-                        .font(.caption)
-                        .foregroundColor(theme.secondaryTextColor ?? .secondary)
-                    Text(typeText(for: entry.scheduleType))
-                        .font(.caption)
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 1)
-                        .background((theme.accentColor ?? .accentColor).opacity(0.15))
-                        .foregroundColor(theme.accentColor ?? .accentColor)
-                        .cornerRadius(4)
+                } else {
+                    HStack(spacing: 6) {
+                        Text(entry.baseDate.formattedChinese())
+                            .font(.caption)
+                            .foregroundColor(theme.secondaryTextColor ?? .secondary)
+                        Text("·")
+                            .font(.caption)
+                            .foregroundColor(theme.secondaryTextColor ?? .secondary)
+                        Text(typeText(for: entry.scheduleType))
+                            .font(.caption)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 1)
+                            .background((theme.accentColor ?? .accentColor).opacity(0.15))
+                            .foregroundColor(theme.accentColor ?? .accentColor)
+                            .cornerRadius(4)
+                    }
                 }
             }
             Spacer()

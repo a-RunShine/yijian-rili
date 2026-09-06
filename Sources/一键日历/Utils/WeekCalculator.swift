@@ -66,4 +66,24 @@ enum WeekCalculator {
     static func addingWeeks(_ n: Int, to mondayStart: Date) -> Date {
         calendar.date(byAdding: .day, value: n * 7, to: mondayStart) ?? mondayStart
     }
+
+    /// 是否是周六或周日（用于周末复习计划双份判定）
+    /// - 使用 `WeekCalculator.calendar`（固定周一为周首日）保持与周计算口径一致
+    /// - `.weekday` 永远 Sunday=1, Monday=2, ..., Saturday=7（不受 firstWeekday 影响）
+    static func isWeekend(_ date: Date) -> Bool {
+        let weekday = calendar.component(.weekday, from: date)
+        return weekday == 1 /* Sunday */ || weekday == 7 /* Saturday */
+    }
+
+    /// 返回**下一周**周一的 `00:00:00.000`。
+    ///
+    /// 不论传入日期是周一至周日的哪一天，结果都是 `date` 之后**下一个日历周**的周一 00:00：
+    /// - 周一 → +7 天
+    /// - 周二至周日 → 计算到下周一的距离
+    /// - 仅用作"周末复习计划"双份规则的预占位日期生成。
+    static func nextWeekMonday(after date: Date) -> Date {
+        let start = weekStart(for: date)
+        // start 是当前周周一 00:00；再加 7 天得到下周周一 00:00
+        return addingWeeks(1, to: start)
+    }
 }

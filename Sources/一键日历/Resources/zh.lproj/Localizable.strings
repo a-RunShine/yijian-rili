@@ -202,4 +202,6 @@
 "weekly_review_mark_reviewed" = "标记为已复习";
 "weekly_review_mark_unreviewed" = "标记为未复习";
 "weekly_review_jump_to_current" = "回到本周";
+"weekly_review_pre_occupied_tag" = "上周周末创建";
+"weekly_review_pre_occupied_subtitle" = "创建于 %@ · %@ 所在周开始复习";
 "close" = "关闭";
