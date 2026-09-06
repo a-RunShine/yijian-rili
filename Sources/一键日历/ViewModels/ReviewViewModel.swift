@@ -314,8 +314,13 @@ class ReviewViewModel: ObservableObject {
                 lastCreatedBaseDate = baseDate
                 canRecreate = true
 
-                // Add to history
-                addHistoryEntry(title: trimmedTitle, baseDate: baseDate, reviewDates: created)
+                // Add to history (同步写入 weekly entries，spec F8 不受 20 上限影响)
+                addHistoryEntry(
+                    title: trimmedTitle,
+                    baseDate: baseDate,
+                    reviewDates: created,
+                    type: scheduleMode == .single ? .single : .review
+                )
 
                 // Enable undo
                 canUndo = true
@@ -457,17 +462,45 @@ class ReviewViewModel: ObservableObject {
     
     // MARK: - History
     
-    private func addHistoryEntry(title: String, baseDate: Date, reviewDates: [Date]) {
+    private func addHistoryEntry(title: String,
+                                  baseDate: Date,
+                                  reviewDates: [Date],
+                                  type: HistoryEntry.ScheduleType = .review) {
         var entries = historyEntries
-        let newEntry = HistoryEntry(title: title, baseDate: baseDate, reviewDates: reviewDates, creationDate: Date())
+        let newEntry = HistoryEntry(
+            title: title,
+            baseDate: baseDate,
+            reviewDates: reviewDates,
+            creationDate: Date(),
+            type: type
+        )
         entries.insert(newEntry, at: 0)
-        
+
         // Limit to 20 entries
         if entries.count > 20 {
             entries = Array(entries.prefix(20))
         }
-        
+
         historyEntries = entries
+
+        // 同步追加 weekly entry（独立存储，不受 20 上限影响，spec F8）
+        weeklyReviewViewModel.appendWeeklyEntry(from: newEntry)
+    }
+
+    // MARK: - 周末总结
+
+    /// 周末总结入口：懒构造 ViewModel（避免 init 时抢占 AppStorage 默认值）
+    lazy var weeklyReviewViewModel: WeeklyReviewViewModel = {
+        WeeklyReviewViewModel()
+    }()
+
+    /// 显示周末总结 sheet（spec F1）
+    @Published var showWeeklyReview: Bool = false
+
+    func openWeeklyReview() {
+        // 每次打开跳到当前周
+        weeklyReviewViewModel.jumpToCurrentWeek()
+        showWeeklyReview = true
     }
     
     func selectHistoryEntry(_ entry: HistoryEntry) {

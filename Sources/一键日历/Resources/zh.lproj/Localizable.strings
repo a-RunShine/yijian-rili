@@ -186,3 +186,20 @@
 "search_delete_cancel" = "取消";
 "search_delete_confirm_action" = "删除";
 "search_delete_success" = "已删除日程";
+
+// Weekly Review (周末总结)
+"weekly_review_button" = "周末总结";
+"weekly_review_title" = "周末总结";
+"weekly_review_prev_week" = "上一周";
+"weekly_review_next_week" = "下一周";
+"weekly_review_this_week" = "本周";
+"weekly_review_weeks_ago" = "前 %@ 周";
+"weekly_review_weeks_later" = "后 %@ 周";
+"weekly_review_progress" = "已复习 %@/%@";
+"weekly_review_empty_state" = "本周还没有学习条目，去主界面添加吧";
+"weekly_review_note_title" = "本周总结";
+"weekly_review_note_autosave" = "自动保存";
+"weekly_review_mark_reviewed" = "标记为已复习";
+"weekly_review_mark_unreviewed" = "标记为未复习";
+"weekly_review_jump_to_current" = "回到本周";
+"close" = "关闭";

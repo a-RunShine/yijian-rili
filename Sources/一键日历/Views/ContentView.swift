@@ -50,6 +50,31 @@ struct ContentView: View {
                     // Today Events
                     TodayEventsSection(viewModel: viewModel)
 
+                    // 周末总结 Button (spec F1)
+                    Button(action: {
+                        viewModel.openWeeklyReview()
+                    }) {
+                        HStack {
+                            Image(systemName: "calendar.badge.clock")
+                            Text(NSLocalizedString("weekly_review_button", comment: ""))
+                                .font(.subheadline)
+                            Spacer()
+                            if !viewModel.weeklyReviewViewModel.entriesInCurrentWeek.isEmpty {
+                                Text("\(viewModel.weeklyReviewViewModel.entriesInCurrentWeek.count)")
+                                    .font(.caption2)
+                                    .foregroundColor(.white)
+                                    .padding(.horizontal, 6)
+                                    .padding(.vertical, 2)
+                                    .background(viewModel.currentTheme.accentColor ?? Color.accentColor)
+                                    .clipShape(Capsule())
+                            }
+                        }
+                    }
+                    .buttonStyle(.plain)
+                    .padding()
+                    .background(viewModel.currentTheme.cardBackgroundColor)
+                    .cornerRadius(10)
+
                     // Title Input (含模式切换 Picker)
                     TitleInputSection(viewModel: viewModel)
 
@@ -142,6 +167,9 @@ struct ContentView: View {
             }) {
                 SearchSheetView(viewModel: viewModel)
                     .frame(width: 380, height: 460)
+            }
+            .sheet(isPresented: $viewModel.showWeeklyReview) {
+                WeeklyReviewView(viewModel: viewModel.weeklyReviewViewModel)
             }
             .onAppear {
                 viewModel.scheduleFirstRunGuideIfNeeded()
