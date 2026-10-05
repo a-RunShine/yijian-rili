@@ -206,9 +206,14 @@ public sealed class ReviewSession
                 OnCreateSuccess(trimmed, result.Created);
             }
         }
-        catch (Exception ex)
+        catch (CalendarServiceException)
         {
-            ResultMessage = ex.Message;
+            ResultMessage = "日历操作失败，请检查权限与账户后重试";
+            ResultKind = ViewModels.ResultKind.Error;
+        }
+        catch (Exception)
+        {
+            ResultMessage = "创建失败，请稍后重试";
             ResultKind = ViewModels.ResultKind.Error;
         }
         finally

@@ -93,6 +93,9 @@ public sealed class WinRtCalendarService : ICalendarService
         string? calendarId = null,
         CancellationToken cancellationToken = default)
     {
+        if (!IntervalRules.Validate(intervals))
+            throw new CalendarServiceException("无效的复习间隔");
+
         var store = await EnsureStoreAsync(cancellationToken).ConfigureAwait(false);
         var calendar = await ResolveCalendarAsync(store, calendarId, cancellationToken).ConfigureAwait(false);
         var dates = ReviewEvent.CalculateReviewDates(baseDate, intervals);

@@ -13,6 +13,9 @@ public sealed class WeeklyReviewService
     public const string HistoryMigrationKey = "weeklyEntriesHistoryMigrationDone";
     public const string WeekendMigrationKey = "weeklyEntriesWeekendMigrationDone";
 
+    /// <summary>反序列化安全上限（周末总结永久保存，但仍防止异常膨胀）。</summary>
+    public const int MaxEntries = 10_000;
+
     private readonly ISettingsStore _settings;
 
     public WeeklyReviewService(ISettingsStore settings)
@@ -33,8 +36,11 @@ public sealed class WeeklyReviewService
     public string CurrentWeekKey => WeekCalculator.WeekKey(CurrentWeekStart);
 
     public IReadOnlyList<WeeklyEntry> LoadEntries()
-        => JsonSettings.Deserialize<List<WeeklyEntry>>(_settings.GetString(WeeklyEntriesKey))
-           ?? new List<WeeklyEntry>();
+    {
+        var list = JsonSettings.Deserialize<List<WeeklyEntry>>(_settings.GetString(WeeklyEntriesKey))
+                   ?? new List<WeeklyEntry>();
+        return list.Count <= MaxEntries ? list : list.Take(MaxEntries).ToList();
+    }
 
     public IReadOnlySet<Guid> ReviewedIds
     {
@@ -177,7 +183,10 @@ public sealed class WeeklyReviewService
     }
 
     public void PersistEntries(IReadOnlyList<WeeklyEntry> entries)
-        => _settings.SetString(WeeklyEntriesKey, JsonSettings.Serialize(entries));
+    {
+        var capped = entries.Count <= MaxEntries ? entries : entries.Take(MaxEntries).ToList();
+        _settings.SetString(WeeklyEntriesKey, JsonSettings.Serialize(capped));
+    }
 
     public void PerformHistoryMigrationIfNeeded()
     {

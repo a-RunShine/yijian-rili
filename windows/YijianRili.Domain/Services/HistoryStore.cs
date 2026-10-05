@@ -13,8 +13,12 @@ public sealed class HistoryStore
     public HistoryStore(ISettingsStore settings) => _settings = settings;
 
     public IReadOnlyList<HistoryEntry> Load()
-        => JsonSettings.Deserialize<List<HistoryEntry>>(_settings.GetString(StorageKey))
-           ?? new List<HistoryEntry>();
+    {
+        var list = JsonSettings.Deserialize<List<HistoryEntry>>(_settings.GetString(StorageKey))
+                   ?? new List<HistoryEntry>();
+        // 反序列化后立即截断，防止被篡改的本地数据膨胀
+        return list.Count <= MaxEntries ? list : list.Take(MaxEntries).ToList();
+    }
 
     public void Save(IReadOnlyList<HistoryEntry> entries)
     {

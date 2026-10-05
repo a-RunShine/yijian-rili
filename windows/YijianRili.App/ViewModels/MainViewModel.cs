@@ -17,6 +17,8 @@ public sealed class MainViewModel : INotifyPropertyChanged
     private CalendarEventInfo? _selectedDayEvent;
     private string _previewText = string.Empty;
     private DayOffset _dayOffset = DayOffset.Today;
+    private CancellationTokenSource? _dayEventsCts;
+    private int _calendarsRevision;
 
     public MainViewModel(ICalendarService calendar, ISettingsStore settings)
     {
@@ -31,6 +33,17 @@ public sealed class MainViewModel : INotifyPropertyChanged
     public ObservableCollection<CalendarEventInfo> DayEvents { get; } = new();
     public ObservableCollection<HistoryEntry> History { get; } = new();
     public ObservableCollection<string> PreviewLines { get; } = new();
+
+    /// <summary>日历列表刷新计数；UI 监听后重新 BindCalendars。</summary>
+    public int CalendarsRevision
+    {
+        get => _calendarsRevision;
+        private set
+        {
+            _calendarsRevision = value;
+            OnPropertyChanged();
+        }
+    }
 
     public string Title
     {
@@ -86,6 +99,7 @@ public sealed class MainViewModel : INotifyPropertyChanged
     }
 
     public event EventHandler<bool>? WindowFloatingChanged;
+    public event EventHandler<AppTheme>? ThemeChanged;
 
     public string SelectedCalendarId
     {
@@ -129,6 +143,7 @@ public sealed class MainViewModel : INotifyPropertyChanged
         get => _showSyncGuide;
         set
         {
+            if (_showSyncGuide == value) return;
             _showSyncGuide = value;
             OnPropertyChanged();
         }
@@ -149,6 +164,12 @@ public sealed class MainViewModel : INotifyPropertyChanged
         get => _dayOffset;
         set
         {
+            if (_dayOffset == value)
+            {
+                _ = ReloadDayEventsAsync();
+                return;
+            }
+
             _dayOffset = value;
             OnPropertyChanged();
             _ = ReloadDayEventsAsync();
@@ -178,6 +199,7 @@ public sealed class MainViewModel : INotifyPropertyChanged
         {
             Session.SetTheme(value);
             OnPropertyChanged();
+            ThemeChanged?.Invoke(this, value);
         }
     }
 
@@ -208,7 +230,18 @@ public sealed class MainViewModel : INotifyPropertyChanged
         Calendars.Clear();
         foreach (var c in _calendar.AvailableCalendars)
             Calendars.Add(c);
+
+        // 若持久化的 id 已失效，清空并通知 UI
+        if (!string.IsNullOrEmpty(Session.SelectedCalendarIdentifier) &&
+            _calendar.GetCalendar(Session.SelectedCalendarIdentifier) is null)
+        {
+            Session.SelectedCalendarIdentifier = string.Empty;
+            Session.PersistSelectedCalendar();
+            OnPropertyChanged(nameof(SelectedCalendarId));
+        }
+
         OnPropertyChanged(nameof(LocalCalendarWarningVisible));
+        CalendarsRevision++;
     }
 
     public void ReloadHistory()
@@ -220,10 +253,28 @@ public sealed class MainViewModel : INotifyPropertyChanged
 
     public async Task ReloadDayEventsAsync()
     {
-        var date = DateTime.Today.AddDays((int)SelectedDay);
-        var events = await _calendar.FetchEventsAsync(date).ConfigureAwait(true);
-        DayEvents.Clear();
-        foreach (var e in events) DayEvents.Add(e);
+        _dayEventsCts?.Cancel();
+        _dayEventsCts?.Dispose();
+        var cts = new CancellationTokenSource();
+        _dayEventsCts = cts;
+        var token = cts.Token;
+        var requestedDay = SelectedDay;
+
+        try
+        {
+            var date = DateTime.Today.AddDays((int)requestedDay);
+            var events = await _calendar.FetchEventsAsync(date, token).ConfigureAwait(true);
+            if (token.IsCancellationRequested || SelectedDay != requestedDay)
+                return;
+
+            DayEvents.Clear();
+            foreach (var e in events) DayEvents.Add(e);
+            OnPropertyChanged(nameof(DayEvents));
+        }
+        catch (OperationCanceledException)
+        {
+            // newer request superseded this one
+        }
     }
 
     public void ApplyPreset(IntervalPreset preset)
@@ -239,16 +290,26 @@ public sealed class MainViewModel : INotifyPropertyChanged
     public async Task CreateAsync()
     {
         IsBusy = true;
+        var calendarBefore = Session.SelectedCalendarIdentifier;
         try
         {
             await Session.CreateAsync().ConfigureAwait(true);
             StatusText = Session.ResultMessage ?? "完成";
+
+            // 失效回退：选择被清空时刷新 combo
+            if (!string.Equals(calendarBefore, Session.SelectedCalendarIdentifier, StringComparison.Ordinal))
+            {
+                OnPropertyChanged(nameof(SelectedCalendarId));
+                ReloadCalendars();
+            }
+
             ReloadHistory();
             await ReloadDayEventsAsync().ConfigureAwait(true);
             OnPropertyChanged(nameof(CanUndo));
             OnPropertyChanged(nameof(CanRecreate));
             OnPropertyChanged(nameof(Title));
             OnPropertyChanged(nameof(BaseDate));
+            OnPropertyChanged(nameof(LocalCalendarWarningVisible));
             RefreshPreview();
         }
         finally
@@ -288,6 +349,7 @@ public sealed class MainViewModel : INotifyPropertyChanged
         Session.HasShownFirstRunGuide = true;
     }
 
+    /// <summary>仅置位；由 MainWindow 统一弹出一次对话框。</summary>
     public void OpenSyncGuide() => ShowSyncGuide = true;
 
     public void UseHistory(HistoryEntry entry)

@@ -71,6 +71,8 @@ public sealed class InMemoryCalendarService : ICalendarService
         CancellationToken cancellationToken = default)
     {
         EnsureAccess();
+        if (!IntervalRules.Validate(intervals))
+            throw new CalendarServiceException("无效的复习间隔");
         var calendar = ResolveCalendar(calendarId);
         var dates = ReviewEvent.CalculateReviewDates(baseDate, intervals);
         var result = new CreateEventsResult();

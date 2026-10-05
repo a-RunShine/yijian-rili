@@ -14,6 +14,7 @@ public sealed partial class MainWindow : Window
 {
     private readonly MainViewModel _vm;
     private bool _suppressUiCallbacks;
+    private bool _syncGuideOpen;
 
     public MainWindow()
     {
@@ -29,34 +30,44 @@ public sealed partial class MainWindow : Window
                 WindowTopMost.Apply(App.MainAppWindow, floating);
         };
 
+        _vm.ThemeChanged += (_, theme) => ThemeApplier.Apply(RootGrid, theme);
+
         _vm.PropertyChanged += (_, e) =>
         {
-            if (e.PropertyName is nameof(MainViewModel.StatusText)
-                or nameof(MainViewModel.CanUndo)
-                or nameof(MainViewModel.CanRecreate)
-                or nameof(MainViewModel.PreviewText)
-                or nameof(MainViewModel.IntervalSummary)
-                or nameof(MainViewModel.LocalCalendarWarningVisible)
-                or nameof(MainViewModel.ShowSyncGuide)
-                or nameof(MainViewModel.IsBusy))
+            switch (e.PropertyName)
             {
-                BindFromViewModel();
+                case nameof(MainViewModel.StatusText):
+                case nameof(MainViewModel.CanUndo):
+                case nameof(MainViewModel.CanRecreate):
+                case nameof(MainViewModel.PreviewText):
+                case nameof(MainViewModel.IntervalSummary):
+                case nameof(MainViewModel.LocalCalendarWarningVisible):
+                case nameof(MainViewModel.IsBusy):
+                    BindFromViewModel();
+                    break;
+                case nameof(MainViewModel.CalendarsRevision):
+                case nameof(MainViewModel.SelectedCalendarId):
+                    BindCalendars();
+                    BindFromViewModel();
+                    break;
+                case nameof(MainViewModel.DayEvents):
+                    BindDayEvents();
+                    break;
+                case nameof(MainViewModel.ShowSyncGuide) when _vm.ShowSyncGuide:
+                    _ = ShowSyncGuideAsync();
+                    break;
             }
-
-            if (e.PropertyName == nameof(MainViewModel.ShowSyncGuide) && _vm.ShowSyncGuide)
-                _ = ShowSyncGuideAsync();
         };
 
         RootGrid.KeyDown += RootGrid_KeyDown;
         Activated += async (_, _) =>
         {
             _vm.ReloadCalendars();
-            BindCalendars();
             await _vm.ReloadDayEventsAsync();
-            BindDayEvents();
         };
 
         InitUiFromViewModel();
+        ThemeApplier.Apply(RootGrid, _vm.CurrentTheme);
     }
 
     private void InitUiFromViewModel()
@@ -105,6 +116,11 @@ public sealed partial class MainWindow : Window
                 CalendarCombo.SelectedItem = _vm.Calendars
                     .FirstOrDefault(c => c.Id == _vm.SelectedCalendarId);
             }
+            else
+            {
+                CalendarCombo.SelectedItem = null;
+                CalendarCombo.PlaceholderText = "系统默认";
+            }
         }
         finally
         {
@@ -144,6 +160,7 @@ public sealed partial class MainWindow : Window
     {
         await _vm.CreateAsync();
         BindHistory();
+        BindCalendars();
         BindDayEvents();
         _suppressUiCallbacks = true;
         try
@@ -201,26 +218,14 @@ public sealed partial class MainWindow : Window
         BindFromViewModel();
     }
 
-    private async void Yesterday_Click(object sender, RoutedEventArgs e)
-    {
-        _vm.SelectedDay = DayOffset.Yesterday;
-        await _vm.ReloadDayEventsAsync();
-        BindDayEvents();
-    }
+    private void Yesterday_Click(object sender, RoutedEventArgs e)
+        => _vm.SelectedDay = DayOffset.Yesterday;
 
-    private async void Today_Click(object sender, RoutedEventArgs e)
-    {
-        _vm.SelectedDay = DayOffset.Today;
-        await _vm.ReloadDayEventsAsync();
-        BindDayEvents();
-    }
+    private void Today_Click(object sender, RoutedEventArgs e)
+        => _vm.SelectedDay = DayOffset.Today;
 
-    private async void Tomorrow_Click(object sender, RoutedEventArgs e)
-    {
-        _vm.SelectedDay = DayOffset.Tomorrow;
-        await _vm.ReloadDayEventsAsync();
-        BindDayEvents();
-    }
+    private void Tomorrow_Click(object sender, RoutedEventArgs e)
+        => _vm.SelectedDay = DayOffset.Tomorrow;
 
     private void History_ItemClick(object sender, ItemClickEventArgs e)
     {
@@ -241,17 +246,26 @@ public sealed partial class MainWindow : Window
         BindFromViewModel();
     }
 
-    private async void HelpButton_Click(object sender, RoutedEventArgs e)
+    private void HelpButton_Click(object sender, RoutedEventArgs e)
     {
+        // 只置位，由 PropertyChanged → ShowSyncGuideAsync 统一弹窗，避免叠开两次
         _vm.OpenSyncGuide();
-        await ShowSyncGuideAsync();
     }
 
     private async Task ShowSyncGuideAsync()
     {
-        var dialog = new SyncGuideDialog { XamlRoot = RootGrid.XamlRoot };
-        await dialog.ShowAsync();
-        _vm.DismissSyncGuide();
+        if (_syncGuideOpen) return;
+        _syncGuideOpen = true;
+        try
+        {
+            var dialog = new SyncGuideDialog { XamlRoot = RootGrid.XamlRoot };
+            await dialog.ShowAsync();
+        }
+        finally
+        {
+            _syncGuideOpen = false;
+            _vm.DismissSyncGuide();
+        }
     }
 
     private void TitleBox_TextChanged(object sender, TextChangedEventArgs e)
