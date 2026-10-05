@@ -1,0 +1,72 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="380" viewBox="0 0 1200 380" role="img" aria-labelledby="title desc">
+  <title id="title">一键日历</title>
+  <desc id="desc">Enter a title and date. Create spaced review events in the system calendar, then sync to your phone.</desc>
+
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#E8EEF5"/>
+      <stop offset="55%" stop-color="#F4F7FA"/>
+      <stop offset="100%" stop-color="#DCE8F2"/>
+    </linearGradient>
+    <linearGradient id="curveStroke" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#1B6CA8"/>
+      <stop offset="100%" stop-color="#0D9488"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="1200" height="380" rx="26" fill="url(#bg)"/>
+
+  <g opacity="0.18" stroke="#1B6CA8" stroke-width="1">
+    <path d="M780 36 H1144 M780 68 H1144 M780 100 H1144 M780 132 H1144"/>
+    <path d="M812 28 V140 M844 28 V140 M876 28 V140 M908 28 V140 M940 28 V140 M972 28 V140 M1004 28 V140 M1036 28 V140 M1068 28 V140 M1100 28 V140 M1132 28 V140"/>
+  </g>
+
+  <g id="title-block" transform="translate(56 52)">
+    <text x="0" y="0" fill="#5B6B7C" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, PingFang SC, sans-serif" font-size="18" font-weight="600" letter-spacing="1.5">macOS · Windows · 云日历同步</text>
+    <text x="0" y="62" fill="#12263A" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, PingFang SC, sans-serif" font-size="64" font-weight="700">一键日历</text>
+    <text x="0" y="112" fill="#12263A" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, PingFang SC, sans-serif" font-size="22" font-weight="500">输入标题和日期，按间隔写入复习提醒</text>
+    <text x="0" y="148" fill="#5B6B7C" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, PingFang SC, sans-serif" font-size="18">默认 3 / 7 / 30 天，写入系统日历后可同步到手机</text>
+
+    <g transform="translate(0 188)">
+      <rect x="0" y="0" width="118" height="36" rx="10" fill="#1B6CA8"/>
+      <text x="59" y="24" text-anchor="middle" fill="#FFFFFF" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="16" font-weight="600">+3 天</text>
+      <rect x="130" y="0" width="118" height="36" rx="10" fill="#1B6CA8" opacity="0.85"/>
+      <text x="189" y="24" text-anchor="middle" fill="#FFFFFF" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="16" font-weight="600">+7 天</text>
+      <rect x="260" y="0" width="126" height="36" rx="10" fill="#0D9488"/>
+      <text x="323" y="24" text-anchor="middle" fill="#FFFFFF" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="16" font-weight="600">+30 天</text>
+    </g>
+
+    <text x="0" y="276" fill="#5B6B7C" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="16">v1.5 · EventKit / WinRT Appointments</text>
+  </g>
+
+  <g id="project-proof" transform="translate(700 48)">
+    <rect x="0" y="0" width="444" height="284" rx="18" fill="#FFFFFF" stroke="#C9D6E4" stroke-width="1.5"/>
+    <rect x="0" y="0" width="444" height="44" rx="18" fill="#12263A"/>
+    <rect x="0" y="26" width="444" height="18" fill="#12263A"/>
+    <text x="22" y="28" fill="#FFFFFF" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, PingFang SC, sans-serif" font-size="18" font-weight="600">一键日历</text>
+    <circle cx="392" cy="22" r="9" fill="none" stroke="#8FB4D4" stroke-width="1.5"/>
+    <text x="388" y="26" fill="#8FB4D4" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, PingFang SC, sans-serif" font-size="12">?</text>
+
+    <text x="22" y="74" fill="#5B6B7C" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, PingFang SC, sans-serif" font-size="14">标题</text>
+    <rect x="22" y="84" width="400" height="34" rx="8" fill="#F4F7FA" stroke="#C9D6E4"/>
+    <text x="36" y="106" fill="#12263A" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, PingFang SC, sans-serif" font-size="16">复习英语单词</text>
+
+    <text x="22" y="144" fill="#5B6B7C" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, PingFang SC, sans-serif" font-size="14">复习计划</text>
+
+    <path d="M36 210 C 120 168, 180 156, 250 168 C 320 182, 360 210, 400 236" fill="none" stroke="url(#curveStroke)" stroke-width="2.5" stroke-linecap="round"/>
+
+    <g font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13" fill="#12263A">
+      <circle cx="90" cy="186" r="7" fill="#1B6CA8"/>
+      <text x="90" y="168" text-anchor="middle" fill="#1B6CA8" font-weight="600">#1</text>
+      <text x="90" y="258" text-anchor="middle" fill="#5B6B7C">+3</text>
+
+      <circle cx="190" cy="160" r="7" fill="#1B6CA8"/>
+      <text x="190" y="142" text-anchor="middle" fill="#1B6CA8" font-weight="600">#2</text>
+      <text x="190" y="258" text-anchor="middle" fill="#5B6B7C">+7</text>
+
+      <circle cx="330" cy="196" r="7" fill="#0D9488"/>
+      <text x="330" y="178" text-anchor="middle" fill="#0D9488" font-weight="600">#3</text>
+      <text x="330" y="258" text-anchor="middle" fill="#5B6B7C">+30</text>
+    </g>
+  </g>
+</svg>

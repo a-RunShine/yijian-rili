@@ -1,0 +1,49 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="280" viewBox="0 0 1200 280" role="img" aria-labelledby="title desc">
+  <title id="title">From input to phone reminder</title>
+  <desc id="desc">Four steps: enter title and date, compute review intervals, write system calendar events, sync to phone.</desc>
+
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0 1.5 L8 5 L0 8.5 Z" fill="#1B6CA8"/>
+    </marker>
+  </defs>
+
+  <rect width="1200" height="280" rx="26" fill="#F4F7FA"/>
+
+  <text x="56" y="48" fill="#12263A" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, PingFang SC, sans-serif" font-size="28" font-weight="700">从输入到手机提醒</text>
+  <text x="56" y="80" fill="#5B6B7C" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, PingFang SC, sans-serif" font-size="18">复习事件写进系统日历；选云账户后，手机日历会收到同一批提醒</text>
+
+  <g transform="translate(56 112)">
+    <rect width="240" height="128" rx="16" fill="#FFFFFF" stroke="#C9D6E4" stroke-width="1.5"/>
+    <text x="20" y="36" fill="#1B6CA8" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="16" font-weight="700">01</text>
+    <text x="20" y="68" fill="#12263A" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, PingFang SC, sans-serif" font-size="20" font-weight="600">输入</text>
+    <text x="20" y="98" fill="#5B6B7C" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, PingFang SC, sans-serif" font-size="16">标题 + 基准日期</text>
+  </g>
+
+  <path d="M310 176 H346" stroke="#1B6CA8" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <g transform="translate(360 112)">
+    <rect width="240" height="128" rx="16" fill="#FFFFFF" stroke="#C9D6E4" stroke-width="1.5"/>
+    <text x="20" y="36" fill="#1B6CA8" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="16" font-weight="700">02</text>
+    <text x="20" y="68" fill="#12263A" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, PingFang SC, sans-serif" font-size="20" font-weight="600">计算间隔</text>
+    <text x="20" y="98" fill="#5B6B7C" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, PingFang SC, sans-serif" font-size="16">默认 3 / 7 / 30 天</text>
+  </g>
+
+  <path d="M614 176 H650" stroke="#1B6CA8" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <g transform="translate(664 112)">
+    <rect width="240" height="128" rx="16" fill="#FFFFFF" stroke="#C9D6E4" stroke-width="1.5"/>
+    <text x="20" y="36" fill="#1B6CA8" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="16" font-weight="700">03</text>
+    <text x="20" y="68" fill="#12263A" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, PingFang SC, sans-serif" font-size="20" font-weight="600">写入日历</text>
+    <text x="20" y="98" fill="#5B6B7C" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, PingFang SC, sans-serif" font-size="16">全天事件 · 9:00 提醒</text>
+  </g>
+
+  <path d="M918 176 H954" stroke="#0D9488" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <g transform="translate(968 112)">
+    <rect width="176" height="128" rx="16" fill="#0D9488"/>
+    <text x="20" y="36" fill="#D1FAE5" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="16" font-weight="700">04</text>
+    <text x="20" y="68" fill="#FFFFFF" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, PingFang SC, sans-serif" font-size="20" font-weight="600">同步手机</text>
+    <text x="20" y="98" fill="#D1FAE5" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, PingFang SC, sans-serif" font-size="15">选云账户</text>
+  </g>
+</svg>
