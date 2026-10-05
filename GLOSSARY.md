@@ -39,3 +39,15 @@ _Avoid_: 仅比标题
 **写入日历编排**:
 深 module：校验间隔、计算复习日、生成备注键、重复检测、经 store 写入并汇总结果。
 _Avoid_: CalendarManager 里的 create 循环（实现细节）
+
+**复习会话**:
+无 UI 依赖的创建/撤销/预览与间隔状态核心，对齐 Windows ReviewSession。
+_Avoid_: 把 ReviewViewModel 当作会话本身
+
+**日程浏览**:
+按日日程列表与标题搜索（含按 id 删除）的只读偏 module。
+_Avoid_: 塞进复习会话
+
+**界面 facade**:
+SwiftUI 观察、系统通知与 AppKit 副作用的薄 adapter；过渡期类型名可仍为 ReviewViewModel。
+_Avoid_: 业务决策中心

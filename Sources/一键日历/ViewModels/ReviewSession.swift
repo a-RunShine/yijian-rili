@@ -1,0 +1,353 @@
+import Foundation
+
+/// 复习会话：无 UI 依赖的创建/撤销/预览与间隔状态核心（对齐 Windows `ReviewSession`）。
+@MainActor
+final class ReviewSession {
+    enum ResultType {
+        case success
+        case warning
+        case error
+    }
+
+    enum ScheduleMode: String, CaseIterable, Identifiable {
+        case review
+        case single
+
+        var id: String { rawValue }
+
+        var displayName: String {
+            switch self {
+            case .review: return NSLocalizedString("schedule_mode_review", comment: "")
+            case .single: return NSLocalizedString("schedule_mode_single", comment: "")
+            }
+        }
+    }
+
+    private let calendar: CalendarService
+
+    var title: String = ""
+    var baseDate: Date = Date()
+    var reviewDates: [Date] = []
+    var scheduleMode: ScheduleMode = .review
+    var reviewIntervals: [Int]
+    var customPresets: [CustomPreset]
+    var selectedCalendarIdentifier: String
+    var authorizationStatus: CalendarAccessStatus = .notDetermined
+    var availableCalendars: [CalendarInfo] = []
+    var hasCloudCalendar: Bool = false
+    var isLoading: Bool = false
+    var resultMessage: String?
+    var resultType: ResultType?
+    var canUndo: Bool = false
+    var canRecreate: Bool = false
+
+    private var lastCreatedTitle: String?
+    private var lastCreatedBaseDate: Date?
+
+    /// create 成功后待界面 facade 写入历史/周末总结（C4 再加深）。
+    private(set) var pendingHistoryEntry: HistoryEntry?
+    private(set) var shouldPlayHaptic: Bool = false
+
+    var selectedCalendar: CalendarInfo? {
+        guard !selectedCalendarIdentifier.isEmpty else { return nil }
+        return calendar.calendar(withIdentifier: selectedCalendarIdentifier)
+    }
+
+    var isSelectedCalendarLocal: Bool {
+        selectedCalendar?.sourceKind == .local
+    }
+
+    var selectedCalendarDisplayName: String {
+        if let cal = selectedCalendar { return cal.displayName }
+        return NSLocalizedString("calendar_default_label", comment: "")
+    }
+
+    init(
+        calendar: CalendarService,
+        reviewIntervals: [Int]? = nil,
+        customPresets: [CustomPreset]? = nil,
+        selectedCalendarIdentifier: String = ""
+    ) {
+        self.calendar = calendar
+        self.reviewIntervals = reviewIntervals ?? Self.loadIntervals()
+        self.customPresets = customPresets ?? Self.loadCustomPresets()
+        self.selectedCalendarIdentifier = selectedCalendarIdentifier
+        authorizationStatus = calendar.checkAuthorizationStatus()
+        syncCalendarStateFromSeam()
+        if !self.selectedCalendarIdentifier.isEmpty,
+           calendar.calendar(withIdentifier: self.selectedCalendarIdentifier) == nil {
+            self.selectedCalendarIdentifier = ""
+        }
+        updateReviewDates()
+    }
+
+    func syncCalendarStateFromSeam() {
+        availableCalendars = calendar.availableCalendars
+        hasCloudCalendar = calendar.hasCloudCalendar
+        authorizationStatus = calendar.authorizationStatus
+    }
+
+    func refreshCalendars() {
+        calendar.refreshAvailableCalendars()
+        syncCalendarStateFromSeam()
+    }
+
+    @discardableResult
+    func requestAccessIfNeeded() async -> Bool {
+        if authorizationStatus == .notDetermined {
+            let granted = await calendar.requestAccess()
+            authorizationStatus = calendar.checkAuthorizationStatus()
+            syncCalendarStateFromSeam()
+            return granted
+        }
+        syncCalendarStateFromSeam()
+        return authorizationStatus == .fullAccess
+    }
+
+    func updateReviewDates() {
+        switch scheduleMode {
+        case .review:
+            reviewDates = ReviewEvent.calculateReviewDates(from: baseDate, intervals: reviewIntervals)
+        case .single:
+            reviewDates = [baseDate]
+        }
+    }
+
+    func persistIntervals() {
+        if let data = try? JSONEncoder().encode(reviewIntervals),
+           let string = String(data: data, encoding: .utf8) {
+            UserDefaults.standard.set(string, forKey: "reviewIntervalsData")
+        }
+    }
+
+    func persistCustomPresets() {
+        if let data = try? JSONEncoder().encode(customPresets),
+           let string = String(data: data, encoding: .utf8) {
+            UserDefaults.standard.set(string, forKey: "customPresetsData")
+        }
+    }
+
+    func persistSelectedCalendar() {
+        UserDefaults.standard.set(selectedCalendarIdentifier, forKey: "selectedCalendarIdentifier")
+    }
+
+    func applyPreset(_ preset: IntervalPreset) {
+        reviewIntervals = preset.intervals
+        persistIntervals()
+        updateReviewDates()
+    }
+
+    func resetIntervalsToDefault() {
+        reviewIntervals = IntervalRules.defaultIntervals
+        persistIntervals()
+        updateReviewDates()
+    }
+
+    func validateIntervals(_ intervals: [Int]) -> Bool {
+        IntervalRules.validate(intervals)
+    }
+
+    func saveCustomPreset(name: String) {
+        let trimmed = name.trimmingCharacters(in: .whitespaces)
+        guard !trimmed.isEmpty else { return }
+        guard !customPresets.contains(where: { $0.name == trimmed }) else { return }
+        customPresets.append(CustomPreset(name: trimmed, intervals: reviewIntervals))
+        persistCustomPresets()
+    }
+
+    func applyCustomPreset(_ preset: CustomPreset) {
+        reviewIntervals = preset.intervals
+        persistIntervals()
+        updateReviewDates()
+    }
+
+    func deleteCustomPreset(id: UUID) {
+        customPresets = customPresets.filter { $0.id != id }
+        persistCustomPresets()
+    }
+
+    func hasDuplicatePresetName(_ name: String) -> Bool {
+        let trimmed = name.trimmingCharacters(in: .whitespaces)
+        return customPresets.contains(where: { $0.name == trimmed })
+    }
+
+    func selectHistoryEntry(_ entry: HistoryEntry) {
+        title = entry.title
+        baseDate = entry.baseDate
+        updateReviewDates()
+    }
+
+    func recreateLastSchedule() {
+        guard let title = lastCreatedTitle, let baseDate = lastCreatedBaseDate else { return }
+        self.title = title
+        self.baseDate = baseDate
+        updateReviewDates()
+        canRecreate = false
+    }
+
+    func consumePendingHistoryEntry() -> HistoryEntry? {
+        let entry = pendingHistoryEntry
+        pendingHistoryEntry = nil
+        return entry
+    }
+
+    func consumeHapticFlag() -> Bool {
+        let flag = shouldPlayHaptic
+        shouldPlayHaptic = false
+        return flag
+    }
+
+    /// 创建复习日程或单次日程。
+    func create() async {
+        pendingHistoryEntry = nil
+        shouldPlayHaptic = false
+        resultMessage = nil
+        resultType = nil
+
+        let trimmedTitle = title.trimmingCharacters(in: .whitespaces)
+
+        guard !trimmedTitle.isEmpty else {
+            resultMessage = NSLocalizedString("empty_title_error", comment: "")
+            resultType = .error
+            return
+        }
+
+        guard trimmedTitle.count <= 100 else {
+            resultMessage = NSLocalizedString("title_too_long_error", comment: "")
+            resultType = .error
+            return
+        }
+
+        isLoading = true
+        defer { isLoading = false }
+
+        if authorizationStatus == .notDetermined {
+            let granted = await calendar.requestAccess()
+            authorizationStatus = calendar.checkAuthorizationStatus()
+            syncCalendarStateFromSeam()
+            if !granted {
+                resultMessage = NSLocalizedString("permission_required", comment: "")
+                resultType = .error
+                return
+            }
+        } else if authorizationStatus == .denied || authorizationStatus == .restricted {
+            resultMessage = NSLocalizedString("permission_denied", comment: "")
+            resultType = .error
+            return
+        }
+
+        do {
+            let targetCalendar = selectedCalendar
+            if !selectedCalendarIdentifier.isEmpty && targetCalendar == nil {
+                resultMessage = NSLocalizedString("calendar_selection_invalid", comment: "")
+                resultType = .warning
+                selectedCalendarIdentifier = ""
+                persistSelectedCalendar()
+                return
+            }
+
+            let calendarId = targetCalendar?.identifier
+            let createResult: CreateEventsResult
+            switch scheduleMode {
+            case .review:
+                createResult = try await calendar.createReviewEvents(
+                    title: trimmedTitle,
+                    baseDate: baseDate,
+                    intervals: reviewIntervals,
+                    calendarId: calendarId
+                )
+            case .single:
+                createResult = try await calendar.createSingleEvent(
+                    title: trimmedTitle,
+                    date: baseDate,
+                    calendarId: calendarId
+                )
+            }
+
+            if !createResult.failed.isEmpty {
+                let failedDates = createResult.failed.map { $0.date.formattedChinese() }.joined(separator: "、")
+                resultMessage = String(format: NSLocalizedString("error_message", comment: ""), failedDates)
+                resultType = .error
+            } else if !createResult.duplicates.isEmpty {
+                let dupDates = createResult.duplicates.map { $0.formattedChinese() }.joined(separator: "、")
+                resultMessage = String(format: NSLocalizedString("warning_message", comment: ""), dupDates)
+                resultType = .warning
+                // 与既有 macOS 行为一致：仅纯成功路径写历史；重复警告不写
+            } else {
+                if scheduleMode == .single {
+                    let dateString = baseDate.formattedChinese()
+                    resultMessage = String(format: NSLocalizedString("single_success_message", comment: ""), dateString)
+                } else {
+                    let createdDates = createResult.created.map { $0.formattedChinese() }.joined(separator: "、")
+                    resultMessage = String(format: NSLocalizedString("success_message", comment: ""), createdDates)
+                }
+                resultType = .success
+                onCreateSuccess(trimmed: trimmedTitle, created: createResult.created)
+            }
+        } catch {
+            resultMessage = error.localizedDescription
+            resultType = .error
+        }
+    }
+
+    func undo() async {
+        let undo = await calendar.undoLastCreation()
+        let undoneTitle = lastCreatedTitle ?? ""
+
+        if undo.success {
+            if undoneTitle.isEmpty {
+                resultMessage = String(format: NSLocalizedString("undo_success", comment: ""), "\(undo.deletedCount)")
+            } else {
+                resultMessage = String(
+                    format: NSLocalizedString("undo_success_with_title", comment: ""),
+                    undoneTitle,
+                    "\(undo.deletedCount)"
+                )
+            }
+            resultType = .success
+        } else {
+            resultMessage = String(format: NSLocalizedString("undo_partial", comment: ""), "\(undo.alreadyDeletedCount)")
+            resultType = .warning
+        }
+
+        canUndo = false
+        canRecreate = false
+    }
+
+    private func onCreateSuccess(trimmed: String, created: [Date]) {
+        shouldPlayHaptic = true
+        lastCreatedTitle = trimmed
+        lastCreatedBaseDate = baseDate
+        canRecreate = true
+        canUndo = true
+        pendingHistoryEntry = HistoryEntry(
+            title: trimmed,
+            baseDate: baseDate,
+            reviewDates: created,
+            creationDate: Date(),
+            type: scheduleMode == .single ? .single : .review
+        )
+        title = ""
+        baseDate = Date()
+        updateReviewDates()
+    }
+
+    private static func loadIntervals() -> [Int] {
+        let raw = UserDefaults.standard.string(forKey: "reviewIntervalsData") ?? "[3,7,30]"
+        guard let data = raw.data(using: .utf8),
+              let intervals = try? JSONDecoder().decode([Int].self, from: data),
+              IntervalRules.validate(intervals) else {
+            return IntervalRules.defaultIntervals
+        }
+        return intervals
+    }
+
+    private static func loadCustomPresets() -> [CustomPreset] {
+        let raw = UserDefaults.standard.string(forKey: "customPresetsData") ?? "[]"
+        guard let data = raw.data(using: .utf8),
+              let presets = try? JSONDecoder().decode([CustomPreset].self, from: data) else {
+            return []
+        }
+        return presets
+    }
+}
