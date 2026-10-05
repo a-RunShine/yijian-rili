@@ -1,9 +1,9 @@
 import Foundation
 
 /// 进程内日历 adapter，对齐 Windows `InMemoryCalendarService`。
-/// 供单测与无 EventKit 环境验证写入日历 / 撤销 / 搜索流程。
+/// create* 委托写入日历编排；本类型实现窄 `CalendarEventStore`。
 @MainActor
-final class InMemoryCalendarService: CalendarService {
+final class InMemoryCalendarService: CalendarService, CalendarEventStore {
     private var calendars: [CalendarInfo]
     private var events: [CalendarEventInfo] = []
     private var lastCreated: [String] = []
@@ -47,9 +47,7 @@ final class InMemoryCalendarService: CalendarService {
         return true
     }
 
-    func refreshAvailableCalendars() {
-        // no-op：样例日历固定
-    }
+    func refreshAvailableCalendars() {}
 
     @discardableResult
     func checkAuthorizationStatus() -> CalendarAccessStatus {
@@ -73,39 +71,18 @@ final class InMemoryCalendarService: CalendarService {
     ) async throws -> CreateEventsResult {
         try ensureAccess()
         let calendar = try resolveCalendar(calendarId)
-        let dates = ReviewEvent.calculateReviewDates(from: baseDate, intervals: intervals)
-        var result = CreateEventsResult()
-        var createdIds: [String] = []
-
-        for (index, date) in dates.enumerated() {
-            let notes = Self.reviewNote(for: index)
-            if hasDuplicate(title: title, date: date, notes: notes, calendarId: calendar.identifier) {
-                result.duplicates.append(date)
-            }
-            let id = nextId()
-            events.append(
-                CalendarEventInfo(
-                    id: id,
-                    title: title,
-                    start: Calendar.current.startOfDay(for: date),
-                    end: Calendar.current.date(byAdding: .day, value: 1, to: Calendar.current.startOfDay(for: date)) ?? date,
-                    isAllDay: true,
-                    notes: notes,
-                    calendarId: calendar.identifier,
-                    calendarTitle: calendar.title,
-                    calendarSourceTitle: calendar.sourceTitle,
-                    colorHex: calendar.colorHex
-                )
-            )
-            result.created.append(date)
-            createdIds.append(id)
+        let outcome = try CalendarWriteOrchestrator.writeReview(
+            title: title,
+            baseDate: baseDate,
+            intervals: intervals,
+            calendarId: calendar.identifier,
+            store: self
+        )
+        if !outcome.createdEventIds.isEmpty {
+            lastCreated = outcome.createdEventIds
+            lastCreatedEventIdentifiers = outcome.createdEventIds
         }
-
-        if !createdIds.isEmpty {
-            lastCreated = createdIds
-            lastCreatedEventIdentifiers = createdIds
-        }
-        return result
+        return outcome.result
     }
 
     func createSingleEvent(
@@ -115,32 +92,60 @@ final class InMemoryCalendarService: CalendarService {
     ) async throws -> CreateEventsResult {
         try ensureAccess()
         let calendar = try resolveCalendar(calendarId)
-        var result = CreateEventsResult()
-        let day = Calendar.current.startOfDay(for: date)
-
-        if hasDuplicate(title: title, date: day, notes: "", calendarId: calendar.identifier) {
-            result.duplicates.append(day)
+        let outcome = try CalendarWriteOrchestrator.writeSingle(
+            title: title,
+            date: date,
+            calendarId: calendar.identifier,
+            store: self
+        )
+        if !outcome.createdEventIds.isEmpty {
+            lastCreated = outcome.createdEventIds
+            lastCreatedEventIdentifiers = outcome.createdEventIds
         }
+        return outcome.result
+    }
 
+    // MARK: - CalendarEventStore
+
+    func events(calendarId: String, day: Date) throws -> [StoredCalendarEvent] {
+        let start = Calendar.current.startOfDay(for: day)
+        guard let end = Calendar.current.date(byAdding: .day, value: 1, to: start) else { return [] }
+        return events.compactMap { event in
+            guard event.calendarId == calendarId,
+                  event.start >= start, event.start < end else { return nil }
+            return StoredCalendarEvent(
+                id: event.id,
+                title: event.title,
+                day: Calendar.current.startOfDay(for: event.start),
+                rawNotes: event.notes ?? ""
+            )
+        }
+    }
+
+    func saveAllDay(calendarId: String, title: String, day: Date, notesKey: String) throws -> String {
+        guard let calendar = calendars.first(where: { $0.identifier == calendarId }) else {
+            throw CalendarError.defaultCalendarUnavailable
+        }
+        let start = Calendar.current.startOfDay(for: day)
+        let end = Calendar.current.date(byAdding: .day, value: 1, to: start) ?? start
+        // 可附加提醒展示文案（对齐 WinRT）；比较前由 NormalizeNotes 剥掉
+        let rawNotes = Self.storageNotes(from: notesKey)
         let id = nextId()
         events.append(
             CalendarEventInfo(
                 id: id,
                 title: title,
-                start: day,
-                end: Calendar.current.date(byAdding: .day, value: 1, to: day) ?? day,
+                start: start,
+                end: end,
                 isAllDay: true,
-                notes: "",
+                notes: rawNotes,
                 calendarId: calendar.identifier,
                 calendarTitle: calendar.title,
                 calendarSourceTitle: calendar.sourceTitle,
                 colorHex: calendar.colorHex
             )
         )
-        result.created.append(day)
-        lastCreated = [id]
-        lastCreatedEventIdentifiers = [id]
-        return result
+        return id
     }
 
     func undoLastCreation() async -> UndoResult {
@@ -217,19 +222,11 @@ final class InMemoryCalendarService: CalendarService {
         return fallback
     }
 
-    private func hasDuplicate(title: String, date: Date, notes: String, calendarId: String) -> Bool {
-        let start = Calendar.current.startOfDay(for: date)
-        guard let end = Calendar.current.date(byAdding: .day, value: 1, to: start) else { return false }
-        return events.contains {
-            $0.calendarId == calendarId
-                && $0.start >= start && $0.start < end
-                && $0.title == title
-                && ($0.notes ?? "") == notes
+    private static func storageNotes(from notesKey: String) -> String {
+        if notesKey.isEmpty {
+            return "提醒建议：当天 09:00"
         }
-    }
-
-    private static func reviewNote(for zeroBasedIndex: Int) -> String {
-        String(format: NSLocalizedString("review_count", comment: ""), "\(zeroBasedIndex + 1)")
+        return "\(notesKey)\n提醒建议：当天 09:00"
     }
 
     private static func sortCalendars(_ calendars: [CalendarInfo]) -> [CalendarInfo] {

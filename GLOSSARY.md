@@ -27,3 +27,15 @@ _Avoid_: CalendarManager 服务, EventKit boundary, calendar API
 **EventKit adapter**:
 日历 seam 的 macOS 生产实现，封装 EventKit（类型名可仍为 CalendarManager）。
 _Avoid_: 把「CalendarManager」当作领域概念
+
+**复习备注键**:
+用于重复检测的稳定备注身份；复习为「第N次复习」，单次为空字符串。
+_Avoid_: EventKit notes 原文, Details 全文
+
+**重复检测**:
+同一目标日历内，按标题 + 日历日 + 规范化后的复习备注键判断是否已存在写入。
+_Avoid_: 仅比标题
+
+**写入日历编排**:
+深 module：校验间隔、计算复习日、生成备注键、重复检测、经 store 写入并汇总结果。
+_Avoid_: CalendarManager 里的 create 循环（实现细节）

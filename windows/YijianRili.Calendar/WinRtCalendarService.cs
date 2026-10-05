@@ -1,7 +1,5 @@
 using Windows.ApplicationModel.Appointments;
 using YijianRili.Domain.Calendar;
-using YijianRili.Domain.Models;
-using YijianRili.Domain.Services;
 
 namespace YijianRili.Calendar;
 
@@ -93,47 +91,19 @@ public sealed class WinRtCalendarService : ICalendarService
         string? calendarId = null,
         CancellationToken cancellationToken = default)
     {
-        if (!IntervalRules.Validate(intervals))
-            throw new CalendarServiceException("无效的复习间隔");
-
         var store = await EnsureStoreAsync(cancellationToken).ConfigureAwait(false);
         var calendar = await ResolveCalendarAsync(store, calendarId, cancellationToken).ConfigureAwait(false);
-        var dates = ReviewEvent.CalculateReviewDates(baseDate, intervals);
-        var result = new CreateEventsResult();
-        var createdIds = new List<string>();
-
-        for (var i = 0; i < dates.Count; i++)
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-            var date = dates[i];
-            var notes = ReviewNoteText.ForIndex(i);
-            try
-            {
-                if (await HasDuplicateAsync(store, title, date, notes, calendar.LocalId, cancellationToken)
-                        .ConfigureAwait(false))
-                {
-                    result.Duplicates.Add(date);
-                }
-
-                var appointment = BuildAllDayAppointment(title, date, notes);
-                await calendar.SaveAppointmentAsync(appointment).AsTask(cancellationToken).ConfigureAwait(false);
-                result.Created.Add(date);
-                if (!string.IsNullOrEmpty(appointment.LocalId))
-                    createdIds.Add(appointment.LocalId);
-            }
-            catch (Exception ex)
-            {
-                result.Failed.Add((date, ex.Message));
-            }
-        }
-
-        if (createdIds.Count > 0)
+        var bridge = new WinRtEventStoreBridge(store, calendar);
+        var outcome = await CalendarWriteOrchestrator
+            .WriteReviewAsync(title, baseDate, intervals, calendar.LocalId, bridge, cancellationToken)
+            .ConfigureAwait(false);
+        if (outcome.CreatedEventIds.Count > 0)
         {
             _lastCreated.Clear();
-            _lastCreated.AddRange(createdIds);
+            _lastCreated.AddRange(outcome.CreatedEventIds);
         }
 
-        return result;
+        return outcome.Result;
     }
 
     public async Task<CreateEventsResult> CreateSingleEventAsync(
@@ -144,30 +114,17 @@ public sealed class WinRtCalendarService : ICalendarService
     {
         var store = await EnsureStoreAsync(cancellationToken).ConfigureAwait(false);
         var calendar = await ResolveCalendarAsync(store, calendarId, cancellationToken).ConfigureAwait(false);
-        var result = new CreateEventsResult();
-        var day = date.Date;
-
-        try
+        var bridge = new WinRtEventStoreBridge(store, calendar);
+        var outcome = await CalendarWriteOrchestrator
+            .WriteSingleAsync(title, date, calendar.LocalId, bridge, cancellationToken)
+            .ConfigureAwait(false);
+        if (outcome.CreatedEventIds.Count > 0)
         {
-            if (await HasDuplicateAsync(store, title, day, string.Empty, calendar.LocalId, cancellationToken)
-                    .ConfigureAwait(false))
-            {
-                result.Duplicates.Add(day);
-            }
-
-            var appointment = BuildAllDayAppointment(title, day, string.Empty);
-            await calendar.SaveAppointmentAsync(appointment).AsTask(cancellationToken).ConfigureAwait(false);
-            result.Created.Add(day);
             _lastCreated.Clear();
-            if (!string.IsNullOrEmpty(appointment.LocalId))
-                _lastCreated.Add(appointment.LocalId);
-        }
-        catch (Exception ex)
-        {
-            result.Failed.Add((day, ex.Message));
+            _lastCreated.AddRange(outcome.CreatedEventIds);
         }
 
-        return result;
+        return outcome.Result;
     }
 
     public async Task<UndoResult> UndoLastCreationAsync(CancellationToken cancellationToken = default)
@@ -313,7 +270,7 @@ public sealed class WinRtCalendarService : ICalendarService
                ?? throw new CalendarServiceException("默认日历不可用");
     }
 
-    private static Appointment BuildAllDayAppointment(string title, DateTime date, string notes)
+    private static Appointment BuildAllDayAppointment(string title, DateTime date, string notesKey)
     {
         var day = date.Date;
         var offset = TimeZoneInfo.Local.GetUtcOffset(day);
@@ -323,40 +280,61 @@ public sealed class WinRtCalendarService : ICalendarService
             AllDay = true,
             StartTime = new DateTimeOffset(day, offset),
             Duration = TimeSpan.FromDays(1),
-            Details = string.IsNullOrEmpty(notes)
+            Details = string.IsNullOrEmpty(notesKey)
                 ? "提醒建议：当天 09:00（系统全天事件提醒能力有限）"
-                : $"{notes}\n提醒建议：当天 09:00",
+                : $"{notesKey}\n提醒建议：当天 09:00",
             BusyStatus = AppointmentBusyStatus.Free,
             Reminder = null
         };
     }
 
-    private static async Task<bool> HasDuplicateAsync(
-        AppointmentStore store,
-        string title,
-        DateTime date,
-        string notes,
-        string calendarLocalId,
-        CancellationToken cancellationToken)
+    /// <summary>将 WinRT AppointmentStore 适配为窄 ICalendarEventStore。</summary>
+    private sealed class WinRtEventStoreBridge : ICalendarEventStore
     {
-        var start = new DateTimeOffset(date.Date);
-        var list = await store
-            .FindAppointmentsAsync(start, TimeSpan.FromDays(1))
-            .AsTask(cancellationToken)
-            .ConfigureAwait(false);
+        private readonly AppointmentStore _store;
+        private readonly AppointmentCalendar _calendar;
 
-        return list.Any(a =>
-            a.CalendarId == calendarLocalId &&
-            a.Subject == title &&
-            NormalizeDetails(a.Details) == NormalizeDetails(notes));
-    }
+        public WinRtEventStoreBridge(AppointmentStore store, AppointmentCalendar calendar)
+        {
+            _store = store;
+            _calendar = calendar;
+        }
 
-    private static string NormalizeDetails(string? details)
-    {
-        if (string.IsNullOrEmpty(details)) return string.Empty;
-        var first = details.Split('\n')[0].Trim();
-        if (first.StartsWith("提醒建议", StringComparison.Ordinal)) return string.Empty;
-        return first;
+        public async Task<IReadOnlyList<StoredCalendarEvent>> GetEventsAsync(
+            string calendarId,
+            DateTime day,
+            CancellationToken cancellationToken = default)
+        {
+            var start = new DateTimeOffset(day.Date);
+            var list = await _store
+                .FindAppointmentsAsync(start, TimeSpan.FromDays(1))
+                .AsTask(cancellationToken)
+                .ConfigureAwait(false);
+            return list
+                .Where(a => a.CalendarId == calendarId)
+                .Select(a => new StoredCalendarEvent
+                {
+                    Id = a.LocalId,
+                    Title = a.Subject ?? string.Empty,
+                    Day = a.StartTime.LocalDateTime.Date,
+                    RawNotes = a.Details ?? string.Empty
+                })
+                .ToList();
+        }
+
+        public async Task<string> SaveAllDayAsync(
+            string calendarId,
+            string title,
+            DateTime day,
+            string notesKey,
+            CancellationToken cancellationToken = default)
+        {
+            if (_calendar.LocalId != calendarId)
+                throw new CalendarServiceException("日历不匹配");
+            var appointment = BuildAllDayAppointment(title, day, notesKey);
+            await _calendar.SaveAppointmentAsync(appointment).AsTask(cancellationToken).ConfigureAwait(false);
+            return appointment.LocalId ?? string.Empty;
+        }
     }
 
     private static CalendarInfo MapCalendar(AppointmentCalendar calendar)

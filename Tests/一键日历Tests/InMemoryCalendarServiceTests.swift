@@ -79,6 +79,23 @@ final class InMemoryCalendarServiceTests: XCTestCase {
         }
     }
 
+    func testCreateReviewRejectsInvalidIntervals() async {
+        let calendar = InMemoryCalendarService()
+        do {
+            _ = try await calendar.createReviewEvents(
+                title: "X",
+                baseDate: Date(),
+                intervals: [30, 7, 3],
+                calendarId: nil
+            )
+            XCTFail("expected invalidIntervals")
+        } catch let error as CalendarError {
+            XCTAssertEqual(error, .invalidIntervals)
+        } catch {
+            XCTFail("unexpected \(error)")
+        }
+    }
+
     private func date(_ y: Int, _ m: Int, _ d: Int) -> Date {
         var components = DateComponents()
         components.year = y

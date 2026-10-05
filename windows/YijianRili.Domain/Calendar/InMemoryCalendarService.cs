@@ -3,8 +3,8 @@ using YijianRili.Domain.Services;
 
 namespace YijianRili.Domain.Calendar;
 
-/// <summary>进程内日历，供单测与无权限环境验证流程。</summary>
-public sealed class InMemoryCalendarService : ICalendarService
+/// <summary>进程内日历，供单测与无权限环境验证流程。create* 委托写入日历编排。</summary>
+public sealed class InMemoryCalendarService : ICalendarService, ICalendarEventStore
 {
     private readonly List<CalendarInfo> _calendars;
     private readonly List<CalendarEventInfo> _events = new();
@@ -71,45 +71,17 @@ public sealed class InMemoryCalendarService : ICalendarService
         CancellationToken cancellationToken = default)
     {
         EnsureAccess();
-        if (!IntervalRules.Validate(intervals))
-            throw new CalendarServiceException("无效的复习间隔");
         var calendar = ResolveCalendar(calendarId);
-        var dates = ReviewEvent.CalculateReviewDates(baseDate, intervals);
-        var result = new CreateEventsResult();
-        var createdIds = new List<string>();
-
-        for (var i = 0; i < dates.Count; i++)
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-            var date = dates[i];
-            var notes = ReviewNoteText.ForIndex(i);
-            if (HasDuplicate(title, date, notes, calendar.Id))
-                result.Duplicates.Add(date);
-
-            var id = $"evt-{++_seq}";
-            _events.Add(new CalendarEventInfo
-            {
-                Id = id,
-                Title = title,
-                Start = date.Date,
-                End = date.Date.AddDays(1),
-                IsAllDay = true,
-                Notes = notes,
-                CalendarId = calendar.Id,
-                CalendarTitle = calendar.Title
-            });
-            result.Created.Add(date);
-            createdIds.Add(id);
-            await Task.Yield();
-        }
-
-        if (createdIds.Count > 0)
+        var outcome = await CalendarWriteOrchestrator
+            .WriteReviewAsync(title, baseDate, intervals, calendar.Id, this, cancellationToken)
+            .ConfigureAwait(false);
+        if (outcome.CreatedEventIds.Count > 0)
         {
             _lastCreated.Clear();
-            _lastCreated.AddRange(createdIds);
+            _lastCreated.AddRange(outcome.CreatedEventIds);
         }
 
-        return result;
+        return outcome.Result;
     }
 
     public async Task<CreateEventsResult> CreateSingleEventAsync(
@@ -120,29 +92,62 @@ public sealed class InMemoryCalendarService : ICalendarService
     {
         EnsureAccess();
         var calendar = ResolveCalendar(calendarId);
-        var result = new CreateEventsResult();
-        var day = date.Date;
+        var outcome = await CalendarWriteOrchestrator
+            .WriteSingleAsync(title, date, calendar.Id, this, cancellationToken)
+            .ConfigureAwait(false);
+        if (outcome.CreatedEventIds.Count > 0)
+        {
+            _lastCreated.Clear();
+            _lastCreated.AddRange(outcome.CreatedEventIds);
+        }
 
-        if (HasDuplicate(title, day, string.Empty, calendar.Id))
-            result.Duplicates.Add(day);
+        return outcome.Result;
+    }
 
+    public Task<IReadOnlyList<StoredCalendarEvent>> GetEventsAsync(
+        string calendarId,
+        DateTime day,
+        CancellationToken cancellationToken = default)
+    {
+        var start = day.Date;
+        var end = start.AddDays(1);
+        var list = _events
+            .Where(e => e.CalendarId == calendarId && e.Start >= start && e.Start < end)
+            .Select(e => new StoredCalendarEvent
+            {
+                Id = e.Id,
+                Title = e.Title,
+                Day = e.Start.Date,
+                RawNotes = e.Notes ?? string.Empty
+            })
+            .ToList();
+        return Task.FromResult<IReadOnlyList<StoredCalendarEvent>>(list);
+    }
+
+    public Task<string> SaveAllDayAsync(
+        string calendarId,
+        string title,
+        DateTime day,
+        string notesKey,
+        CancellationToken cancellationToken = default)
+    {
+        var calendar = _calendars.FirstOrDefault(c => c.Id == calendarId)
+                       ?? throw new CalendarServiceException("默认日历不可用");
+        var start = day.Date;
         var id = $"evt-{++_seq}";
+        var rawNotes = StorageNotes(notesKey);
         _events.Add(new CalendarEventInfo
         {
             Id = id,
             Title = title,
-            Start = day,
-            End = day.AddDays(1),
+            Start = start,
+            End = start.AddDays(1),
             IsAllDay = true,
-            Notes = string.Empty,
+            Notes = rawNotes,
             CalendarId = calendar.Id,
             CalendarTitle = calendar.Title
         });
-        result.Created.Add(day);
-        _lastCreated.Clear();
-        _lastCreated.Add(id);
-        await Task.Yield();
-        return result;
+        return Task.FromResult(id);
     }
 
     public Task<UndoResult> UndoLastCreationAsync(CancellationToken cancellationToken = default)
@@ -225,16 +230,10 @@ public sealed class InMemoryCalendarService : ICalendarService
                ?? throw new CalendarServiceException("默认日历不可用");
     }
 
-    private bool HasDuplicate(string title, DateTime date, string notes, string calendarId)
-    {
-        var start = date.Date;
-        var end = start.AddDays(1);
-        return _events.Any(e =>
-            e.CalendarId == calendarId &&
-            e.Start >= start && e.Start < end &&
-            e.Title == title &&
-            (e.Notes ?? string.Empty) == notes);
-    }
+    private static string StorageNotes(string notesKey)
+        => string.IsNullOrEmpty(notesKey)
+            ? "提醒建议：当天 09:00（系统全天事件提醒能力有限）"
+            : $"{notesKey}\n提醒建议：当天 09:00";
 
     private static IReadOnlyList<CalendarInfo> SortCalendars(IEnumerable<CalendarInfo> calendars)
         => calendars
