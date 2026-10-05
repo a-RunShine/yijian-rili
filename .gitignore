@@ -15,3 +15,12 @@ releases/*.zip
 releases/*.dmg
 
 retrospectives/
+
+# .NET / Windows
+**/bin/
+**/obj/
+windows/**/AppPackages/
+windows/**/BundleArtifacts/
+*.user
+*.suo
+.vs/
