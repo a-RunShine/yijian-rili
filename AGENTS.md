@@ -169,3 +169,19 @@ App 用 `eventStore.defaultCalendarForNewEvents` 写入事件。`defaultCalendar
 - 主界面右上角「?」按钮可随时重看引导
 - `@AppStorage("selectedCalendarIdentifier")` 持久化用户选择
 - 若选中的日历被删/账户注销，App 自动回退到系统默认并提示
+
+## Cursor Cloud specific instructions
+
+Cloud Agent 跑在 Ubuntu Linux 上。本仓库是 macOS 14 的 SwiftUI 应用，界面和日历写入依赖 SwiftUI、AppKit、EventKit。这些框架在 Linux 上不存在，`OSLog` 也不存在，所以 `make build`、`make test`、`swift build`、`swift test`、`swift run` 会在对应 `import` 处失败，`一键日历.app` 也无法启动。完整测试仍在 macOS 上执行。
+
+环境提供 Swift 6.4.0：`swift --version`。工具链在 `/opt/swift`。`/usr/local/bin` 上只有 `swift`、`swiftc`、`swift-build`、`swift-test`、`swift-run`、`swift-package`、`sourcekit-lsp`，避免工具链自带的 `clang` 盖住系统编译器。不要执行 `apt install swift`，Ubuntu 上那个包是 OpenStack 对象存储。
+
+Linux 上可以编译并运行复习日期引擎，确认工具链和核心计算。把下面五个源文件和一份本地 `OSLog` 桩一起交给 `swiftc`：
+
+- `Sources/一键日历/Models/ReviewEvent.swift`
+- `Sources/一键日历/Models/HistoryEntry.swift`
+- `Sources/一键日历/Models/WeeklyEntry.swift`
+- `Sources/一键日历/Utils/DateFormatter+Extension.swift`
+- `Sources/一键日历/Utils/WeekCalculator.swift`
+
+桩只需要 `Logger.init(subsystem:category:)` 和 `warning(_: String)`。没有应用资源包时，`NSLocalizedString` 会退回 key `review_count`，这和单元测试里的预期一致。用 2026-01-31 作基准、间隔 `[3, 7, 30]` 时，复习日应为 2026-02-03、2026-02-07、2026-03-02。
