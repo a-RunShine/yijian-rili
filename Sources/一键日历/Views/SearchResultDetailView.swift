@@ -1,13 +1,12 @@
 import SwiftUI
-import EventKit
 
 struct SearchResultDetailView: View {
     @ObservedObject var viewModel: ReviewViewModel
-    let event: EKEvent
+    let event: CalendarEventInfo
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text(event.title ?? NSLocalizedString("untitled", comment: ""))
+            Text(event.title.isEmpty ? NSLocalizedString("untitled", comment: "") : event.title)
                 .font(.title3)
                 .fontWeight(.semibold)
                 .foregroundColor(viewModel.currentTheme.primaryTextColor)
@@ -17,7 +16,7 @@ struct SearchResultDetailView: View {
             detailRow(
                 icon: "calendar",
                 label: NSLocalizedString("search_result_date", comment: ""),
-                value: event.startDate.formattedChinese()
+                value: event.start.formattedChinese()
             )
 
             if !event.isAllDay {
@@ -37,7 +36,7 @@ struct SearchResultDetailView: View {
             detailRow(
                 icon: "calendar.badge.checkmark",
                 label: NSLocalizedString("search_result_calendar", comment: ""),
-                value: "\(event.calendar.source.title) → \(event.calendar.title)"
+                value: event.calendarDisplayName
             )
 
             if let notes = event.notes, !notes.isEmpty {
@@ -77,8 +76,8 @@ struct SearchResultDetailView: View {
     }
 
     private var timeRangeString: String {
-        let start = event.startDate.formattedTime()
-        let end = event.endDate.formattedTime()
+        let start = event.start.formattedTime()
+        let end = event.end.formattedTime()
         return "\(start) – \(end)"
     }
 }
