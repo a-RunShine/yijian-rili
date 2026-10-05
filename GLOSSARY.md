@@ -51,3 +51,11 @@ _Avoid_: 塞进复习会话
 **界面 facade**:
 SwiftUI 观察、系统通知与 AppKit 副作用的薄 adapter；过渡期类型名可仍为 ReviewViewModel。
 _Avoid_: 业务决策中心
+
+**创建成功 outcomes**:
+接收「日历写入纯成功」后的持久化编排：历史 cap-20 append + 周末总结 append（含预占位）；清/删历史与 undo 不触达周末总结。
+_Avoid_: ReviewViewModel.commitHistoryEntry, pendingHistoryEntry 通道
+
+**历史记录 store**:
+最近创建记录的 capped JSON 持久化（默认 20）；与周末总结物理分离。
+_Avoid_: 当作周末总结的唯一数据源

@@ -108,10 +108,6 @@ struct HistorySection: View {
     }
 
     private func deleteEntry(_ entry: HistoryEntry) {
-        var entries = viewModel.historyEntries
-        if let index = entries.firstIndex(where: { $0.id == entry.id }) {
-            entries.remove(at: index)
-            viewModel.historyEntries = entries
-        }
+        viewModel.deleteHistoryEntry(entry)
     }
 }

@@ -12,7 +12,9 @@ class ReviewViewModel: ObservableObject {
 
     let session: ReviewSession
     let browse: DayBrowseModel
+    let historyStore: HistoryStore
     private let calendar: CalendarService
+    private let outcomes: CreateSuccessOutcomes
 
     @Published var title: String = "" {
         didSet { session.title = title }
@@ -51,7 +53,9 @@ class ReviewViewModel: ObservableObject {
     @Published var availableCalendars: [CalendarInfo] = []
     @Published var hasCloudCalendar: Bool = false
 
-    @AppStorage("historyEntriesData") private var historyEntriesData: String = ""
+    /// 触发 SwiftUI 刷新历史列表（HistoryStore 变更后递增）。
+    @Published private(set) var historyRevision: Int = 0
+
     @AppStorage("selectedCalendarIdentifier") var selectedCalendarIdentifier: String = "" {
         didSet {
             session.selectedCalendarIdentifier = selectedCalendarIdentifier
@@ -77,19 +81,8 @@ class ReviewViewModel: ObservableObject {
     }
 
     var historyEntries: [HistoryEntry] {
-        get {
-            guard let data = historyEntriesData.data(using: .utf8),
-                  let entries = try? JSONDecoder().decode([HistoryEntry].self, from: data) else {
-                return []
-            }
-            return entries
-        }
-        set {
-            if let data = try? JSONEncoder().encode(newValue),
-               let string = String(data: data, encoding: .utf8) {
-                historyEntriesData = string
-            }
-        }
+        _ = historyRevision
+        return historyStore.load()
     }
 
     private var notificationToken: Any?
@@ -104,9 +97,17 @@ class ReviewViewModel: ObservableObject {
     /// - Parameter calendar: 日历 seam；生产默认 EventKit adapter。
     init(calendar: CalendarService = CalendarManager.shared) {
         self.calendar = calendar
+        let history = HistoryStore()
+        let weekly = WeeklyReviewViewModel()
+        let outcomes = CreateSuccessOutcomes(history: history, weekly: weekly)
+        self.historyStore = history
+        self.weeklyReviewViewModel = weekly
+        self.outcomes = outcomes
+
         let storedCalendarId = UserDefaults.standard.string(forKey: "selectedCalendarIdentifier") ?? ""
         self.session = ReviewSession(
             calendar: calendar,
+            outcomes: outcomes,
             selectedCalendarIdentifier: storedCalendarId
         )
         self.browse = DayBrowseModel(calendar: calendar)
@@ -235,10 +236,8 @@ class ReviewViewModel: ObservableObject {
         if session.consumeHapticFlag() {
             NSHapticFeedbackManager.defaultPerformer.perform(.generic, performanceTime: .now)
         }
-        if let entry = session.consumePendingHistoryEntry() {
-            commitHistoryEntry(entry)
-        }
         if session.resultType == .success {
+            refreshHistoryProjection()
             loadDisplayedDayEvents()
         }
         scheduleResultDismissal()
@@ -299,19 +298,11 @@ class ReviewViewModel: ObservableObject {
         canRecreate = session.canRecreate
     }
 
-    private func commitHistoryEntry(_ entry: HistoryEntry) {
-        var entries = historyEntries
-        entries.insert(entry, at: 0)
-        if entries.count > 20 {
-            entries = Array(entries.prefix(20))
-        }
-        historyEntries = entries
-        weeklyReviewViewModel.appendWeeklyEntry(from: entry)
+    private func refreshHistoryProjection() {
+        historyRevision &+= 1
     }
 
-    lazy var weeklyReviewViewModel: WeeklyReviewViewModel = {
-        WeeklyReviewViewModel()
-    }()
+    let weeklyReviewViewModel: WeeklyReviewViewModel
 
     @Published var showWeeklyReview: Bool = false
 
@@ -327,18 +318,26 @@ class ReviewViewModel: ObservableObject {
     }
 
     func clearHistory() {
-        historyEntries = []
+        outcomes.clearHistory()
+        refreshHistoryProjection()
+    }
+
+    func deleteHistoryEntry(_ entry: HistoryEntry) {
+        outcomes.removeHistory(id: entry.id)
+        refreshHistoryProjection()
     }
 
     func deleteHistoryEntry(at offsets: IndexSet) {
-        var entries = historyEntries
-        entries.remove(atOffsets: offsets)
-        historyEntries = entries
+        let entries = historyEntries
+        for index in offsets {
+            guard entries.indices.contains(index) else { continue }
+            outcomes.removeHistory(id: entries[index].id)
+        }
+        refreshHistoryProjection()
     }
 
     var filteredHistoryEntries: [HistoryEntry] {
-        guard !historySearchText.isEmpty else { return historyEntries }
-        return historyEntries.filter { $0.title.localizedCaseInsensitiveContains(historySearchText) }
+        historyStore.filter(historySearchText)
     }
 
     func applyPreset(_ preset: IntervalPreset) {

@@ -24,6 +24,7 @@ final class ReviewSession {
     }
 
     private let calendar: CalendarService
+    private let outcomes: CreateSuccessOutcomes
 
     var title: String = ""
     var baseDate: Date = Date()
@@ -44,8 +45,6 @@ final class ReviewSession {
     private var lastCreatedTitle: String?
     private var lastCreatedBaseDate: Date?
 
-    /// create 成功后待界面 facade 写入历史/周末总结（C4 再加深）。
-    private(set) var pendingHistoryEntry: HistoryEntry?
     private(set) var shouldPlayHaptic: Bool = false
 
     var selectedCalendar: CalendarInfo? {
@@ -64,11 +63,13 @@ final class ReviewSession {
 
     init(
         calendar: CalendarService,
+        outcomes: CreateSuccessOutcomes,
         reviewIntervals: [Int]? = nil,
         customPresets: [CustomPreset]? = nil,
         selectedCalendarIdentifier: String = ""
     ) {
         self.calendar = calendar
+        self.outcomes = outcomes
         self.reviewIntervals = reviewIntervals ?? Self.loadIntervals()
         self.customPresets = customPresets ?? Self.loadCustomPresets()
         self.selectedCalendarIdentifier = selectedCalendarIdentifier
@@ -185,12 +186,6 @@ final class ReviewSession {
         canRecreate = false
     }
 
-    func consumePendingHistoryEntry() -> HistoryEntry? {
-        let entry = pendingHistoryEntry
-        pendingHistoryEntry = nil
-        return entry
-    }
-
     func consumeHapticFlag() -> Bool {
         let flag = shouldPlayHaptic
         shouldPlayHaptic = false
@@ -199,7 +194,6 @@ final class ReviewSession {
 
     /// 创建复习日程或单次日程。
     func create() async {
-        pendingHistoryEntry = nil
         shouldPlayHaptic = false
         resultMessage = nil
         resultType = nil
@@ -320,13 +314,14 @@ final class ReviewSession {
         lastCreatedBaseDate = baseDate
         canRecreate = true
         canUndo = true
-        pendingHistoryEntry = HistoryEntry(
+        let entry = HistoryEntry(
             title: trimmed,
             baseDate: baseDate,
             reviewDates: created,
             creationDate: Date(),
             type: scheduleMode == .single ? .single : .review
         )
+        outcomes.record(entry)
         title = ""
         baseDate = Date()
         updateReviewDates()

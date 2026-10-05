@@ -8,7 +8,7 @@ import SwiftUI
 /// - `weeklyReviewStateData`：已复习条目 id 列表
 /// - `weeklyNotesData`：每周笔记字典（key = weekKey）
 @MainActor
-final class WeeklyReviewViewModel: ObservableObject {
+final class WeeklyReviewViewModel: ObservableObject, WeeklyEntryAppending {
 
     // MARK: - 持久化键（plan §2.3）
 
@@ -19,8 +19,8 @@ final class WeeklyReviewViewModel: ObservableObject {
     static let historyMigrationKey = "weeklyEntriesHistoryMigrationDone"
     /// 周末预占位条目迁移完成标记（避免重复执行）
     static let weekendMigrationKey = "weeklyEntriesWeekendMigrationDone"
-    /// `ReviewViewModel.historyEntriesData` 的存储 key（迁移时读取）
-    static let legacyHistoryEntriesKey = "historyEntriesData"
+    /// 历史记录 store 的存储 key（迁移时读取）
+    static var legacyHistoryEntriesKey: String { HistoryStore.storageKey }
 
     // MARK: - Published 状态
 
@@ -226,7 +226,7 @@ final class WeeklyReviewViewModel: ObservableObject {
         }
     }
 
-    // MARK: - 写入 weekly entry（由 ReviewViewModel 在 addHistoryEntry 时调用）
+    // MARK: - WeeklyEntryAppending（由创建成功 outcomes 调用）
 
     /// 追加一条 weekly entry，使用 historyEntry.id 作为关联 id。
     ///
