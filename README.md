@@ -1,8 +1,10 @@
 # 一键日历
 
-> 基于艾宾浩斯遗忘曲线的 macOS 复习提醒工具，支持手机日历同步
+> 基于艾宾浩斯遗忘曲线的复习提醒工具（macOS + Windows），支持手机日历同步
 
 输入标题和日期，一键在系统日历中创建复习日程，按科学间隔（默认 3/7/30 天，可自定义）帮助巩固记忆；可选云日历账户，写入即同步到一加 12/iPhone/安卓手机。
+
+**Windows 移植**见 [`windows/README.md`](windows/README.md)（C# / WinUI 3 / WinRT Appointments）。
 
 ## 功能特性
 
@@ -46,9 +48,15 @@
 
 ## 系统要求
 
+### macOS
 - **macOS 14.0** 或更高版本
 - **日历访问权限**（首次使用时会请求 Full Access）
 - 同步到手机需要 macOS 端配置云日历账户
+
+### Windows
+- **Windows 10 1809+ / Windows 11**
+- .NET 8 + Windows App SDK（见 [`windows/README.md`](windows/README.md)）
+- 日历读写权限；同步推荐 Outlook 或 Google 账户
 
 ## 安装与运行
 

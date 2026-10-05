@@ -1,0 +1,13 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <LangVersion>latest</LangVersion>
+    <RootNamespace>YijianRili.Domain</RootNamespace>
+    <AssemblyName>YijianRili.Domain</AssemblyName>
+    <Description>Portable domain logic for 一键日历 (review dates, intervals, history, weekly review).</Description>
+  </PropertyGroup>
+
+</Project>

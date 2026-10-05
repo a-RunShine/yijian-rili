@@ -2,12 +2,26 @@
 
 ## 项目概述
 
-Swift 6.0 + SwiftUI 的 macOS 可执行应用，基于艾宾浩斯遗忘曲线创建复习提醒。使用 EventKit 读写系统日历，Swift Package Manager 管理依赖。
+基于艾宾浩斯遗忘曲线创建复习提醒的桌面应用。
+
+### macOS（主工程）
+
+Swift 6.0 + SwiftUI 的 macOS 可执行应用。使用 EventKit 读写系统日历，Swift Package Manager 管理依赖。
 
 - **平台**：macOS 14.0+
 - **语言**：Swift 6（启用 `StrictConcurrency` 实验特性）
 - **本地化**：默认中文（`defaultLocalization: "zh"`），所有 UI 文本通过 `NSLocalizedString` 走 `Resources/zh.lproj/Localizable.strings`
 - **入口**：`Sources/一键日历/一键日历App.swift`（`@main`）
+
+### Windows（移植）
+
+目录：`windows/`（详见 [`windows/README.md`](windows/README.md)）
+
+- **栈**：C# / WinUI 3 / .NET 8 + WinRT `Appointments`
+- **领域层**：`YijianRili.Domain`（`net8.0`，可在 Linux 跑 `dotnet test`）
+- **日历适配**：`YijianRili.Calendar.WinRtCalendarService` 实现 `ICalendarService`
+- **UI**：`YijianRili.App`（需 Windows + Windows App SDK；Linux 无法跑 XamlCompiler）
+- **同步引导**：Outlook / Google 优先（非 macOS CalDAV）
 
 ## 构建与发布
 

@@ -1,0 +1,40 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.0.31903.59
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "YijianRili.Domain", "YijianRili.Domain\YijianRili.Domain.csproj", "{9EB7A1D2-AA0A-4612-A00B-B650CFE9F68C}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "YijianRili.Domain.Tests", "YijianRili.Domain.Tests\YijianRili.Domain.Tests.csproj", "{A40A7A65-1066-459C-9C00-A4B666C42D4C}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "YijianRili.Calendar", "YijianRili.Calendar\YijianRili.Calendar.csproj", "{9CE2D6A2-8492-47DF-BDAA-A5AC4FD1E798}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "YijianRili.App", "YijianRili.App\YijianRili.App.csproj", "{958799D8-4531-4161-9A79-00F5E6258136}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{9EB7A1D2-AA0A-4612-A00B-B650CFE9F68C}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{9EB7A1D2-AA0A-4612-A00B-B650CFE9F68C}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{9EB7A1D2-AA0A-4612-A00B-B650CFE9F68C}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{9EB7A1D2-AA0A-4612-A00B-B650CFE9F68C}.Release|Any CPU.Build.0 = Release|Any CPU
+		{A40A7A65-1066-459C-9C00-A4B666C42D4C}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{A40A7A65-1066-459C-9C00-A4B666C42D4C}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{A40A7A65-1066-459C-9C00-A4B666C42D4C}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{A40A7A65-1066-459C-9C00-A4B666C42D4C}.Release|Any CPU.Build.0 = Release|Any CPU
+		{9CE2D6A2-8492-47DF-BDAA-A5AC4FD1E798}.Debug|Any CPU.ActiveCfg = Debug|x64
+		{9CE2D6A2-8492-47DF-BDAA-A5AC4FD1E798}.Debug|Any CPU.Build.0 = Debug|x64
+		{9CE2D6A2-8492-47DF-BDAA-A5AC4FD1E798}.Release|Any CPU.ActiveCfg = Release|x64
+		{9CE2D6A2-8492-47DF-BDAA-A5AC4FD1E798}.Release|Any CPU.Build.0 = Release|x64
+		{958799D8-4531-4161-9A79-00F5E6258136}.Debug|Any CPU.ActiveCfg = Debug|x86
+		{958799D8-4531-4161-9A79-00F5E6258136}.Debug|Any CPU.Build.0 = Debug|x86
+		{958799D8-4531-4161-9A79-00F5E6258136}.Release|Any CPU.ActiveCfg = Release|x86
+		{958799D8-4531-4161-9A79-00F5E6258136}.Release|Any CPU.Build.0 = Release|x86
+	EndGlobalSection
+EndGlobal
