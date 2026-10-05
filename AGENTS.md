@@ -184,6 +184,20 @@ App 用 `eventStore.defaultCalendarForNewEvents` 写入事件。`defaultCalendar
 - `@AppStorage("selectedCalendarIdentifier")` 持久化用户选择
 - 若选中的日历被删/账户注销，App 自动回退到系统默认并提示
 
+## Agent skills
+
+### Issue tracker
+
+Issues live in this repo's GitHub Issues (via `gh`). See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Canonical roles map 1:1 to `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context: root `GLOSSARY.md` + `docs/adr/`. See `docs/agents/domain.md`.
+
 ## Cursor Cloud specific instructions
 
 Cloud Agent 跑在 Ubuntu Linux 上。本仓库是 macOS 14 的 SwiftUI 应用，界面和日历写入依赖 SwiftUI、AppKit、EventKit。这些框架在 Linux 上不存在，`OSLog` 也不存在，所以 `make build`、`make test`、`swift build`、`swift test`、`swift run` 会在对应 `import` 处失败，`一键日历.app` 也无法启动。完整测试仍在 macOS 上执行。
