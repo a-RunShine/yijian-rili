@@ -207,6 +207,15 @@ public sealed class InMemoryCalendarService : ICalendarService
         return Task.FromResult<IReadOnlyList<CalendarEventInfo>>(list);
     }
 
+    public CalendarDiagnostics GetDiagnostics()
+        => new()
+        {
+            Status = AuthorizationStatus,
+            CalendarCount = AvailableCalendars.Count,
+            WritableCount = AvailableCalendars.Count(c => c.AllowsContentModifications),
+            LooksLikeMissingPackageIdentity = false
+        };
+
     private void EnsureAccess()
     {
         if (AuthorizationStatus != CalendarAccessStatus.FullAccess)
