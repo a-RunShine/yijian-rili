@@ -154,14 +154,23 @@ public sealed class ReviewSession
                 var granted = await _calendar.RequestAccessAsync(cancellationToken).ConfigureAwait(false);
                 if (!granted)
                 {
-                    ResultMessage = "需要日历权限才能创建日程";
+                    ResultMessage = _calendar.GetDiagnostics().UserHint;
                     ResultKind = ViewModels.ResultKind.Error;
                     return;
                 }
             }
             else if (_calendar.AuthorizationStatus is CalendarAccessStatus.Denied or CalendarAccessStatus.Restricted)
             {
-                ResultMessage = "日历权限被拒绝，请在系统设置中开启";
+                ResultMessage = _calendar.GetDiagnostics().UserHint;
+                ResultKind = ViewModels.ResultKind.Error;
+                return;
+            }
+
+            // 无可写日历时直接给出可操作提示（常见于未打包 exe / 未加 Windows 账户）
+            var diagnostics = _calendar.GetDiagnostics();
+            if (diagnostics.WritableCount == 0)
+            {
+                ResultMessage = diagnostics.UserHint;
                 ResultKind = ViewModels.ResultKind.Error;
                 return;
             }
@@ -206,9 +215,12 @@ public sealed class ReviewSession
                 OnCreateSuccess(trimmed, result.Created);
             }
         }
-        catch (CalendarServiceException)
+        catch (CalendarServiceException ex)
         {
-            ResultMessage = "日历操作失败，请检查权限与账户后重试";
+            // 消息均由本适配层构造，可直接展示
+            ResultMessage = string.IsNullOrWhiteSpace(ex.Message)
+                ? "日历操作失败，请检查权限与账户后重试"
+                : ex.Message;
             ResultKind = ViewModels.ResultKind.Error;
         }
         catch (Exception)

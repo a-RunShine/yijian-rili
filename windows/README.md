@@ -35,21 +35,27 @@ dotnet test YijianRili.Domain.Tests/YijianRili.Domain.Tests.csproj
 
 ### 完整 Windows 应用（需 Windows 10/11 + Windows App SDK）
 
+**必须打 MSIX 包**（`WindowsPackageType=MSIX`）。直接跑未打包 exe 时，WinRT 拿不到系统/Google 日历，界面会只显示「系统默认」且创建失败。
+
 ```powershell
 cd windows
 dotnet restore YijianRili.sln
 dotnet build YijianRili.App/YijianRili.App.csproj -c Release -p:Platform=x64
-dotnet run --project YijianRili.App/YijianRili.App.csproj -p:Platform=x64
+# 输出目录中的 .msix / 用 Visual Studio「部署」安装到本机
 ```
 
-或用 Visual Studio 2022 打开 `YijianRili.sln`，安装「Windows 应用开发」工作负载后运行。
+推荐：用 Visual Studio 2022 打开 `YijianRili.sln`，安装「Windows 应用开发」工作负载，F5 部署打包应用。
+
+未签名 MSIX 旁加载需开启「开发人员模式」。
 
 ## 权限与同步
 
-1. 首次启动会请求日历读写权限。
-2. 在 Windows「设置 → 账户」添加 **Outlook** 或 **Google**。
-3. 在 App「写入日历」选择云账户（勿选本地）。
-4. 手机使用同一账户即可看到复习日程。
+1. 用 **MSIX** 安装（见上）。
+2. 首次启动允许日历权限。
+3. 在 Windows「设置 → 账户 → 电子邮件和账户」添加 **Outlook** 或 **Google**，并开启**日历同步**（仅浏览器登录 Gmail 无效）。
+4. 打开系统「日历」App 确认账户下有日历。
+5. 在本 App「写入日历」选择该云日历（勿停在「系统默认」）。
+6. 手机使用同一账户即可看到复习日程。
 
 > 说明：WinRT 全天事件的定点 09:00 提醒能力弱于 EventKit；事件备注中会提示建议提醒时间。可靠响铃可后续改为 09:00 定时事件。
 

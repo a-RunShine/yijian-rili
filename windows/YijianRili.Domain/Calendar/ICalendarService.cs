@@ -47,4 +47,7 @@ public interface ICalendarService
         string query,
         int daysAhead = 90,
         CancellationToken cancellationToken = default);
+
+    /// <summary>供 UI 展示权限/空日历诊断。</summary>
+    CalendarDiagnostics GetDiagnostics();
 }

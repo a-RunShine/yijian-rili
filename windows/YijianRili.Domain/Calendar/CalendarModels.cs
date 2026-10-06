@@ -59,3 +59,33 @@ public sealed class CalendarServiceException : Exception
     public CalendarServiceException(string message) : base(message) { }
     public CalendarServiceException(string message, Exception inner) : base(message, inner) { }
 }
+
+/// <summary>用户可见的日历诊断信息（权限/空列表/打包问题）。</summary>
+public sealed class CalendarDiagnostics
+{
+    public CalendarAccessStatus Status { get; init; }
+    public int CalendarCount { get; init; }
+    public int WritableCount { get; init; }
+    public string? LastError { get; init; }
+    public bool LooksLikeMissingPackageIdentity { get; init; }
+
+    public string UserHint
+    {
+        get
+        {
+            if (Status is CalendarAccessStatus.Denied or CalendarAccessStatus.Restricted)
+                return "日历权限未授予。请在系统弹窗中允许，或到「设置 → 隐私和安全性 → 日历」开启本应用权限。";
+
+            if (CalendarCount == 0 || WritableCount == 0)
+            {
+                return "未找到可写日历。请确认：\n"
+                       + "1) 用 MSIX 安装本应用（不要直接运行未打包的 exe）\n"
+                       + "2) 在「设置 → 账户 → 电子邮件和账户」添加 Google/Outlook，并开启日历同步\n"
+                       + "3) 打开系统「日历」App，确认能看到该账户下的日历\n"
+                       + "（仅在浏览器登录 Gmail 不够）";
+            }
+
+            return LastError ?? string.Empty;
+        }
+    }
+}
