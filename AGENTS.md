@@ -36,11 +36,11 @@ make run         # swift run
 发布流程（v1.4.0 实测）：
 
 1. 改源码 → `swift build` + `swift test`
-2. 更新 `Info.plist` 的 `CFBundleShortVersionString` 和 `CFBundleVersion`
+2. 更新根目录 `Info.plist` 的 `CFBundleShortVersionString` 和 `CFBundleVersion`（构建时会被 `cp` 进 bundle）
 3. `make install`
 4. `zip -X -r releases/YijianRili-v<版本>-macOS.app.zip 一键日历.app`
 5. 写 `releases/v<版本>.md`
-6. `git add -f 一键日历.app/Contents/Info.plist`（`.app` 被 .gitignore 排除，Info.plist 要强推）+ commit + push。**app 二进制不跟踪**——`一键日历.app/` 整个被忽略，发版产物由第 7/9 步的 GitHub Releases（zip + dmg）归档，不要往仓库里塞二进制
+6. `git add Info.plist` + commit + push。**没有任何 app bundle 内文件需要跟踪**——`一键日历.app/` 下的 `Contents/Info.plist` 只是构建时从根目录复制的副本，根目录那份才是源文件。发版产物全部由第 7/9 步的 GitHub Releases（zip + dmg）归档，不要往仓库里塞二进制
 7. `gh release create v<版本> <zip> --notes-file releases/v<版本>.md`
 8. 制作 dmg：hdiutil UDRW → AppleScript 设 Finder 布局 → hdiutil convert UDZO（详见 `retrospectives/v1.4.0.md`）
 9. `gh release upload v<版本> <dmg>`
