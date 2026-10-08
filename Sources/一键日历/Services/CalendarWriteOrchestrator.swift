@@ -2,6 +2,7 @@ import Foundation
 
 /// 写入日历编排：校验间隔 → 算日 → 备注键 → 重复检测 → 经 store 写入。
 /// `CalendarService.create*` 对外不变，内部委托本 module。
+@MainActor
 enum CalendarWriteOrchestrator {
     /// 写入复习日程。
     static func writeReview(

@@ -10,6 +10,7 @@ struct StoredCalendarEvent: Sendable, Equatable {
 }
 
 /// 窄日历 store seam：写入日历编排只依赖查找与保存全天事件。
+@MainActor
 protocol CalendarEventStore: AnyObject {
     func events(calendarId: String, day: Date) throws -> [StoredCalendarEvent]
     /// 保存全天事件；`notesKey` 为复习备注键（adapter 可附加提醒展示文案）。

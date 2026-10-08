@@ -105,6 +105,7 @@ final class CalendarWriteOrchestratorTests: XCTestCase {
 }
 
 /// 假 store：供写入日历编排单测（不碰 EventKit）。
+@MainActor
 final class FakeCalendarEventStore: CalendarEventStore {
     private var items: [StoredCalendarEvent] = []
     private var seq = 0
