@@ -277,6 +277,89 @@ final class ReviewSessionTests: XCTestCase {
         XCTAssertEqual(entry.type, .review)
     }
 
+    func testUpdateSharedDetailRewritesOnlyDetailAcrossSeries() async {
+        let calendar = InMemoryCalendarService(grantAccessByDefault: true)
+        let (session, history, weekly) = CreateSuccessTestSupport.makeSession(calendar: calendar)
+        session.title = "系列编辑"
+        session.baseDate = CreateSuccessTestSupport.date(2026, 1, 31)
+        session.reviewIntervals = [3, 7, 30]
+        session.scheduleMode = .review
+        session.detail = "初始详情"
+        session.updateReviewDates()
+        await session.create()
+        XCTAssertEqual(session.resultType, .success)
+        let entry = try XCTUnwrap(history.load().first)
+        XCTAssertEqual(entry.createdEventIdentifiers.count, 3)
+        let weeklyBefore = weekly.appendCallCount
+
+        let outcome = session.updateSharedDetail(for: entry, detail: "  修订后详情  ")
+
+        XCTAssertEqual(outcome, .updated(updated: 3, missing: 0))
+        XCTAssertEqual(session.resultType, .success)
+        XCTAssertEqual(history.load().first?.sharedDetail, "修订后详情")
+        XCTAssertEqual(weekly.appendCallCount, weeklyBefore)
+        let d1 = calendar.fetchEvents(on: CreateSuccessTestSupport.date(2026, 2, 3))
+        let d2 = calendar.fetchEvents(on: CreateSuccessTestSupport.date(2026, 2, 7))
+        let d3 = calendar.fetchEvents(on: CreateSuccessTestSupport.date(2026, 3, 2))
+        XCTAssertEqual(d1.count, 1)
+        XCTAssertEqual(d1[0].notes, ReviewNotes.compose(key: "第1次复习", detail: "修订后详情"))
+        XCTAssertEqual(d2[0].notes, ReviewNotes.compose(key: "第2次复习", detail: "修订后详情"))
+        XCTAssertEqual(d3[0].notes, ReviewNotes.compose(key: "第3次复习", detail: "修订后详情"))
+        XCTAssertEqual(NormalizeNotes.normalize(d1[0].notes), "第1次复习")
+        XCTAssertEqual(NormalizeNotes.normalize(d2[0].notes), "第2次复习")
+        XCTAssertEqual(NormalizeNotes.normalize(d3[0].notes), "第3次复习")
+    }
+
+    func testUpdateSharedDetailPartialSuccessWhenSomeEventsMissing() async {
+        let calendar = InMemoryCalendarService(grantAccessByDefault: true)
+        let (session, history, _) = CreateSuccessTestSupport.makeSession(calendar: calendar)
+        session.title = "部分缺失"
+        session.baseDate = CreateSuccessTestSupport.date(2026, 1, 31)
+        session.reviewIntervals = [3, 7, 30]
+        session.scheduleMode = .review
+        session.detail = "原详情"
+        session.updateReviewDates()
+        await session.create()
+        let entry = try XCTUnwrap(history.load().first)
+        let firstId = entry.createdEventIdentifiers[0]
+        XCTAssertTrue(calendar.deleteEvent(id: firstId))
+
+        let outcome = session.updateSharedDetail(for: entry, detail: "新详情")
+
+        XCTAssertEqual(outcome, .updated(updated: 2, missing: 1))
+        XCTAssertEqual(session.resultType, .warning)
+        XCTAssertEqual(history.load().first?.sharedDetail, "新详情")
+        let surviving = calendar.fetchEvents(on: CreateSuccessTestSupport.date(2026, 2, 7))
+        XCTAssertEqual(
+            surviving[0].notes,
+            ReviewNotes.compose(key: "第2次复习", detail: "新详情")
+        )
+    }
+
+    func testUpdateSharedDetailUnavailableForEmptyIdentifiers() {
+        let calendar = InMemoryCalendarService(grantAccessByDefault: true)
+        let (session, history, weekly) = CreateSuccessTestSupport.makeSession(calendar: calendar)
+        let legacy = HistoryEntry(
+            title: "旧批次",
+            baseDate: CreateSuccessTestSupport.date(2026, 1, 1),
+            reviewDates: [],
+            creationDate: Date(),
+            type: .review,
+            createdEventIdentifiers: [],
+            sharedDetail: "残留"
+        )
+        history.add(legacy)
+        let weeklyBefore = weekly.appendCallCount
+
+        let outcome = session.updateSharedDetail(for: legacy, detail: "不应写入")
+
+        XCTAssertEqual(outcome, .unavailable)
+        XCTAssertEqual(session.resultType, .warning)
+        XCTAssertEqual(history.load().first?.sharedDetail, "残留")
+        XCTAssertEqual(weekly.appendCallCount, weeklyBefore)
+        XCTAssertTrue(calendar.fetchEvents(on: Date()).isEmpty)
+    }
+
     func testCommitIntervalDraftSuccessUpdatesPreview() {
         let (session, _, _) = CreateSuccessTestSupport.makeSession()
         session.baseDate = CreateSuccessTestSupport.date(2026, 1, 31)

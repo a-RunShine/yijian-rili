@@ -72,6 +72,10 @@ enum ReviewNotes {
         }
         return lines.joined(separator: "\n")
     }
+
+    static func replacingDetail(in notes: String, detail: String?) -> String {
+        compose(key: NormalizeNotes.normalize(notes), detail: detail)
+    }
 }
 
 enum NormalizeNotes {

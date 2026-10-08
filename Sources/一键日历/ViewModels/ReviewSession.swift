@@ -199,6 +199,64 @@ final class ReviewSession {
         outcomes.todayCreatedEntries(now: now, calendar: calendar)
     }
 
+    @discardableResult
+    func updateSharedDetail(for entry: HistoryEntry, detail: String) -> SharedDetailUpdateOutcome {
+        resultMessage = nil
+        resultType = nil
+
+        let identifiers = entry.createdEventIdentifiers
+        guard !identifiers.isEmpty else {
+            resultMessage = NSLocalizedString("shared_detail_unavailable", comment: "")
+            resultType = .warning
+            return .unavailable
+        }
+
+        let trimmed = detail.trimmingCharacters(in: .whitespacesAndNewlines)
+        let detailForWrite: String? = trimmed.isEmpty ? nil : trimmed
+
+        var updated = 0
+        var missing = 0
+        for identifier in identifiers {
+            guard let existingNotes = calendar.eventNotes(id: identifier) else {
+                missing += 1
+                continue
+            }
+            let rewritten = ReviewNotes.replacingDetail(in: existingNotes, detail: detailForWrite)
+            if calendar.updateEventNotes(id: identifier, notes: rewritten) {
+                updated += 1
+            } else {
+                missing += 1
+            }
+        }
+
+        if updated > 0 {
+            outcomes.updateSharedDetail(id: entry.id, sharedDetail: detailForWrite)
+        }
+
+        if missing == 0 {
+            resultMessage = String(
+                format: NSLocalizedString("shared_detail_success", comment: ""),
+                "\(updated)"
+            )
+            resultType = .success
+        } else if updated > 0 {
+            resultMessage = String(
+                format: NSLocalizedString("shared_detail_partial", comment: ""),
+                "\(updated)",
+                "\(missing)"
+            )
+            resultType = .warning
+        } else {
+            resultMessage = String(
+                format: NSLocalizedString("shared_detail_all_missing", comment: ""),
+                "\(missing)"
+            )
+            resultType = .warning
+        }
+
+        return .updated(updated: updated, missing: missing)
+    }
+
     func consumeHapticFlag() -> Bool {
         let flag = shouldPlayHaptic
         shouldPlayHaptic = false

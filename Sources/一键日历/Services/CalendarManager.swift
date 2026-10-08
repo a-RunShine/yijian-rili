@@ -210,6 +210,28 @@ final class CalendarManager: ObservableObject, CalendarService, CalendarEventSto
         }
     }
 
+    func eventNotes(id: String) -> String? {
+        guard let event = eventStore.event(withIdentifier: id) else { return nil }
+        return event.notes ?? ""
+    }
+
+    @discardableResult
+    func updateEventNotes(id: String, notes: String) -> Bool {
+        guard let event = eventStore.event(withIdentifier: id) else {
+            logger.warning("updateEventNotes: event \(id) not found")
+            return false
+        }
+        event.notes = notes
+        do {
+            try eventStore.save(event, span: .thisEvent)
+            logger.info("Updated notes for event \(id)")
+            return true
+        } catch {
+            logger.error("Failed to update event notes: \(error.localizedDescription)")
+            return false
+        }
+    }
+
     func searchEvents(query: String, daysAhead: Int) -> [CalendarEventInfo] {
         let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return [] }

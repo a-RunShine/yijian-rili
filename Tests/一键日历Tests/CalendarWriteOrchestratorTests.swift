@@ -47,6 +47,23 @@ final class WriteRulesTests: XCTestCase {
         )
     }
 
+    func testReviewNotesReplacingDetailPreservesKeyAndReminder() {
+        let original = ReviewNotes.compose(key: "第2次复习", detail: "旧详情")
+        XCTAssertEqual(
+            ReviewNotes.replacingDetail(in: original, detail: "新详情"),
+            ReviewNotes.compose(key: "第2次复习", detail: "新详情")
+        )
+        let single = ReviewNotes.compose(key: "", detail: "单次旧")
+        XCTAssertEqual(
+            ReviewNotes.replacingDetail(in: single, detail: "单次新"),
+            ReviewNotes.compose(key: "", detail: "单次新")
+        )
+        XCTAssertEqual(
+            ReviewNotes.replacingDetail(in: original, detail: "  "),
+            ReviewNotes.compose(key: "第2次复习", detail: nil)
+        )
+    }
+
     func testDuplicateMatchUsesNormalizedNotes() {
         let day = date(2026, 2, 3)
         let existing = [

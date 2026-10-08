@@ -23,6 +23,11 @@ final class CreateSuccessOutcomes {
         history.remove(id: id)
     }
 
+    func updateSharedDetail(id: UUID, sharedDetail: String?) {
+        guard let existing = history.load().first(where: { $0.id == id }) else { return }
+        history.replace(existing.withSharedDetail(sharedDetail))
+    }
+
     func todayCreatedEntries(now: Date = Date(), calendar: Calendar = .current) -> [HistoryEntry] {
         history.created(on: now, calendar: calendar)
     }

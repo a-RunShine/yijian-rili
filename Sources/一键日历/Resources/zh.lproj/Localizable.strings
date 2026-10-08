@@ -33,6 +33,12 @@
 "undo_success_with_title" = "已撤销「%@」的%@个日程";
 "undo_partial" = "%@个日程已被删除或不存在";
 
+// Shared detail
+"shared_detail_unavailable" = "该历史记录无法编辑共享详情（缺少日程标识）";
+"shared_detail_success" = "已更新%@个日程的共享详情";
+"shared_detail_partial" = "已更新%@个日程，%@个日程已删除或不存在";
+"shared_detail_all_missing" = "%@个日程已被删除或不存在";
+
 // History
 "history_title" = "历史记录";
 "no_history" = "暂无历史记录";

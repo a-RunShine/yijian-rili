@@ -41,6 +41,13 @@ final class HistoryStore {
         save(load().filter { $0.id != id })
     }
 
+    func replace(_ entry: HistoryEntry) {
+        var list = load()
+        guard let index = list.firstIndex(where: { $0.id == entry.id }) else { return }
+        list[index] = entry
+        save(list)
+    }
+
     func clear() {
         save([])
     }

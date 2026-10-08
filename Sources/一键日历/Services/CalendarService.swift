@@ -36,4 +36,8 @@ protocol CalendarService: AnyObject {
     @discardableResult
     func deleteEvent(id: String) -> Bool
     func searchEvents(query: String, daysAhead: Int) -> [CalendarEventInfo]
+
+    func eventNotes(id: String) -> String?
+    @discardableResult
+    func updateEventNotes(id: String, notes: String) -> Bool
 }

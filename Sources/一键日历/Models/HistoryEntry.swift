@@ -20,14 +20,15 @@ struct HistoryEntry: Identifiable, Codable {
         case createdEventIdentifiers, sharedDetail
     }
 
-    init(title: String,
+    init(id: UUID = UUID(),
+         title: String,
          baseDate: Date,
          reviewDates: [Date],
          creationDate: Date,
          type: ScheduleType = .review,
          createdEventIdentifiers: [String] = [],
          sharedDetail: String? = nil) {
-        self.id = UUID()
+        self.id = id
         self.title = title
         self.baseDate = baseDate
         self.reviewDates = reviewDates
@@ -35,6 +36,19 @@ struct HistoryEntry: Identifiable, Codable {
         self.type = type
         self.createdEventIdentifiers = createdEventIdentifiers
         self.sharedDetail = sharedDetail
+    }
+
+    func withSharedDetail(_ detail: String?) -> HistoryEntry {
+        HistoryEntry(
+            id: id,
+            title: title,
+            baseDate: baseDate,
+            reviewDates: reviewDates,
+            creationDate: creationDate,
+            type: type,
+            createdEventIdentifiers: createdEventIdentifiers,
+            sharedDetail: detail
+        )
     }
 
     init(from decoder: Decoder) throws {
