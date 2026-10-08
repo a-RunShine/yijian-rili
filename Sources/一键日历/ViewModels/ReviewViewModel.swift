@@ -43,6 +43,8 @@ class ReviewViewModel: ObservableObject {
     }
     @Published var sharedDetailDraft: String = ""
     @Published var editingSharedDetailEntryID: UUID?
+    @Published var sharedDetailEditOutcomeVisible: Bool = false
+    @Published var sharedDetailResultOnToday: Bool = false
     @Published var reviewDates: [Date] = []
     @Published var authorizationStatus: CalendarAccessStatus = .notDetermined
     @Published var isLoading: Bool = false
@@ -310,6 +312,10 @@ class ReviewViewModel: ObservableObject {
                 self?.resultType = nil
                 self?.session.resultMessage = nil
                 self?.session.resultType = nil
+                self?.sharedDetailResultOnToday = false
+                if self?.sharedDetailEditOutcomeVisible == true {
+                    self?.finishSharedDetailEditSheet()
+                }
             }
         }
     }
@@ -356,28 +362,44 @@ class ReviewViewModel: ObservableObject {
     }
 
     func beginSharedDetailEdit(for entry: HistoryEntry) {
+        sharedDetailEditOutcomeVisible = false
+        sharedDetailResultOnToday = false
+        if showHistory {
+            showHistory = false
+        }
         editingSharedDetailEntryID = entry.id
         sharedDetailDraft = entry.sharedDetail ?? ""
     }
 
     func cancelSharedDetailEdit() {
+        let hadOutcome = sharedDetailEditOutcomeVisible
+        finishSharedDetailEditSheet()
+        if hadOutcome {
+            sharedDetailResultOnToday = resultMessage != nil
+            scheduleResultDismissal()
+        }
+    }
+
+    func dismissSharedDetailEditAfterOutcome() {
+        sharedDetailEditOutcomeVisible = false
+        finishSharedDetailEditSheet()
+        sharedDetailResultOnToday = resultMessage != nil
+        scheduleResultDismissal()
+    }
+
+    private func finishSharedDetailEditSheet() {
         editingSharedDetailEntryID = nil
         sharedDetailDraft = ""
+        sharedDetailEditOutcomeVisible = false
     }
 
     @discardableResult
     func commitSharedDetailEdit() -> SharedDetailUpdateOutcome {
         guard let entry = editingSharedDetailEntry else { return .unavailable }
         let outcome = updateSharedDetail(for: entry, detail: sharedDetailDraft)
-        if case .updated = outcome {
-            refreshHistoryProjection()
-        }
+        sharedDetailEditOutcomeVisible = true
+        sharedDetailResultOnToday = false
         scheduleResultDismissal()
-        if case .unavailable = outcome {
-            return outcome
-        }
-        editingSharedDetailEntryID = nil
-        sharedDetailDraft = ""
         return outcome
     }
 

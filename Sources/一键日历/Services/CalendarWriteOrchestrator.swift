@@ -81,4 +81,27 @@ enum CalendarWriteOrchestrator {
 
         return CalendarWriteOutcome(result: result, createdEventIds: createdIds)
     }
+
+    static func rewriteSharedDetail(
+        identifiers: [String],
+        detail: String?,
+        eventNotes: (String) -> String?,
+        updateEventNotes: (String, String) -> Bool
+    ) -> (updated: Int, missing: Int) {
+        var updated = 0
+        var missing = 0
+        for identifier in identifiers {
+            guard let existingNotes = eventNotes(identifier) else {
+                missing += 1
+                continue
+            }
+            let rewritten = ReviewNotes.replacingDetail(in: existingNotes, detail: detail)
+            if updateEventNotes(identifier, rewritten) {
+                updated += 1
+            } else {
+                missing += 1
+            }
+        }
+        return (updated: updated, missing: missing)
+    }
 }

@@ -30,9 +30,23 @@ struct TodayCreatedSection: View {
                                 .fontWeight(.medium)
                                 .foregroundColor(viewModel.currentTheme.primaryTextColor)
                                 .lineLimit(1)
-                            Text(entry.creationDate.formattedTime())
-                                .font(.caption)
-                                .foregroundColor(viewModel.currentTheme.secondaryTextColor ?? .secondary)
+                            HStack(spacing: 4) {
+                                Text(entry.baseDate.formattedChinese())
+                                    .font(.caption)
+                                    .foregroundColor(viewModel.currentTheme.secondaryTextColor ?? .secondary)
+                                Text("·")
+                                    .font(.caption)
+                                    .foregroundColor(viewModel.currentTheme.secondaryTextColor ?? .secondary)
+                                Text(scheduleTypeLabel(entry.type))
+                                    .font(.caption)
+                                    .foregroundColor(viewModel.currentTheme.secondaryTextColor ?? .secondary)
+                                Text("·")
+                                    .font(.caption)
+                                    .foregroundColor(viewModel.currentTheme.secondaryTextColor ?? .secondary)
+                                Text(entry.creationDate.formattedTime())
+                                    .font(.caption)
+                                    .foregroundColor(viewModel.currentTheme.secondaryTextColor ?? .secondary)
+                            }
 
                             if entry.createdEventIdentifiers.isEmpty {
                                 Text(NSLocalizedString("today_created_edit_unavailable", comment: ""))
@@ -58,6 +72,41 @@ struct TodayCreatedSection: View {
                     )
                 }
             }
+
+            if viewModel.sharedDetailResultOnToday,
+               let message = viewModel.resultMessage,
+               let type = viewModel.resultType {
+                resultBanner(message: message, type: type)
+            }
         }
+    }
+
+    private func scheduleTypeLabel(_ type: HistoryEntry.ScheduleType) -> String {
+        switch type {
+        case .review: return NSLocalizedString("schedule_mode_review", comment: "")
+        case .single: return NSLocalizedString("schedule_mode_single", comment: "")
+        }
+    }
+
+    private func resultBanner(message: String, type: ReviewViewModel.ResultType) -> some View {
+        let (icon, color, bg): (String, Color, Color) = {
+            switch type {
+            case .success: return ("checkmark.circle.fill", .green, Color.green.opacity(0.1))
+            case .warning: return ("exclamationmark.triangle.fill", .orange, Color.orange.opacity(0.1))
+            case .error: return ("xmark.circle.fill", .red, Color.red.opacity(0.1))
+            }
+        }()
+        return HStack(spacing: 6) {
+            Image(systemName: icon)
+            Text(message)
+                .font(.callout)
+        }
+        .foregroundColor(color)
+        .padding()
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(bg)
+        .cornerRadius(8)
+        .transition(.opacity.combined(with: .move(edge: .bottom)))
+        .animation(.easeInOut(duration: 0.25), value: viewModel.resultMessage != nil)
     }
 }

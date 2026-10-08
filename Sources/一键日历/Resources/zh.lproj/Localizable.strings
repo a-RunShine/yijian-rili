@@ -38,6 +38,7 @@
 "shared_detail_sheet_title" = "系列共享详情";
 "shared_detail_save" = "保存详情";
 "shared_detail_cancel" = "取消";
+"shared_detail_done" = "完成";
 
 // Settings segment
 "settings_segment_title" = "设置";

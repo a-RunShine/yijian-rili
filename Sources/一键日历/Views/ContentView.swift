@@ -51,7 +51,7 @@ struct ContentView: View {
             set: { if !$0 { viewModel.cancelSharedDetailEdit() } }
         )) {
             SharedDetailEditSheet(viewModel: viewModel)
-                .frame(width: 340, height: 280)
+                .frame(width: 340, height: 360)
         }
         .onAppear {
             viewModel.scheduleFirstRunGuideIfNeeded()

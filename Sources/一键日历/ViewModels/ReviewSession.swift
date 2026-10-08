@@ -211,23 +211,15 @@ final class ReviewSession {
             return .unavailable
         }
 
-        let trimmed = detail.trimmingCharacters(in: .whitespacesAndNewlines)
-        let detailForWrite: String? = trimmed.isEmpty ? nil : trimmed
-
-        var updated = 0
-        var missing = 0
-        for identifier in identifiers {
-            guard let existingNotes = calendar.eventNotes(id: identifier) else {
-                missing += 1
-                continue
-            }
-            let rewritten = ReviewNotes.replacingDetail(in: existingNotes, detail: detailForWrite)
-            if calendar.updateEventNotes(id: identifier, notes: rewritten) {
-                updated += 1
-            } else {
-                missing += 1
-            }
-        }
+        let detailForWrite = Self.optionalDetail(from: detail)
+        let counts = CalendarWriteOrchestrator.rewriteSharedDetail(
+            identifiers: identifiers,
+            detail: detailForWrite,
+            eventNotes: { [calendar] id in calendar.eventNotes(id: id) },
+            updateEventNotes: { [calendar] id, notes in calendar.updateEventNotes(id: id, notes: notes) }
+        )
+        let updated = counts.updated
+        let missing = counts.missing
 
         if updated > 0 {
             outcomes.updateSharedDetail(id: entry.id, sharedDetail: detailForWrite)
@@ -269,8 +261,7 @@ final class ReviewSession {
         resultType = nil
 
         let trimmedTitle = title.trimmingCharacters(in: .whitespaces)
-        let trimmedDetail = detail.trimmingCharacters(in: .whitespacesAndNewlines)
-        let detailForWrite: String? = trimmedDetail.isEmpty ? nil : trimmedDetail
+        let detailForWrite = Self.optionalDetail(from: detail)
 
         guard !trimmedTitle.isEmpty else {
             resultMessage = NSLocalizedString("empty_title_error", comment: "")
@@ -405,6 +396,11 @@ final class ReviewSession {
         detail = ""
         baseDate = Date()
         updateReviewDates()
+    }
+
+    private static func optionalDetail(from raw: String) -> String? {
+        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
     }
 
     private static func loadIntervals() -> [Int] {

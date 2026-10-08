@@ -180,6 +180,27 @@ final class CalendarWriteOrchestratorTests: XCTestCase {
         XCTAssertEqual(again.result.duplicates.count, 3)
     }
 
+    func testRewriteSharedDetailUpdatesAndCountsMissing() {
+        var notesById = [
+            "a": ReviewNotes.compose(key: "第1次复习", detail: "旧"),
+            "b": ReviewNotes.compose(key: "第2次复习", detail: "旧")
+        ]
+        let counts = CalendarWriteOrchestrator.rewriteSharedDetail(
+            identifiers: ["a", "missing", "b"],
+            detail: "新",
+            eventNotes: { notesById[$0] },
+            updateEventNotes: { id, notes in
+                guard notesById[id] != nil else { return false }
+                notesById[id] = notes
+                return true
+            }
+        )
+        XCTAssertEqual(counts.updated, 2)
+        XCTAssertEqual(counts.missing, 1)
+        XCTAssertEqual(notesById["a"], ReviewNotes.compose(key: "第1次复习", detail: "新"))
+        XCTAssertEqual(notesById["b"], ReviewNotes.compose(key: "第2次复习", detail: "新"))
+    }
+
     private func date(_ y: Int, _ m: Int, _ d: Int) -> Date {
         var c = DateComponents(); c.year = y; c.month = m; c.day = d
         return Calendar.current.date(from: c)!
