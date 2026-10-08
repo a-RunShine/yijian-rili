@@ -125,6 +125,69 @@ final class ReviewViewModelCalendarInjectionTests: XCTestCase {
         XCTAssertEqual(viewModel.historyEntries.first?.title, "注入日历 seam")
     }
 
+    func testDefaultSegmentIsCreate() {
+        let viewModel = ReviewViewModel(calendar: InMemoryCalendarService(grantAccessByDefault: true))
+        XCTAssertEqual(viewModel.selectedSegment, .create)
+    }
+
+    func testDetailBindingRoundsTripToSession() async {
+        let calendar = InMemoryCalendarService(grantAccessByDefault: true)
+        let viewModel = ReviewViewModel(calendar: calendar)
+        viewModel.detail = "  课堂补充  "
+        viewModel.title = "详情绑定"
+        viewModel.baseDate = date(2026, 1, 31)
+        viewModel.reviewIntervals = [3, 7, 30]
+        viewModel.scheduleMode = .review
+        viewModel.updateReviewDates()
+
+        XCTAssertEqual(viewModel.session.detail, "  课堂补充  ")
+
+        await viewModel.createReviewSchedule()
+
+        XCTAssertEqual(viewModel.resultType, .success)
+        XCTAssertEqual(viewModel.detail, "")
+        XCTAssertEqual(viewModel.session.detail, "")
+        XCTAssertEqual(viewModel.historyEntries.first?.sharedDetail, "课堂补充")
+        XCTAssertFalse(viewModel.todayCreatedEntries.isEmpty)
+        XCTAssertEqual(viewModel.todayCreatedEntries.first?.title, "详情绑定")
+    }
+
+    func testUpdateSharedDetailViaFacade() async {
+        let calendar = InMemoryCalendarService(grantAccessByDefault: true)
+        let viewModel = ReviewViewModel(calendar: calendar)
+        viewModel.title = "系列编辑"
+        viewModel.detail = "初始"
+        viewModel.baseDate = date(2026, 1, 31)
+        viewModel.reviewIntervals = [3, 7, 30]
+        viewModel.scheduleMode = .review
+        viewModel.updateReviewDates()
+        await viewModel.createReviewSchedule()
+
+        guard let entry = viewModel.historyEntries.first else {
+            return XCTFail("expected history entry")
+        }
+        XCTAssertFalse(entry.createdEventIdentifiers.isEmpty)
+
+        let outcome = viewModel.updateSharedDetail(for: entry, detail: "  修订  ")
+        XCTAssertEqual(outcome, .updated(updated: 3, missing: 0))
+        XCTAssertEqual(viewModel.historyEntries.first?.sharedDetail, "修订")
+        XCTAssertEqual(viewModel.resultType, .success)
+    }
+
+    func testSharedDetailUnavailableWhenNoIdentifiers() {
+        let viewModel = ReviewViewModel(calendar: InMemoryCalendarService(grantAccessByDefault: true))
+        let legacy = HistoryEntry(
+            title: "旧记录",
+            baseDate: date(2026, 1, 1),
+            reviewDates: [date(2026, 1, 4)],
+            creationDate: Date(),
+            createdEventIdentifiers: []
+        )
+        let outcome = viewModel.updateSharedDetail(for: legacy, detail: "不应写入")
+        XCTAssertEqual(outcome, .unavailable)
+        XCTAssertEqual(viewModel.resultType, .warning)
+    }
+
     private func date(_ y: Int, _ m: Int, _ d: Int) -> Date {
         var components = DateComponents()
         components.year = y

@@ -5,14 +5,18 @@ struct DatePickerSection: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Label(NSLocalizedString("date", comment: ""), systemImage: "calendar")
-                .font(.headline)
+            Text(NSLocalizedString("base_date_label", comment: ""))
+                .font(.caption)
+                .fontWeight(.semibold)
+                .foregroundColor(viewModel.currentTheme.secondaryTextColor ?? .secondary)
+
             DatePicker("", selection: $viewModel.baseDate, displayedComponents: .date)
                 .datePickerStyle(.compact)
                 .labelsHidden()
                 .onChange(of: viewModel.baseDate) { _, _ in
                     viewModel.updateReviewDates()
                 }
+
             HStack(spacing: 6) {
                 Button(NSLocalizedString("today_button", comment: "")) {
                     viewModel.baseDate = Date()
@@ -31,8 +35,5 @@ struct DatePickerSection: View {
                 .controlSize(.small)
             }
         }
-        .padding()
-        .background(viewModel.currentTheme.cardBackgroundColor)
-        .cornerRadius(10)
     }
 }

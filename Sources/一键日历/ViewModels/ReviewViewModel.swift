@@ -9,18 +9,40 @@ class ReviewViewModel: ObservableObject {
     typealias ScheduleMode = ReviewSession.ScheduleMode
     typealias DayType = DayBrowseModel.DayType
 
+    enum MainSegment: String, CaseIterable, Identifiable {
+        case create
+        case today
+        case settings
+
+        var id: String { rawValue }
+
+        var title: String {
+            switch self {
+            case .create: return NSLocalizedString("segment_create", comment: "")
+            case .today: return NSLocalizedString("segment_today", comment: "")
+            case .settings: return NSLocalizedString("segment_settings", comment: "")
+            }
+        }
+    }
+
     let session: ReviewSession
     let browse: DayBrowseModel
     let historyStore: HistoryStore
     private let calendar: CalendarService
     private let outcomes: CreateSuccessOutcomes
 
+    @Published var selectedSegment: MainSegment = .create
     @Published var title: String = "" {
         didSet { session.title = title }
+    }
+    @Published var detail: String = "" {
+        didSet { session.detail = detail }
     }
     @Published var baseDate: Date = Date() {
         didSet { session.baseDate = baseDate }
     }
+    @Published var sharedDetailDraft: String = ""
+    @Published var editingSharedDetailEntryID: UUID?
     @Published var reviewDates: [Date] = []
     @Published var authorizationStatus: CalendarAccessStatus = .notDetermined
     @Published var isLoading: Bool = false
@@ -110,6 +132,7 @@ class ReviewViewModel: ObservableObject {
         self.browse = DayBrowseModel(calendar: calendar)
 
         title = session.title
+        detail = session.detail
         baseDate = session.baseDate
         reviewDates = session.reviewDates
         scheduleMode = session.scheduleMode
@@ -199,6 +222,7 @@ class ReviewViewModel: ObservableObject {
         canRecreate = session.canRecreate
         reviewDates = session.reviewDates
         title = session.title
+        detail = session.detail
         baseDate = session.baseDate
         selectedCalendarIdentifier = session.selectedCalendarIdentifier
     }
@@ -213,6 +237,7 @@ class ReviewViewModel: ObservableObject {
 
     private func pushInputsToSession() {
         session.title = title
+        session.detail = detail
         session.baseDate = baseDate
         session.scheduleMode = scheduleMode
         session.reviewIntervals = reviewIntervals
@@ -312,6 +337,58 @@ class ReviewViewModel: ObservableObject {
         session.selectHistoryEntry(entry)
         pullSessionChrome()
         showHistory = false
+        selectedSegment = .create
+    }
+
+    var todayCreatedEntries: [HistoryEntry] {
+        _ = historyRevision
+        return session.todayCreatedEntries()
+    }
+
+    var editingSharedDetailEntry: HistoryEntry? {
+        guard let editingSharedDetailEntryID else { return nil }
+        return historyEntries.first(where: { $0.id == editingSharedDetailEntryID })
+    }
+
+    var canEditSharedDetailForSelection: Bool {
+        guard let entry = editingSharedDetailEntry else { return false }
+        return !entry.createdEventIdentifiers.isEmpty
+    }
+
+    func beginSharedDetailEdit(for entry: HistoryEntry) {
+        editingSharedDetailEntryID = entry.id
+        sharedDetailDraft = entry.sharedDetail ?? ""
+    }
+
+    func cancelSharedDetailEdit() {
+        editingSharedDetailEntryID = nil
+        sharedDetailDraft = ""
+    }
+
+    @discardableResult
+    func commitSharedDetailEdit() -> SharedDetailUpdateOutcome {
+        guard let entry = editingSharedDetailEntry else { return .unavailable }
+        let outcome = updateSharedDetail(for: entry, detail: sharedDetailDraft)
+        if case .updated = outcome {
+            refreshHistoryProjection()
+        }
+        scheduleResultDismissal()
+        if case .unavailable = outcome {
+            return outcome
+        }
+        editingSharedDetailEntryID = nil
+        sharedDetailDraft = ""
+        return outcome
+    }
+
+    @discardableResult
+    func updateSharedDetail(for entry: HistoryEntry, detail: String) -> SharedDetailUpdateOutcome {
+        let outcome = session.updateSharedDetail(for: entry, detail: detail)
+        pullSessionChrome()
+        if case .updated = outcome {
+            refreshHistoryProjection()
+        }
+        return outcome
     }
 
     func clearHistory() {

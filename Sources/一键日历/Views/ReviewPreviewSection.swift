@@ -5,40 +5,56 @@ struct ReviewPreviewSection: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Label(NSLocalizedString("review_plan", comment: ""), systemImage: "list.bullet.rectangle")
-                .font(.headline)
+            Text(previewTitle)
+                .font(.caption)
+                .fontWeight(.semibold)
+                .foregroundColor(viewModel.currentTheme.secondaryTextColor ?? .secondary)
 
-            ForEach(Array(viewModel.reviewDates.enumerated()), id: \.element) { index, date in
-                HStack {
-                    Text(String(format: NSLocalizedString("review_count", comment: ""), "\(index + 1)"))
-                        .font(.subheadline)
-                    Spacer()
-                    VStack(alignment: .trailing, spacing: 1) {
-                        Text(date.formattedChinese())
+            VStack(alignment: .leading, spacing: 12) {
+                ForEach(Array(viewModel.reviewDates.enumerated()), id: \.element) { index, date in
+                    HStack(spacing: 10) {
+                        Circle()
+                            .fill(Color(red: 0.051, green: 0.580, blue: 0.533))
+                            .frame(width: 8, height: 8)
+                        Text("\(date.formattedChinese()) · \(String(format: NSLocalizedString("review_count", comment: ""), "\(index + 1)"))")
                             .font(.subheadline)
-                            .fontWeight(.medium)
+                            .foregroundColor(viewModel.currentTheme.primaryTextColor)
+                        Spacer(minLength: 0)
                         Text(daysFromToday(date))
                             .font(.caption2)
                             .foregroundColor(viewModel.currentTheme.secondaryTextColor ?? .secondary)
                     }
                 }
-                .padding(.vertical, 4)
-            }
 
-            if viewModel.reviewDates.allSatisfy({ Calendar.current.startOfDay(for: $0) < Calendar.current.startOfDay(for: Date()) }) {
-                HStack(spacing: 4) {
-                    Image(systemName: "exclamationmark.triangle")
-                        .font(.caption2)
-                    Text(NSLocalizedString("past_date_warning", comment: ""))
-                        .font(.caption2)
+                Text(NSLocalizedString("create_settings_hint", comment: ""))
+                    .font(.caption)
+                    .foregroundColor(viewModel.currentTheme.secondaryTextColor ?? .secondary)
+                    .padding(.top, 2)
+
+                if viewModel.reviewDates.allSatisfy({ Calendar.current.startOfDay(for: $0) < Calendar.current.startOfDay(for: Date()) }) {
+                    HStack(spacing: 4) {
+                        Image(systemName: "exclamationmark.triangle")
+                            .font(.caption2)
+                        Text(NSLocalizedString("past_date_warning", comment: ""))
+                            .font(.caption2)
+                    }
+                    .foregroundColor(.orange)
                 }
-                .foregroundColor(.orange)
-                .padding(.top, 2)
             }
+            .padding()
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(viewModel.currentTheme.cardBackgroundColor)
+            .cornerRadius(10)
+            .overlay(
+                RoundedRectangle(cornerRadius: 10)
+                    .stroke((viewModel.currentTheme.secondaryTextColor ?? .secondary).opacity(0.2), lineWidth: 1)
+            )
         }
-        .padding()
-        .background(viewModel.currentTheme.cardBackgroundColor)
-        .cornerRadius(10)
+    }
+
+    private var previewTitle: String {
+        let intervals = viewModel.reviewIntervals.map { "+\($0)" }.joined(separator: " / ")
+        return String(format: NSLocalizedString("review_preview_intervals", comment: ""), intervals)
     }
 
     private func daysFromToday(_ date: Date) -> String {
