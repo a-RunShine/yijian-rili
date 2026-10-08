@@ -1,5 +1,12 @@
 import Foundation
 
+enum IntervalDraftFailure: Error, Equatable {
+    case empty
+    case tooMany
+    case invalidAt(Int)
+    case notIncreasingAt(Int)
+}
+
 enum IntervalRules {
     static let defaultIntervals = [3, 7, 30]
     static let minIntervalDays = 1
@@ -14,6 +21,31 @@ enum IntervalRules {
             if intervals[i] <= intervals[i - 1] { return false }
         }
         return true
+    }
+
+    static func parseDraft(_ draft: [String]) -> Result<[Int], IntervalDraftFailure> {
+        guard !draft.isEmpty else { return .failure(.empty) }
+        guard draft.count <= maxIntervalCount else { return .failure(.tooMany) }
+
+        var intervals: [Int] = []
+        intervals.reserveCapacity(draft.count)
+        for (index, raw) in draft.enumerated() {
+            let trimmed = raw.trimmingCharacters(in: .whitespaces)
+            guard let value = Int(trimmed),
+                  value >= minIntervalDays,
+                  value <= maxIntervalDays else {
+                return .failure(.invalidAt(index + 1))
+            }
+            intervals.append(value)
+        }
+
+        for i in 1..<intervals.count {
+            if intervals[i] <= intervals[i - 1] {
+                return .failure(.notIncreasingAt(i + 1))
+            }
+        }
+
+        return .success(intervals)
     }
 }
 

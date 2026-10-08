@@ -143,8 +143,17 @@ final class ReviewSession {
         updateReviewDates()
     }
 
-    func validateIntervals(_ intervals: [Int]) -> Bool {
-        IntervalRules.validate(intervals)
+    @discardableResult
+    func commitIntervalDraft(_ draft: [String]) -> Result<[Int], IntervalDraftFailure> {
+        switch IntervalRules.parseDraft(draft) {
+        case .success(let intervals):
+            reviewIntervals = intervals
+            persistIntervals()
+            updateReviewDates()
+            return .success(intervals)
+        case .failure(let failure):
+            return .failure(failure)
+        }
     }
 
     func saveCustomPreset(name: String) {

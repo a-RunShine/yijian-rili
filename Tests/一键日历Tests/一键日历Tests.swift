@@ -128,40 +128,43 @@ final class 一键日历Tests: XCTestCase {
         XCTAssertEqual(viewModel.resultType, .error)
     }
     
-    @MainActor
-    func testViewModelIntervalValidation() {
-        let viewModel = ReviewViewModel()
-        
-        XCTAssertTrue(viewModel.validateIntervals([1, 3, 7]))
-        XCTAssertTrue(viewModel.validateIntervals([3, 7, 30]))
-        XCTAssertFalse(viewModel.validateIntervals([0, 3, 7]))
-        XCTAssertFalse(viewModel.validateIntervals([3, -1, 7]))
-        // 空数组不合法
-        XCTAssertFalse(viewModel.validateIntervals([]))
-        // 超过 365 不合法
-        XCTAssertFalse(viewModel.validateIntervals([1, 366]))
-        // 单个间隔合法
-        XCTAssertTrue(viewModel.validateIntervals([7]))
-        // 多个间隔合法
-        XCTAssertTrue(viewModel.validateIntervals([1, 2, 4, 7, 15]))
-        // 非递增序列不合法（时间倒退）
-        XCTAssertFalse(viewModel.validateIntervals([30, 7, 3]))
-        XCTAssertFalse(viewModel.validateIntervals([7, 7, 30]))
-        XCTAssertFalse(viewModel.validateIntervals([10, 5]))
-        // 边界：严格递增合法
-        XCTAssertTrue(viewModel.validateIntervals([1, 2, 3]))
-        XCTAssertTrue(viewModel.validateIntervals([1, 365]))
+    func testIntervalRulesValidate() {
+        XCTAssertTrue(IntervalRules.validate([1, 3, 7]))
+        XCTAssertTrue(IntervalRules.validate([3, 7, 30]))
+        XCTAssertFalse(IntervalRules.validate([0, 3, 7]))
+        XCTAssertFalse(IntervalRules.validate([3, -1, 7]))
+        XCTAssertFalse(IntervalRules.validate([]))
+        XCTAssertFalse(IntervalRules.validate([1, 366]))
+        XCTAssertTrue(IntervalRules.validate([7]))
+        XCTAssertTrue(IntervalRules.validate([1, 2, 4, 7, 15]))
+        XCTAssertFalse(IntervalRules.validate([30, 7, 3]))
+        XCTAssertFalse(IntervalRules.validate([7, 7, 30]))
+        XCTAssertFalse(IntervalRules.validate([10, 5]))
+        XCTAssertTrue(IntervalRules.validate([1, 2, 3]))
+        XCTAssertTrue(IntervalRules.validate([1, 365]))
+        XCTAssertTrue(IntervalRules.validate([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]))
+        XCTAssertFalse(IntervalRules.validate([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]))
     }
 
-    @MainActor
-    func testMaxIntervalCountExceeded() {
-        let viewModel = ReviewViewModel()
+    func testIntervalRulesParseDraft() {
+        switch IntervalRules.parseDraft(["3", "7", "30"]) {
+        case .success(let intervals):
+            XCTAssertEqual(intervals, [3, 7, 30])
+        case .failure:
+            XCTFail("expected success")
+        }
 
-        // 10 个间隔（上限）——全部合法
-        XCTAssertTrue(viewModel.validateIntervals([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]))
-
-        // 11 个间隔——超过上限，应被拒绝
-        XCTAssertFalse(viewModel.validateIntervals([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]))
+        XCTAssertEqual(IntervalRules.parseDraft([]), .failure(.empty))
+        XCTAssertEqual(
+            IntervalRules.parseDraft(["1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11"]),
+            .failure(.tooMany)
+        )
+        XCTAssertEqual(IntervalRules.parseDraft(["3", "x", "30"]), .failure(.invalidAt(2)))
+        XCTAssertEqual(IntervalRules.parseDraft(["0", "7"]), .failure(.invalidAt(1)))
+        XCTAssertEqual(IntervalRules.parseDraft(["1", "366"]), .failure(.invalidAt(2)))
+        XCTAssertEqual(IntervalRules.parseDraft(["30", "7", "3"]), .failure(.notIncreasingAt(2)))
+        XCTAssertEqual(IntervalRules.parseDraft(["7", "7", "30"]), .failure(.notIncreasingAt(2)))
+        XCTAssertEqual(IntervalRules.parseDraft([" 1 ", " 2 ", " 3 "]), .success([1, 2, 3]))
     }
 
     @MainActor
