@@ -3,9 +3,6 @@ import EventKit
 import OSLog
 import AppKit
 
-/// EventKit adapter（日历 seam 的 macOS 生产实现）。
-/// 类型名保留 `CalendarManager`；通过 `CalendarService` 对外，不向调用方泄露 EventKit 类型。
-/// create* 委托写入日历编排；本类型实现窄 `CalendarEventStore`。
 @MainActor
 final class CalendarManager: ObservableObject, CalendarService, CalendarEventStore {
     static let shared = CalendarManager()
@@ -13,11 +10,8 @@ final class CalendarManager: ObservableObject, CalendarService, CalendarEventSto
     private let logger = Logger(subsystem: "com.yijianrili.app", category: "CalendarManager")
 
     @Published private(set) var authorizationStatus: CalendarAccessStatus = .notDetermined
-    /// 所有可写日历（含本地），按 source.title 排序，本地排最后
     @Published private(set) var availableCalendars: [CalendarInfo] = []
-    /// 是否存在至少一个非本地的可写日历（云账户），用于判断是否需要首次启动引导
     @Published private(set) var hasCloudCalendar: Bool = false
-    /// 最近一次创建事件的标识符列表，用于撤销
     private(set) var lastCreatedEventIdentifiers: [String] = []
 
     private init() {
@@ -100,8 +94,6 @@ final class CalendarManager: ObservableObject, CalendarService, CalendarEventSto
         }
         return outcome.result
     }
-
-    // MARK: - CalendarEventStore
 
     func events(calendarId: String, day: Date) throws -> [StoredCalendarEvent] {
         guard let ekCalendar = eventStore.calendar(withIdentifier: calendarId) else { return [] }
@@ -240,8 +232,6 @@ final class CalendarManager: ObservableObject, CalendarService, CalendarEventSto
         logger.info("searchEvents query=\(trimmed) daysAhead=\(daysAhead): \(matches.count)/\(events.count) matched")
         return matches.sorted { $0.startDate < $1.startDate }.map { Self.mapEvent($0) }
     }
-
-    // MARK: - Private
 
     private func resolveEKCalendar(calendarId: String?) throws -> EKCalendar {
         if let calendarId, !calendarId.isEmpty,

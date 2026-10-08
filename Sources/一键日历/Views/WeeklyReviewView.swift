@@ -1,6 +1,5 @@
 import SwiftUI
 
-/// 周末总结 sheet 页面（spec F1-F9，plan §4.2）。
 struct WeeklyReviewView: View {
     @ObservedObject var viewModel: WeeklyReviewViewModel
     @Environment(\.dismiss) private var dismiss
@@ -11,7 +10,6 @@ struct WeeklyReviewView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            // Header：标题 + 关闭按钮
             header
             Divider()
 
@@ -34,12 +32,9 @@ struct WeeklyReviewView: View {
             viewModel.jumpToCurrentWeek()
         }
         .onDisappear {
-            // 关闭前强制 commit，避免遗漏草稿
             viewModel.commitNoteDraft()
         }
     }
-
-    // MARK: - Header
 
     private var header: some View {
         HStack {
@@ -56,8 +51,6 @@ struct WeeklyReviewView: View {
         }
         .padding()
     }
-
-    // MARK: - Week Navigator
 
     private var weekNavigator: some View {
         HStack {
@@ -120,8 +113,6 @@ struct WeeklyReviewView: View {
         return ""
     }
 
-    // MARK: - Progress Bar
-
     private var progressBar: some View {
         let total = viewModel.totalCount
         let reviewed = viewModel.reviewedCount
@@ -142,8 +133,6 @@ struct WeeklyReviewView: View {
         .background(theme.cardBackgroundColor)
         .cornerRadius(10)
     }
-
-    // MARK: - Entries
 
     @ViewBuilder
     private var entriesSection: some View {
@@ -198,9 +187,6 @@ struct WeeklyReviewView: View {
                                          ? (theme.secondaryTextColor ?? .secondary)
                                          : (theme.primaryTextColor ?? .primary))
                         .lineLimit(2)
-                    // 周末复习计划预占位标签（spec F11：UI 在条目右侧加
-                    // "上周周末创建" 标签，用 .secondary 颜色区分预占位，
-                    // 不改变勾选/笔记行为）
                     if entry.isPreOccupiedNextWeek {
                         Text(NSLocalizedString("weekly_review_pre_occupied_tag", comment: ""))
                             .font(.caption2)
@@ -213,11 +199,6 @@ struct WeeklyReviewView: View {
                     Spacer(minLength: 0)
                 }
 
-                // 副标题：
-                // - 真实条目：baseDate · 类型
-                // - 预占位条目（spec F11）："创建于 X · Y 所在周开始复习"
-                //   X = entry.creationDate 中文格式（= 下一周周一）
-                //   Y = 归档周周一（原创建所在周的周一 = 当前周一 - 7 天）
                 if entry.isPreOccupiedNextWeek {
                     let creationText = entry.creationDate.formattedChinese()
                     let archivedMonday = WeekCalculator.addingWeeks(-1, to: entry.creationDate)
@@ -277,8 +258,6 @@ struct WeeklyReviewView: View {
         .cornerRadius(10)
     }
 
-    // MARK: - Note Editor
-
     private var noteEditor: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack {
@@ -308,8 +287,6 @@ struct WeeklyReviewView: View {
         .background(theme.cardBackgroundColor)
         .cornerRadius(10)
     }
-
-    // MARK: - Footer
 
     private var footer: some View {
         HStack {

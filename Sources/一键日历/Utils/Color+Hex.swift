@@ -1,7 +1,6 @@
 import SwiftUI
 
 extension Color {
-    /// 解析 `#RRGGBB` / `RRGGBB`；失败返回 nil。
     init?(hex: String?) {
         guard var value = hex?.trimmingCharacters(in: .whitespacesAndNewlines), !value.isEmpty else {
             return nil

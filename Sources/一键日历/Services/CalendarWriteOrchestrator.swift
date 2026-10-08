@@ -1,10 +1,7 @@
 import Foundation
 
-/// 写入日历编排：校验间隔 → 算日 → 备注键 → 重复检测 → 经 store 写入。
-/// `CalendarService.create*` 对外不变，内部委托本 module。
 @MainActor
 enum CalendarWriteOrchestrator {
-    /// 写入复习日程。
     static func writeReview(
         title: String,
         baseDate: Date,
@@ -22,7 +19,6 @@ enum CalendarWriteOrchestrator {
         return try writeAllDayEvents(title: title, items: items, calendarId: calendarId, store: store)
     }
 
-    /// 写入单次日程。
     static func writeSingle(
         title: String,
         date: Date,
@@ -38,7 +34,6 @@ enum CalendarWriteOrchestrator {
         )
     }
 
-    /// 共用路径：写入一组全天事件。
     static func writeAllDayEvents(
         title: String,
         items: [(date: Date, notesKey: String)],

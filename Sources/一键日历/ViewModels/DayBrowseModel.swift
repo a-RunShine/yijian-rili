@@ -1,6 +1,5 @@
 import Foundation
 
-/// 日程浏览：按日列表与标题搜索（含按 id 删除）。
 @MainActor
 final class DayBrowseModel {
     enum DayType: String, CaseIterable, Identifiable {

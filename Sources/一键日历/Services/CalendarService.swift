@@ -1,8 +1,5 @@
 import Foundation
 
-/// 日历 seam：系统日历读写的可替换 interface。
-/// 生产：EventKit adapter（`CalendarManager`）；测试：`InMemoryCalendarService`。
-/// 对齐 Windows `ICalendarService` 能力集合；不暴露 EventKit 类型。
 @MainActor
 protocol CalendarService: AnyObject {
     var authorizationStatus: CalendarAccessStatus { get }
@@ -12,7 +9,6 @@ protocol CalendarService: AnyObject {
 
     func requestAccess() async -> Bool
     func refreshAvailableCalendars()
-    /// 刷新并返回当前权限（EventKit adapter 会重新读取系统状态）。
     @discardableResult
     func checkAuthorizationStatus() -> CalendarAccessStatus
 

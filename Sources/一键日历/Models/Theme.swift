@@ -19,7 +19,6 @@ extension Theme {
         }
     }
 
-    /// 系统 ColorScheme，nil 表示跟随系统外观
     var colorScheme: ColorScheme? {
         switch self {
         case .light, .letterPaper, .claude: return .light
@@ -28,7 +27,6 @@ extension Theme {
         }
     }
 
-    /// 卡片背景色（非 Optional，所有主题都有）
     var cardBackgroundColor: Color {
         switch self {
         case .light: return Color.secondary.opacity(0.12)
@@ -39,7 +37,6 @@ extension Theme {
         }
     }
 
-    /// 窗口背景色，nil 表示使用系统默认
     var windowBackgroundColor: Color? {
         switch self {
         case .light, .dark, .system: return nil
@@ -48,7 +45,6 @@ extension Theme {
         }
     }
 
-    /// 强调色，nil 表示使用系统 .accentColor
     var accentColor: Color? {
         switch self {
         case .light, .dark, .letterPaper, .system: return nil
@@ -56,7 +52,6 @@ extension Theme {
         }
     }
 
-    /// 主文字色，nil 表示使用系统 .primary
     var primaryTextColor: Color? {
         switch self {
         case .light, .dark, .letterPaper, .system: return nil
@@ -64,7 +59,6 @@ extension Theme {
         }
     }
 
-    /// 次要文字色，nil 表示使用系统 .secondary
     var secondaryTextColor: Color? {
         switch self {
         case .light, .dark, .letterPaper, .system: return nil

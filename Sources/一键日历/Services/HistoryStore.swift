@@ -1,6 +1,5 @@
 import Foundation
 
-/// 历史记录 store：最近创建记录的 capped JSON 持久化（默认 20）；与周末总结物理分离。
 final class HistoryStore {
     static let storageKey = "historyEntriesData"
     static let maxEntries = 20
@@ -30,7 +29,6 @@ final class HistoryStore {
         }
     }
 
-    /// 最新在前；强制 cap 20。
     @discardableResult
     func add(_ entry: HistoryEntry) -> HistoryEntry {
         var list = load()

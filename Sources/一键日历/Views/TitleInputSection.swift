@@ -34,7 +34,6 @@ struct TitleInputSection: View {
         }
     }
 
-    /// 自定义 Segmented Picker：选中段的背景色块在两个段之间用 spring 滑动
     private var scheduleModePicker: some View {
         HStack(spacing: 0) {
             ForEach(ReviewViewModel.ScheduleMode.allCases) { mode in
