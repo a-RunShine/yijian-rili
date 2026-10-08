@@ -3,7 +3,6 @@ import SwiftUI
 import AppKit
 import Combine
 
-/// 界面 facade：观察转发 + NotificationCenter + AppKit + sheet；业务在复习会话 / 日程浏览。
 @MainActor
 class ReviewViewModel: ObservableObject {
     typealias ResultType = ReviewSession.ResultType
@@ -53,7 +52,6 @@ class ReviewViewModel: ObservableObject {
     @Published var availableCalendars: [CalendarInfo] = []
     @Published var hasCloudCalendar: Bool = false
 
-    /// 触发 SwiftUI 刷新历史列表（HistoryStore 变更后递增）。
     @Published private(set) var historyRevision: Int = 0
 
     @AppStorage("selectedCalendarIdentifier") var selectedCalendarIdentifier: String = "" {
@@ -94,7 +92,6 @@ class ReviewViewModel: ObservableObject {
     var isSelectedCalendarLocal: Bool { session.isSelectedCalendarLocal }
     var selectedCalendarDisplayName: String { session.selectedCalendarDisplayName }
 
-    /// - Parameter calendar: 日历 seam；生产默认 EventKit adapter。
     init(calendar: CalendarService = CalendarManager.shared) {
         self.calendar = calendar
         let history = HistoryStore()

@@ -6,7 +6,6 @@ struct ContentView: View {
     var body: some View {
         ScrollView {
             VStack(spacing: 14) {
-                    // Title + Theme Picker + Help
                     HStack {
                         Text(NSLocalizedString("app_name", comment: ""))
                             .font(.largeTitle)
@@ -46,10 +45,8 @@ struct ContentView: View {
                         .frame(width: 110)
                     }
 
-                    // Today Events
                     TodayEventsSection(viewModel: viewModel)
 
-                    // 周末总结 Button (spec F1)
                     Button(action: {
                         viewModel.openWeeklyReview()
                     }) {
@@ -74,18 +71,14 @@ struct ContentView: View {
                     .background(viewModel.currentTheme.cardBackgroundColor)
                     .cornerRadius(10)
 
-                    // Title Input (含模式切换 Picker)
                     TitleInputSection(viewModel: viewModel)
 
-                    // 撤销 / 再建一个（"上次操作的后续"紧跟标题输入，符合操作直觉）
                     if viewModel.canUndo || viewModel.canRecreate {
                         RecreateUndoSection(viewModel: viewModel)
                     }
 
-                    // Date Picker
                     DatePickerSection(viewModel: viewModel)
 
-                    // Review Preview（仅复习模式显示）
                     if viewModel.scheduleMode == .review {
                         ReviewPreviewSection(viewModel: viewModel)
                             .transition(.asymmetric(
@@ -94,10 +87,8 @@ struct ContentView: View {
                             ))
                     }
 
-                    // Calendar Picker（折叠）
                     CalendarPickerSection(viewModel: viewModel)
 
-                    // Interval Settings（折叠，仅复习模式显示）
                     if viewModel.scheduleMode == .review {
                         IntervalSettingsSection(viewModel: viewModel)
                             .transition(.asymmetric(
@@ -106,10 +97,8 @@ struct ContentView: View {
                             ))
                     }
 
-                    // Window Settings（折叠）
                     WindowSettingsSection(viewModel: viewModel)
 
-                    // History Button (card-style，按钮直接进 sheet，不需要折叠)
                     Button(action: {
                         viewModel.showHistory = true
                     }) {

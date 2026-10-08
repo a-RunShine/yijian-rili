@@ -18,7 +18,6 @@ struct ReviewEvent: Identifiable, Codable {
         self.baseDate = baseDate
         let dates = ReviewEvent.calculateReviewDates(from: baseDate, intervals: intervals)
         self.reviewDates = dates
-        // notes 数量与 reviewDates 对齐，而非 intervals
         self.notes = dates.enumerated().map { index, _ in
             String(format: NSLocalizedString("review_count", comment: ""), "\(index + 1)")
         }

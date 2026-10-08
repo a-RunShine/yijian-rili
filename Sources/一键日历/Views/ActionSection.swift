@@ -5,7 +5,6 @@ struct ActionSection: View {
 
     var body: some View {
         VStack(spacing: 10) {
-            // Create Button（主操作，固定在 Footer）
             Button(action: {
                 Task {
                     await viewModel.createReviewSchedule()
@@ -32,7 +31,6 @@ struct ActionSection: View {
             .disabled(viewModel.isLoading)
             .frame(maxWidth: .infinity)
 
-            // Result Message
             if let message = viewModel.resultMessage, let type = viewModel.resultType {
                 let (icon, color, bg): (String, Color, Color) = {
                     switch type {
@@ -54,7 +52,6 @@ struct ActionSection: View {
                 .transition(.opacity.combined(with: .move(edge: .bottom)))
             }
 
-            // Permission denied button
             if viewModel.authorizationStatus == .denied {
                 Button(NSLocalizedString("open_settings", comment: "")) {
                     viewModel.openSystemSettings()

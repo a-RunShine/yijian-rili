@@ -1,7 +1,5 @@
 import Foundation
 
-/// 进程内日历 adapter，对齐 Windows `InMemoryCalendarService`。
-/// create* 委托写入日历编排；本类型实现窄 `CalendarEventStore`。
 @MainActor
 final class InMemoryCalendarService: CalendarService, CalendarEventStore {
     private var calendars: [CalendarInfo]
@@ -105,8 +103,6 @@ final class InMemoryCalendarService: CalendarService, CalendarEventStore {
         return outcome.result
     }
 
-    // MARK: - CalendarEventStore
-
     func events(calendarId: String, day: Date) throws -> [StoredCalendarEvent] {
         let start = Calendar.current.startOfDay(for: day)
         guard let end = Calendar.current.date(byAdding: .day, value: 1, to: start) else { return [] }
@@ -128,7 +124,6 @@ final class InMemoryCalendarService: CalendarService, CalendarEventStore {
         }
         let start = Calendar.current.startOfDay(for: day)
         let end = Calendar.current.date(byAdding: .day, value: 1, to: start) ?? start
-        // 可附加提醒展示文案（对齐 WinRT）；比较前由 NormalizeNotes 剥掉
         let rawNotes = Self.storageNotes(from: notesKey)
         let id = nextId()
         events.append(
@@ -198,8 +193,6 @@ final class InMemoryCalendarService: CalendarService, CalendarEventStore {
             .filter { $0.title.localizedCaseInsensitiveContains(trimmed) }
             .sorted { $0.start < $1.start }
     }
-
-    // MARK: - Private
 
     private func nextId() -> String {
         seq += 1

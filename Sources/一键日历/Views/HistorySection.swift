@@ -30,7 +30,6 @@ struct HistorySection: View {
                     .font(.caption)
                     .foregroundColor(viewModel.currentTheme.secondaryTextColor ?? .secondary)
             } else {
-                // 搜索框 + 清除按钮
                 HStack(spacing: 4) {
                     Image(systemName: "magnifyingglass")
                         .foregroundColor(viewModel.currentTheme.secondaryTextColor ?? .secondary)

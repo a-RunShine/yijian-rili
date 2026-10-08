@@ -1,6 +1,5 @@
 import Foundation
 
-/// 复习会话：无 UI 依赖的创建/撤销/预览与间隔状态核心（对齐 Windows `ReviewSession`）。
 @MainActor
 final class ReviewSession {
     enum ResultType {
@@ -192,7 +191,6 @@ final class ReviewSession {
         return flag
     }
 
-    /// 创建复习日程或单次日程。
     func create() async {
         shouldPlayHaptic = false
         resultMessage = nil
@@ -266,7 +264,6 @@ final class ReviewSession {
                 let dupDates = createResult.duplicates.map { $0.formattedChinese() }.joined(separator: "、")
                 resultMessage = String(format: NSLocalizedString("warning_message", comment: ""), dupDates)
                 resultType = .warning
-                // 与既有 macOS 行为一致：仅纯成功路径写历史；重复警告不写
             } else {
                 if scheduleMode == .single {
                     let dateString = baseDate.formattedChinese()
