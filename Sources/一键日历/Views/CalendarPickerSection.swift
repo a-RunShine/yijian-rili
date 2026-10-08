@@ -1,5 +1,4 @@
 import SwiftUI
-import EventKit
 
 struct CalendarPickerSection: View {
     @ObservedObject var viewModel: ReviewViewModel
@@ -34,9 +33,9 @@ struct CalendarPickerSection: View {
                             .tag("")
                         ForEach(groupedCalendars, id: \.sourceTitle) { group in
                             Section(group.sourceTitle) {
-                                ForEach(group.calendars, id: \.calendarIdentifier) { calendar in
+                                ForEach(group.calendars) { calendar in
                                     Text(calendar.title)
-                                        .tag(calendar.calendarIdentifier)
+                                        .tag(calendar.identifier)
                                 }
                             }
                         }
@@ -75,11 +74,11 @@ struct CalendarPickerSection: View {
 
     private struct CalendarGroup: Hashable {
         let sourceTitle: String
-        let calendars: [EKCalendar]
+        let calendars: [CalendarInfo]
     }
 
     private var groupedCalendars: [CalendarGroup] {
-        let grouped = Dictionary(grouping: viewModel.availableCalendars) { $0.source.title }
+        let grouped = Dictionary(grouping: viewModel.availableCalendars) { $0.sourceTitle }
         return grouped
             .map { CalendarGroup(sourceTitle: $0.key, calendars: $0.value) }
             .sorted { $0.sourceTitle < $1.sourceTitle }

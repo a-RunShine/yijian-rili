@@ -1,7 +1,6 @@
 import Foundation
 import SwiftUI
 import AppKit
-import EventKit
 import Combine
 
 @MainActor
@@ -9,7 +8,7 @@ class ReviewViewModel: ObservableObject {
     @Published var title: String = ""
     @Published var baseDate: Date = Date()
     @Published var reviewDates: [Date] = []
-    @Published var authorizationStatus: EKAuthorizationStatus = .notDetermined
+    @Published var authorizationStatus: CalendarAccessStatus = .notDetermined
     @Published var isLoading: Bool = false
     @Published var resultMessage: String?
     @Published var resultType: ResultType?
@@ -20,9 +19,9 @@ class ReviewViewModel: ObservableObject {
     @Published var showHelpGuide: Bool = false
     @Published var showSearch: Bool = false
     @Published var searchText: String = ""
-    @Published var searchResults: [EKEvent] = []
-    @Published var selectedSearchResult: EKEvent?
-    @Published var displayedEvents: [EKEvent] = []
+    @Published var searchResults: [CalendarEventInfo] = []
+    @Published var selectedSearchResult: CalendarEventInfo?
+    @Published var displayedEvents: [CalendarEventInfo] = []
     @Published var historySearchText: String = ""
     @Published var scheduleMode: ScheduleMode = .review
     @Published var currentTheme: Theme = {
@@ -30,8 +29,8 @@ class ReviewViewModel: ObservableObject {
         return Theme(rawValue: rawValue) ?? .light
     }()
     
-    /// 桥接 CalendarManager 的日历列表（按 source 分组，本地排最后）
-    @Published var availableCalendars: [EKCalendar] = []
+    /// 桥接日历 seam 的日历列表（按 source 分组，本地排最后）
+    @Published var availableCalendars: [CalendarInfo] = []
     @Published var hasCloudCalendar: Bool = false
     
     /// 最近一次创建的标题和日期，用于「再建一个」
@@ -100,26 +99,26 @@ class ReviewViewModel: ObservableObject {
         }
     }
     
-    private let calendarManager = CalendarManager.shared
+    private let calendar: CalendarService
     private var notificationToken: Any?
     private var activeToken: Any?
     private var resultDismissTask: Task<Void, Never>?
     private var cancellables = Set<AnyCancellable>()
     
     /// 当前选中的日历（identifier 失效时返回 nil，会回退到系统默认）
-    var selectedCalendar: EKCalendar? {
+    var selectedCalendar: CalendarInfo? {
         guard !selectedCalendarIdentifier.isEmpty else { return nil }
-        return calendarManager.calendar(withIdentifier: selectedCalendarIdentifier)
+        return calendar.calendar(withIdentifier: selectedCalendarIdentifier)
     }
     
     /// 当前选中的是否是本地日历（用于 UI 警告）
     var isSelectedCalendarLocal: Bool {
-        selectedCalendar?.source.sourceType == .local
+        selectedCalendar?.sourceKind == .local
     }
     
     /// 选中的日历显示名（identifier 为空时显示"系统默认"）
     var selectedCalendarDisplayName: String {
-        if let cal = selectedCalendar { return "\(cal.source.title) → \(cal.title)" }
+        if let cal = selectedCalendar { return cal.displayName }
         return NSLocalizedString("calendar_default_label", comment: "")
     }
     
@@ -144,23 +143,28 @@ class ReviewViewModel: ObservableObject {
         }
     }
 
-    init() {
-        authorizationStatus = calendarManager.checkAuthorizationStatus()
+    /// - Parameter calendar: 日历 seam；生产默认 EventKit adapter（`CalendarManager.shared`），测试注入 in-memory。
+    init(calendar: CalendarService = CalendarManager.shared) {
+        self.calendar = calendar
+        authorizationStatus = calendar.checkAuthorizationStatus()
         updateReviewDates()
         
-        // 桥接 CalendarManager 的日历列表
-        availableCalendars = calendarManager.availableCalendars
-        hasCloudCalendar = calendarManager.hasCloudCalendar
-        calendarManager.$availableCalendars
-            .receive(on: DispatchQueue.main)
-            .assign(to: &$availableCalendars)
-        calendarManager.$hasCloudCalendar
-            .receive(on: DispatchQueue.main)
-            .assign(to: &$hasCloudCalendar)
+        syncCalendarStateFromSeam()
+        if let manager = calendar as? CalendarManager {
+            manager.$availableCalendars
+                .receive(on: DispatchQueue.main)
+                .assign(to: &$availableCalendars)
+            manager.$hasCloudCalendar
+                .receive(on: DispatchQueue.main)
+                .assign(to: &$hasCloudCalendar)
+            manager.$authorizationStatus
+                .receive(on: DispatchQueue.main)
+                .assign(to: &$authorizationStatus)
+        }
         
         // 若用户之前选中的日历已失效（如被删除/账户注销），自动清空
         if !selectedCalendarIdentifier.isEmpty,
-           calendarManager.calendar(withIdentifier: selectedCalendarIdentifier) == nil {
+           calendar.calendar(withIdentifier: selectedCalendarIdentifier) == nil {
             selectedCalendarIdentifier = ""
         }
         
@@ -182,7 +186,8 @@ class ReviewViewModel: ObservableObject {
             Task { @MainActor [weak self] in
                 guard let self = self else { return }
                 // 用户在系统设置里改了账户后，回来重新扫描
-                self.calendarManager.refreshAvailableCalendars()
+                self.calendar.refreshAvailableCalendars()
+                self.syncCalendarStateFromSeam()
                 if self.authorizationStatus == .fullAccess {
                     self.loadDisplayedDayEvents()
                 }
@@ -193,8 +198,9 @@ class ReviewViewModel: ObservableObject {
         Task { @MainActor [weak self] in
             guard let self = self else { return }
             if self.authorizationStatus == .notDetermined {
-                let granted = await self.calendarManager.requestAccess()
-                self.authorizationStatus = self.calendarManager.checkAuthorizationStatus()
+                let granted = await self.calendar.requestAccess()
+                self.authorizationStatus = self.calendar.checkAuthorizationStatus()
+                self.syncCalendarStateFromSeam()
                 if granted {
                     self.loadDisplayedDayEvents()
                 }
@@ -202,6 +208,12 @@ class ReviewViewModel: ObservableObject {
                 self.loadDisplayedDayEvents()
             }
         }
+    }
+
+    private func syncCalendarStateFromSeam() {
+        availableCalendars = calendar.availableCalendars
+        hasCloudCalendar = calendar.hasCloudCalendar
+        authorizationStatus = calendar.authorizationStatus
     }
     
     @MainActor
@@ -248,8 +260,9 @@ class ReviewViewModel: ObservableObject {
         
         // Check and request permission if needed
         if authorizationStatus == .notDetermined {
-            let granted = await calendarManager.requestAccess()
-            authorizationStatus = calendarManager.checkAuthorizationStatus()
+            let granted = await calendar.requestAccess()
+            authorizationStatus = calendar.checkAuthorizationStatus()
+            syncCalendarStateFromSeam()
             if !granted {
                 resultMessage = NSLocalizedString("permission_required", comment: "")
                 resultType = .error
@@ -272,25 +285,29 @@ class ReviewViewModel: ObservableObject {
                 return
             }
 
-            let (created, duplicates, failed): ([Date], [Date], [(Date, Error)])
+            let calendarId = targetCalendar?.identifier
+            let createResult: CreateEventsResult
             switch scheduleMode {
             case .review:
-                (created, duplicates, failed) = try await calendarManager.createReviewEvents(
+                createResult = try await calendar.createReviewEvents(
                     title: trimmedTitle,
                     baseDate: baseDate,
                     intervals: reviewIntervals,
-                    calendar: targetCalendar
+                    calendarId: calendarId
                 )
             case .single:
-                (created, duplicates, failed) = try await calendarManager.createSingleEvent(
+                createResult = try await calendar.createSingleEvent(
                     title: trimmedTitle,
                     date: baseDate,
-                    calendar: targetCalendar
+                    calendarId: calendarId
                 )
             }
+            let created = createResult.created
+            let duplicates = createResult.duplicates
+            let failed = createResult.failed
 
             if !failed.isEmpty {
-                let failedDates = failed.map { $0.0.formattedChinese() }.joined(separator: "、")
+                let failedDates = failed.map { $0.date.formattedChinese() }.joined(separator: "、")
                 resultMessage = String(format: NSLocalizedString("error_message", comment: ""), failedDates)
                 resultType = .error
             } else if !duplicates.isEmpty {
@@ -343,18 +360,18 @@ class ReviewViewModel: ObservableObject {
     
     /// 撤销最近一次创建的复习日程
     func undoReviewSchedule() async {
-        let (success, deletedCount, alreadyDeletedCount) = await calendarManager.undoLastCreation()
+        let undo = await calendar.undoLastCreation()
         let title = lastCreatedTitle ?? ""
         
-        if success {
+        if undo.success {
             if title.isEmpty {
-                resultMessage = String(format: NSLocalizedString("undo_success", comment: ""), "\(deletedCount)")
+                resultMessage = String(format: NSLocalizedString("undo_success", comment: ""), "\(undo.deletedCount)")
             } else {
-                resultMessage = String(format: NSLocalizedString("undo_success_with_title", comment: ""), title, "\(deletedCount)")
+                resultMessage = String(format: NSLocalizedString("undo_success_with_title", comment: ""), title, "\(undo.deletedCount)")
             }
             resultType = .success
         } else {
-            resultMessage = String(format: NSLocalizedString("undo_partial", comment: ""), "\(alreadyDeletedCount)")
+            resultMessage = String(format: NSLocalizedString("undo_partial", comment: ""), "\(undo.alreadyDeletedCount)")
             resultType = .warning
         }
         
@@ -425,7 +442,7 @@ class ReviewViewModel: ObservableObject {
     }
     
     func loadDisplayedDayEvents() {
-        displayedEvents = calendarManager.fetchEvents(on: displayedDate)
+        displayedEvents = calendar.fetchEvents(on: displayedDate)
     }
     
     /// 用户切换日期按钮时调用
@@ -635,15 +652,15 @@ class ReviewViewModel: ObservableObject {
             searchResults = []
             return
         }
-        searchResults = calendarManager.searchEvents(query: trimmed, daysAhead: 90)
+        searchResults = calendar.searchEvents(query: trimmed, daysAhead: 90)
     }
 
     /// 删除搜索到的单条日程，成功后从 searchResults 移除
     @discardableResult
-    func deleteSearchResult(_ event: EKEvent) -> Bool {
-        let success = calendarManager.deleteEvent(event)
+    func deleteSearchResult(_ event: CalendarEventInfo) -> Bool {
+        let success = calendar.deleteEvent(id: event.id)
         if success {
-            searchResults.removeAll { ($0.eventIdentifier ?? "") == (event.eventIdentifier ?? "") }
+            searchResults.removeAll { $0.id == event.id }
         }
         return success
     }

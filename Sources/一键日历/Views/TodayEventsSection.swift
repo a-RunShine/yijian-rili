@@ -24,7 +24,7 @@ struct TodayEventsSection: View {
                 ForEach(Array(viewModel.displayedEvents.prefix(displayCount).enumerated()), id: \.offset) { index, event in
                     HStack(spacing: 6) {
                         Circle()
-                            .fill(Color(cgColor: event.calendar.cgColor))
+                            .fill(Color(hex: event.colorHex) ?? (viewModel.currentTheme.accentColor ?? .accentColor))
                             .frame(width: 6, height: 6)
 
                         if event.isAllDay {
@@ -33,13 +33,13 @@ struct TodayEventsSection: View {
                                 .foregroundColor(viewModel.currentTheme.secondaryTextColor ?? .secondary)
                                 .frame(width: 40, alignment: .leading)
                         } else {
-                            Text(event.startDate.formattedTime())
+                            Text(event.start.formattedTime())
                                 .font(.caption)
                                 .fontWeight(.medium)
                                 .foregroundColor(viewModel.currentTheme.secondaryTextColor ?? .secondary)
                                 .frame(width: 40, alignment: .leading)
                         }
-                        Text(event.title ?? NSLocalizedString("untitled", comment: ""))
+                        Text(event.title.isEmpty ? NSLocalizedString("untitled", comment: "") : event.title)
                             .font(.subheadline)
                             .lineLimit(1)
                         Spacer()

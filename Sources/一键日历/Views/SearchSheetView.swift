@@ -1,10 +1,9 @@
 import SwiftUI
-import EventKit
 
 struct SearchSheetView: View {
     @ObservedObject var viewModel: ReviewViewModel
     @FocusState private var isFieldFocused: Bool
-    @State private var eventPendingDelete: EKEvent?
+    @State private var eventPendingDelete: CalendarEventInfo?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -34,7 +33,7 @@ struct SearchSheetView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .padding()
-        .animation(.spring(response: 0.4, dampingFraction: 0.85), value: viewModel.selectedSearchResult)
+        .animation(.spring(response: 0.4, dampingFraction: 0.85), value: viewModel.selectedSearchResult?.id)
         .onAppear {
             isFieldFocused = viewModel.selectedSearchResult == nil
         }
@@ -55,15 +54,15 @@ struct SearchSheetView: View {
         } message: { event in
             Text(String(
                 format: NSLocalizedString("search_delete_confirm_message", comment: ""),
-                event.title ?? NSLocalizedString("untitled", comment: "")
+                event.title.isEmpty ? NSLocalizedString("untitled", comment: "") : event.title
             ))
         }
     }
 
-    private func performDelete(_ event: EKEvent) {
+    private func performDelete(_ event: CalendarEventInfo) {
         eventPendingDelete = nil
         let success = viewModel.deleteSearchResult(event)
-        if success, viewModel.selectedSearchResult?.eventIdentifier == event.eventIdentifier {
+        if success, viewModel.selectedSearchResult?.id == event.id {
             withAnimation(.spring(response: 0.4, dampingFraction: 0.85)) {
                 viewModel.selectedSearchResult = nil
             }
@@ -170,7 +169,7 @@ struct SearchSheetView: View {
         } else {
             ScrollView {
                 VStack(spacing: 0) {
-                    ForEach(Array(viewModel.searchResults.enumerated()), id: \.offset) { index, event in
+                    ForEach(Array(viewModel.searchResults.enumerated()), id: \.element.id) { index, event in
                         searchRow(event)
                         if index < viewModel.searchResults.count - 1 {
                             Divider()
@@ -181,7 +180,7 @@ struct SearchSheetView: View {
         }
     }
 
-    private func searchRow(_ event: EKEvent) -> some View {
+    private func searchRow(_ event: CalendarEventInfo) -> some View {
         HStack(spacing: 4) {
             Button {
                 withAnimation(.spring(response: 0.4, dampingFraction: 0.85)) {
@@ -190,15 +189,15 @@ struct SearchSheetView: View {
             } label: {
                 HStack(spacing: 8) {
                     Circle()
-                        .fill(Color(cgColor: event.calendar.cgColor))
+                        .fill(Color(hex: event.colorHex) ?? (viewModel.currentTheme.accentColor ?? .accentColor))
                         .frame(width: 8, height: 8)
 
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(event.title ?? NSLocalizedString("untitled", comment: ""))
+                        Text(event.title.isEmpty ? NSLocalizedString("untitled", comment: "") : event.title)
                             .font(.subheadline)
                             .lineLimit(1)
                         HStack(spacing: 4) {
-                            Text(event.startDate.formattedChinese())
+                            Text(event.start.formattedChinese())
                                 .font(.caption)
                                 .foregroundColor(viewModel.currentTheme.secondaryTextColor ?? .secondary)
                             Text("·")
@@ -209,7 +208,7 @@ struct SearchSheetView: View {
                                     .font(.caption)
                                     .foregroundColor(viewModel.currentTheme.secondaryTextColor ?? .secondary)
                             } else {
-                                Text(event.startDate.formattedTime())
+                                Text(event.start.formattedTime())
                                     .font(.caption)
                                     .foregroundColor(viewModel.currentTheme.secondaryTextColor ?? .secondary)
                             }
