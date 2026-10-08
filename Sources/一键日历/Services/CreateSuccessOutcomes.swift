@@ -22,4 +22,8 @@ final class CreateSuccessOutcomes {
     func removeHistory(id: UUID) {
         history.remove(id: id)
     }
+
+    func todayCreatedEntries(now: Date = Date(), calendar: Calendar = .current) -> [HistoryEntry] {
+        history.created(on: now, calendar: calendar)
+    }
 }

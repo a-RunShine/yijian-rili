@@ -169,6 +169,114 @@ final class ReviewSessionTests: XCTestCase {
         XCTAssertEqual(weekly.appendCallCount, 1, "undo 不触达 weekly")
     }
 
+    func testCreateWithDetailWritesKeyFirstLineNotes() async {
+        let calendar = InMemoryCalendarService(grantAccessByDefault: true)
+        let (session, history, _) = CreateSuccessTestSupport.makeSession(calendar: calendar)
+        session.title = "带备注"
+        session.baseDate = CreateSuccessTestSupport.date(2026, 1, 31)
+        session.reviewIntervals = [3, 7, 30]
+        session.scheduleMode = .review
+        session.detail = "  课堂补充  "
+        session.updateReviewDates()
+
+        await session.create()
+
+        XCTAssertEqual(session.resultType, .success)
+        let events = calendar.fetchEvents(on: CreateSuccessTestSupport.date(2026, 2, 3))
+        XCTAssertEqual(events.count, 1)
+        XCTAssertEqual(
+            events[0].notes,
+            ReviewNotes.compose(key: "第1次复习", detail: "课堂补充")
+        )
+        XCTAssertEqual(NormalizeNotes.normalize(events[0].notes), "第1次复习")
+        let entry = history.load().first
+        XCTAssertEqual(entry?.sharedDetail, "课堂补充")
+        XCTAssertEqual(entry?.createdEventIdentifiers, calendar.lastCreatedEventIdentifiers)
+        XCTAssertEqual(entry?.createdEventIdentifiers.count, 3)
+    }
+
+    func testCreatePureSuccessPersistsIdsAndDetail_DuplicateDoesNot() async {
+        let calendar = InMemoryCalendarService(grantAccessByDefault: true)
+        let (session, history, weekly) = CreateSuccessTestSupport.makeSession(calendar: calendar)
+        session.title = "门控"
+        session.baseDate = CreateSuccessTestSupport.date(2026, 3, 1)
+        session.scheduleMode = .single
+        session.detail = "首次详情"
+
+        await session.create()
+        XCTAssertEqual(session.resultType, .success)
+        XCTAssertEqual(history.load().count, 1)
+        XCTAssertEqual(history.load().first?.createdEventIdentifiers.count, 1)
+        XCTAssertEqual(history.load().first?.sharedDetail, "首次详情")
+        XCTAssertEqual(weekly.appendCallCount, 1)
+
+        session.title = "门控"
+        session.baseDate = CreateSuccessTestSupport.date(2026, 3, 1)
+        session.scheduleMode = .single
+        session.detail = "重复时不应写入"
+        await session.create()
+        XCTAssertEqual(session.resultType, .warning)
+        XCTAssertEqual(history.load().count, 1)
+        XCTAssertEqual(history.load().first?.sharedDetail, "首次详情")
+        XCTAssertEqual(weekly.appendCallCount, 1)
+    }
+
+    func testTodayCreatedEntriesFiltersByLocalCreationDay() async {
+        let calendar = InMemoryCalendarService(grantAccessByDefault: true)
+        let defaults = CreateSuccessTestSupport.makeSuite()
+        let (outcomes, history, _) = CreateSuccessTestSupport.makeOutcomes(defaults: defaults)
+        let session = ReviewSession(calendar: calendar, outcomes: outcomes)
+
+        let today = CreateSuccessTestSupport.date(2026, 4, 10)
+        let yesterday = CreateSuccessTestSupport.date(2026, 4, 9)
+        outcomes.record(HistoryEntry(
+            title: "昨天",
+            baseDate: yesterday,
+            reviewDates: [],
+            creationDate: yesterday,
+            type: .single
+        ))
+        outcomes.record(HistoryEntry(
+            title: "今天早",
+            baseDate: today,
+            reviewDates: [],
+            creationDate: today.addingTimeInterval(3600),
+            type: .review
+        ))
+        outcomes.record(HistoryEntry(
+            title: "今天晚",
+            baseDate: today,
+            reviewDates: [],
+            creationDate: today.addingTimeInterval(7200),
+            type: .single
+        ))
+
+        let listed = session.todayCreatedEntries(now: today)
+        XCTAssertEqual(listed.map(\.title), ["今天晚", "今天早"])
+        XCTAssertTrue(session.todayCreatedEntries(now: yesterday.addingTimeInterval(86_400 * 2)).isEmpty)
+
+        session.title = "会话新建"
+        session.baseDate = today
+        session.scheduleMode = .single
+        await session.create()
+        XCTAssertEqual(session.resultType, .success)
+        let after = session.todayCreatedEntries(now: Date())
+        XCTAssertEqual(after.first?.title, "会话新建")
+        XCTAssertTrue(history.load().contains { $0.title == "会话新建" })
+    }
+
+    func testHistoryEntryDecodesMissingIdsAndDetail() throws {
+        let legacy = """
+        {"id":"00000000-0000-0000-0000-000000000001","title":"旧","baseDate":0,"reviewDates":[],"creationDate":0}
+        """
+        let data = Data(legacy.utf8)
+        let entry = try JSONDecoder().decode(HistoryEntry.self, from: data)
+        XCTAssertEqual(entry.title, "旧")
+        XCTAssertEqual(entry.createdEventIdentifiers, [])
+        XCTAssertNil(entry.sharedDetail)
+        XCTAssertEqual(entry.type, .review)
+    }
+
     func testCommitIntervalDraftSuccessUpdatesPreview() {
         let (session, _, _) = CreateSuccessTestSupport.makeSession()
         session.baseDate = CreateSuccessTestSupport.date(2026, 1, 31)

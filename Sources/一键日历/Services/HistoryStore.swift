@@ -50,4 +50,8 @@ final class HistoryStore {
         guard !trimmed.isEmpty else { return load() }
         return load().filter { $0.title.localizedCaseInsensitiveContains(trimmed) }
     }
+
+    func created(on day: Date, calendar: Calendar = .current) -> [HistoryEntry] {
+        load().filter { calendar.isDate($0.creationDate, inSameDayAs: day) }
+    }
 }

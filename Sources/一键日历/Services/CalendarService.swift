@@ -19,13 +19,15 @@ protocol CalendarService: AnyObject {
         title: String,
         baseDate: Date,
         intervals: [Int],
-        calendarId: String?
+        calendarId: String?,
+        detail: String?
     ) async throws -> CreateEventsResult
 
     func createSingleEvent(
         title: String,
         date: Date,
-        calendarId: String?
+        calendarId: String?,
+        detail: String?
     ) async throws -> CreateEventsResult
 
     func undoLastCreation() async -> UndoResult

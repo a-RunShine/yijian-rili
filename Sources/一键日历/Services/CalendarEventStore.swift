@@ -10,7 +10,7 @@ struct StoredCalendarEvent: Sendable, Equatable {
 @MainActor
 protocol CalendarEventStore: AnyObject {
     func events(calendarId: String, day: Date) throws -> [StoredCalendarEvent]
-    func saveAllDay(calendarId: String, title: String, day: Date, notesKey: String) throws -> String
+    func saveAllDay(calendarId: String, title: String, day: Date, notes: String) throws -> String
 }
 
 struct CalendarWriteOutcome: Sendable {

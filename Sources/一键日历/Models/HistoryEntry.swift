@@ -7,6 +7,8 @@ struct HistoryEntry: Identifiable, Codable {
     let reviewDates: [Date]
     let creationDate: Date
     let type: ScheduleType
+    let createdEventIdentifiers: [String]
+    let sharedDetail: String?
 
     enum ScheduleType: String, Codable {
         case review
@@ -15,19 +17,24 @@ struct HistoryEntry: Identifiable, Codable {
 
     enum CodingKeys: String, CodingKey {
         case id, title, baseDate, reviewDates, creationDate, type
+        case createdEventIdentifiers, sharedDetail
     }
 
     init(title: String,
          baseDate: Date,
          reviewDates: [Date],
          creationDate: Date,
-         type: ScheduleType = .review) {
+         type: ScheduleType = .review,
+         createdEventIdentifiers: [String] = [],
+         sharedDetail: String? = nil) {
         self.id = UUID()
         self.title = title
         self.baseDate = baseDate
         self.reviewDates = reviewDates
         self.creationDate = creationDate
         self.type = type
+        self.createdEventIdentifiers = createdEventIdentifiers
+        self.sharedDetail = sharedDetail
     }
 
     init(from decoder: Decoder) throws {
@@ -38,5 +45,7 @@ struct HistoryEntry: Identifiable, Codable {
         reviewDates = try c.decode([Date].self, forKey: .reviewDates)
         creationDate = try c.decode(Date.self, forKey: .creationDate)
         type = try c.decodeIfPresent(ScheduleType.self, forKey: .type) ?? .review
+        createdEventIdentifiers = try c.decodeIfPresent([String].self, forKey: .createdEventIdentifiers) ?? []
+        sharedDetail = try c.decodeIfPresent(String.self, forKey: .sharedDetail)
     }
 }

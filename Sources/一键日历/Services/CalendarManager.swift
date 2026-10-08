@@ -61,7 +61,8 @@ final class CalendarManager: ObservableObject, CalendarService, CalendarEventSto
         title: String,
         baseDate: Date,
         intervals: [Int],
-        calendarId: String?
+        calendarId: String?,
+        detail: String? = nil
     ) async throws -> CreateEventsResult {
         let targetCalendar = try resolveEKCalendar(calendarId: calendarId)
         let outcome = try CalendarWriteOrchestrator.writeReview(
@@ -69,7 +70,8 @@ final class CalendarManager: ObservableObject, CalendarService, CalendarEventSto
             baseDate: baseDate,
             intervals: intervals,
             calendarId: targetCalendar.calendarIdentifier,
-            store: self
+            store: self,
+            detail: detail
         )
         if !outcome.createdEventIds.isEmpty {
             lastCreatedEventIdentifiers = outcome.createdEventIds
@@ -80,14 +82,16 @@ final class CalendarManager: ObservableObject, CalendarService, CalendarEventSto
     func createSingleEvent(
         title: String,
         date: Date,
-        calendarId: String?
+        calendarId: String?,
+        detail: String? = nil
     ) async throws -> CreateEventsResult {
         let targetCalendar = try resolveEKCalendar(calendarId: calendarId)
         let outcome = try CalendarWriteOrchestrator.writeSingle(
             title: title,
             date: date,
             calendarId: targetCalendar.calendarIdentifier,
-            store: self
+            store: self,
+            detail: detail
         )
         if !outcome.createdEventIds.isEmpty {
             lastCreatedEventIdentifiers = outcome.createdEventIds
@@ -115,7 +119,7 @@ final class CalendarManager: ObservableObject, CalendarService, CalendarEventSto
         }
     }
 
-    func saveAllDay(calendarId: String, title: String, day: Date, notesKey: String) throws -> String {
+    func saveAllDay(calendarId: String, title: String, day: Date, notes: String) throws -> String {
         guard let targetCalendar = eventStore.calendar(withIdentifier: calendarId),
               targetCalendar.allowsContentModifications else {
             throw CalendarError.defaultCalendarUnavailable
@@ -125,7 +129,7 @@ final class CalendarManager: ObservableObject, CalendarService, CalendarEventSto
         event.startDate = day
         event.endDate = day
         event.isAllDay = true
-        event.notes = notesKey
+        event.notes = notes
         event.calendar = targetCalendar
 
         let alarm = EKAlarm()

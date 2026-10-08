@@ -26,6 +26,7 @@ final class ReviewSession {
     private let outcomes: CreateSuccessOutcomes
 
     var title: String = ""
+    var detail: String = ""
     var baseDate: Date = Date()
     var reviewDates: [Date] = []
     var scheduleMode: ScheduleMode = .review
@@ -194,6 +195,10 @@ final class ReviewSession {
         canRecreate = false
     }
 
+    func todayCreatedEntries(now: Date = Date(), calendar: Calendar = .current) -> [HistoryEntry] {
+        outcomes.todayCreatedEntries(now: now, calendar: calendar)
+    }
+
     func consumeHapticFlag() -> Bool {
         let flag = shouldPlayHaptic
         shouldPlayHaptic = false
@@ -206,6 +211,8 @@ final class ReviewSession {
         resultType = nil
 
         let trimmedTitle = title.trimmingCharacters(in: .whitespaces)
+        let trimmedDetail = detail.trimmingCharacters(in: .whitespacesAndNewlines)
+        let detailForWrite: String? = trimmedDetail.isEmpty ? nil : trimmedDetail
 
         guard !trimmedTitle.isEmpty else {
             resultMessage = NSLocalizedString("empty_title_error", comment: "")
@@ -255,13 +262,15 @@ final class ReviewSession {
                     title: trimmedTitle,
                     baseDate: baseDate,
                     intervals: reviewIntervals,
-                    calendarId: calendarId
+                    calendarId: calendarId,
+                    detail: detailForWrite
                 )
             case .single:
                 createResult = try await calendar.createSingleEvent(
                     title: trimmedTitle,
                     date: baseDate,
-                    calendarId: calendarId
+                    calendarId: calendarId,
+                    detail: detailForWrite
                 )
             }
 
@@ -282,7 +291,11 @@ final class ReviewSession {
                     resultMessage = String(format: NSLocalizedString("success_message", comment: ""), createdDates)
                 }
                 resultType = .success
-                onCreateSuccess(trimmed: trimmedTitle, created: createResult.created)
+                onCreateSuccess(
+                    trimmed: trimmedTitle,
+                    created: createResult.created,
+                    sharedDetail: detailForWrite
+                )
             }
         } catch {
             resultMessage = error.localizedDescription
@@ -314,7 +327,7 @@ final class ReviewSession {
         canRecreate = false
     }
 
-    private func onCreateSuccess(trimmed: String, created: [Date]) {
+    private func onCreateSuccess(trimmed: String, created: [Date], sharedDetail: String?) {
         shouldPlayHaptic = true
         lastCreatedTitle = trimmed
         lastCreatedBaseDate = baseDate
@@ -325,10 +338,13 @@ final class ReviewSession {
             baseDate: baseDate,
             reviewDates: created,
             creationDate: Date(),
-            type: scheduleMode == .single ? .single : .review
+            type: scheduleMode == .single ? .single : .review,
+            createdEventIdentifiers: calendar.lastCreatedEventIdentifiers,
+            sharedDetail: sharedDetail
         )
         outcomes.record(entry)
         title = ""
+        detail = ""
         baseDate = Date()
         updateReviewDates()
     }
