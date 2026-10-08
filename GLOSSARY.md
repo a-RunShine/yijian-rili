@@ -64,3 +64,7 @@ _Avoid_: 在 outcomes 里直接拼 WeeklyEntry
 **历史记录 store**:
 最近创建记录的 capped JSON 持久化（默认 20）；与周末总结物理分离。
 _Avoid_: 当作周末总结的唯一数据源
+
+**复习间隔 commit**:
+接收间隔 draft（字符串列表）→ parse/校验 → 成功则持久化已提交间隔并刷新复习预览；View 只编辑 draft 并映射结构化失败。
+_Avoid_: View 内自拼校验后再赋值并手调 updateReviewDates；公开 validateIntervals 当作写入 API

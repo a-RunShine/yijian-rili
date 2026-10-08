@@ -272,49 +272,31 @@ struct IntervalSettingsSection: View {
         }
     }
 
+    private func message(for failure: IntervalDraftFailure) -> String {
+        switch failure {
+        case .empty:
+            return NSLocalizedString("interval_min_error", comment: "")
+        case .tooMany:
+            return NSLocalizedString("interval_max_error", comment: "")
+        case .invalidAt(let index):
+            return String(format: NSLocalizedString("interval_invalid_at", comment: ""), "\(index)")
+        case .notIncreasingAt(let index):
+            return String(format: NSLocalizedString("interval_not_increasing_at", comment: ""), "\(index)")
+        }
+    }
+
     private func saveIntervals() {
-        guard !tempIntervals.isEmpty else {
-            errorMessage = NSLocalizedString("interval_min_error", comment: "")
+        let draft = tempIntervals.map(\.value)
+        switch viewModel.commitIntervalDraft(draft) {
+        case .success(let intervals):
+            showError = false
+            errorMessage = ""
+            tempIntervals = intervals.map { IntervalEntry(value: String($0)) }
+            saveSnapshot(intervals)
+        case .failure(let failure):
+            errorMessage = message(for: failure)
             showError = true
-            return
         }
-
-        guard tempIntervals.count <= maxIntervalCount else {
-            errorMessage = NSLocalizedString("interval_max_error", comment: "")
-            showError = true
-            return
-        }
-
-        var intervals: [Int] = []
-        for (i, entry) in tempIntervals.enumerated() {
-            let trimmed = entry.value.trimmingCharacters(in: .whitespaces)
-            guard let val = Int(trimmed), val >= 1, val <= 365 else {
-                errorMessage = String(format: NSLocalizedString("interval_invalid_at", comment: ""), "\(i + 1)")
-                showError = true
-                return
-            }
-            intervals.append(val)
-        }
-
-        guard viewModel.validateIntervals(intervals) else {
-            for i in 1..<intervals.count {
-                if intervals[i] <= intervals[i - 1] {
-                    errorMessage = String(format: NSLocalizedString("interval_not_increasing_at", comment: ""), "\(i + 1)")
-                    showError = true
-                    return
-                }
-            }
-            errorMessage = NSLocalizedString("interval_invalid", comment: "")
-            showError = true
-            return
-        }
-
-        showError = false
-        errorMessage = ""
-        viewModel.reviewIntervals = intervals
-        tempIntervals = intervals.map { IntervalEntry(value: String($0)) }
-        saveSnapshot(intervals)
-        viewModel.updateReviewDates()
     }
 
     private func savePreset() {
@@ -327,15 +309,15 @@ struct IntervalSettingsSection: View {
             presetAlertError = NSLocalizedString("preset_name_duplicate", comment: "")
             return
         }
-        let currentIntervals = tempIntervals.compactMap { Int($0.value.trimmingCharacters(in: .whitespaces)) }
-        guard currentIntervals.count == tempIntervals.count,
-              viewModel.validateIntervals(currentIntervals) else {
+        let draft = tempIntervals.map(\.value)
+        switch viewModel.commitIntervalDraft(draft) {
+        case .success(let intervals):
+            tempIntervals = intervals.map { IntervalEntry(value: String($0)) }
+            viewModel.saveCustomPreset(name: trimmed)
+            showSavePresetAlert = false
+            presetAlertError = nil
+        case .failure:
             presetAlertError = NSLocalizedString("preset_save_invalid_intervals", comment: "")
-            return
         }
-        viewModel.reviewIntervals = currentIntervals
-        viewModel.updateReviewDates()
-        viewModel.saveCustomPreset(name: trimmed)
-        showSavePresetAlert = false
     }
 }

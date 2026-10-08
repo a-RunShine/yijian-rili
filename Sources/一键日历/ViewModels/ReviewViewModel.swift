@@ -349,8 +349,14 @@ class ReviewViewModel: ObservableObject {
         reviewDates = session.reviewDates
     }
 
-    func validateIntervals(_ intervals: [Int]) -> Bool {
-        session.validateIntervals(intervals)
+    @discardableResult
+    func commitIntervalDraft(_ draft: [String]) -> Result<[Int], IntervalDraftFailure> {
+        let result = session.commitIntervalDraft(draft)
+        if case .success = result {
+            reviewIntervals = session.reviewIntervals
+            reviewDates = session.reviewDates
+        }
+        return result
     }
 
     func saveCustomPreset(name: String) {

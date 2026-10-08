@@ -168,6 +168,39 @@ final class ReviewSessionTests: XCTestCase {
         XCTAssertEqual(history.load().count, 1, "undo 不删历史")
         XCTAssertEqual(weekly.appendCallCount, 1, "undo 不触达 weekly")
     }
+
+    func testCommitIntervalDraftSuccessUpdatesPreview() {
+        let (session, _, _) = CreateSuccessTestSupport.makeSession()
+        session.baseDate = CreateSuccessTestSupport.date(2026, 1, 31)
+        session.scheduleMode = .review
+        session.reviewIntervals = [3, 7, 30]
+        session.updateReviewDates()
+        let before = session.reviewDates
+
+        let result = session.commitIntervalDraft(["1", "2", "4"])
+        guard case .success(let intervals) = result else {
+            return XCTFail("expected success")
+        }
+        XCTAssertEqual(intervals, [1, 2, 4])
+        XCTAssertEqual(session.reviewIntervals, [1, 2, 4])
+        XCTAssertEqual(session.reviewDates.count, 3)
+        XCTAssertNotEqual(session.reviewDates, before)
+    }
+
+    func testCommitIntervalDraftFailureLeavesStateUnchanged() {
+        let (session, _, _) = CreateSuccessTestSupport.makeSession()
+        session.baseDate = CreateSuccessTestSupport.date(2026, 1, 31)
+        session.scheduleMode = .review
+        session.reviewIntervals = [3, 7, 30]
+        session.updateReviewDates()
+        let intervalsBefore = session.reviewIntervals
+        let datesBefore = session.reviewDates
+
+        let result = session.commitIntervalDraft(["30", "7", "3"])
+        XCTAssertEqual(result, .failure(.notIncreasingAt(2)))
+        XCTAssertEqual(session.reviewIntervals, intervalsBefore)
+        XCTAssertEqual(session.reviewDates, datesBefore)
+    }
 }
 
 @MainActor
