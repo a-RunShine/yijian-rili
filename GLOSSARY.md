@@ -56,6 +56,11 @@ _Avoid_: 业务决策中心
 接收「日历写入纯成功」后的持久化编排：历史 cap-20 append + 周末总结 append（含预占位）；清/删历史与 undo 不触达周末总结。
 _Avoid_: ReviewViewModel.commitHistoryEntry, pendingHistoryEntry 通道
 
+**周末总结 append seam**:
+创建成功 outcomes 追加 weekly entry 的窄 interface（`WeeklyEntryAppending`）；当前唯一实现是 `WeeklyReviewViewModel`。
+macOS 侧专有——Windows 侧无对应 interface，直接 concrete 持有 `WeeklyReviewService`。
+_Avoid_: 在 outcomes 里直接拼 WeeklyEntry
+
 **历史记录 store**:
 最近创建记录的 capped JSON 持久化（默认 20）；与周末总结物理分离。
 _Avoid_: 当作周末总结的唯一数据源

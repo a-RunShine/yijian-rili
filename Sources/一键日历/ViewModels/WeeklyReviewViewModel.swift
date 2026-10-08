@@ -230,7 +230,7 @@ final class WeeklyReviewViewModel: ObservableObject, WeeklyEntryAppending {
 
     /// 追加一条 weekly entry，使用 historyEntry.id 作为关联 id。
     ///
-    /// **周末复习计划双份规则**（plan §X 新需求）：
+    /// **周末复习计划双份规则**（plan §3.4 新需求）：
     /// - 当 `historyEntry.type == .review` 且 `creationDate` 落在周六/周日时，
     ///   写入两条 WeeklyEntry：第二条 `creationDate` 改为下一周周一 00:00，
     ///   并标记 `isPreOccupiedNextWeek = true`，UI 用以显示"下周复习"标签。
