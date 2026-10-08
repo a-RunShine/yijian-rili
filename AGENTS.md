@@ -40,7 +40,7 @@ make run         # swift run
 3. `make install`
 4. `zip -X -r releases/YijianRili-v<版本>-macOS.app.zip 一键日历.app`
 5. 写 `releases/v<版本>.md`
-6. `git add -f 一键日历.app/Contents/MacOS/一键日历 一键日历.app/Contents/Info.plist`（`.app` 被 .gitignore 排除，要强推内部分文件）+ commit + push
+6. `git add -f 一键日历.app/Contents/Info.plist`（`.app` 被 .gitignore 排除，Info.plist 要强推）+ commit + push。**app 二进制不跟踪**——`一键日历.app/` 整个被忽略，发版产物由第 7/9 步的 GitHub Releases（zip + dmg）归档，不要往仓库里塞二进制
 7. `gh release create v<版本> <zip> --notes-file releases/v<版本>.md`
 8. 制作 dmg：hdiutil UDRW → AppleScript 设 Finder 布局 → hdiutil convert UDZO（详见 `retrospectives/v1.4.0.md`）
 9. `gh release upload v<版本> <dmg>`
