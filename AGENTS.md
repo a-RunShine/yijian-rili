@@ -40,7 +40,7 @@ make run         # swift run
 3. `make install`
 4. `zip -X -r releases/YijianRili-v<版本>-macOS.app.zip 一键日历.app`
 5. 写 `releases/v<版本>.md`
-6. `git add -f 一键日历.app/Contents/MacOS/一键日历 一键日历.app/Contents/Info.plist`（`.app` 被 .gitignore 排除，要强推内部分文件）+ commit + push
+6. `git add -f 一键日历.app/Contents/Info.plist`（`.app` 被 .gitignore 排除，Info.plist 要强推）+ commit + push。**app 二进制不跟踪**——`一键日历.app/` 整个被忽略，发版产物由第 7/9 步的 GitHub Releases（zip + dmg）归档，不要往仓库里塞二进制
 7. `gh release create v<版本> <zip> --notes-file releases/v<版本>.md`
 8. 制作 dmg：hdiutil UDRW → AppleScript 设 Finder 布局 → hdiutil convert UDZO（详见 `retrospectives/v1.4.0.md`）
 9. `gh release upload v<版本> <dmg>`
@@ -52,6 +52,9 @@ make run         # swift run
 ### 线程与并发
 
 - **所有 UI 类和 ViewModel 必须标记 `@MainActor`**，编译器会严格检查（`StrictConcurrency` 已启用）
+- **Services/ 下的 seam protocol 及其所有实现者（含测试 fake）统一标 `@MainActor`**：现有的 `CalendarService` / `CalendarEventStore` / `WeeklyEntryAppending` 全部如此。
+  原因是 Swift 6 不允许 `@MainActor` 类型满足 `nonisolated` 协议要求（报 `#ConformanceIsolation`）；而这些 seam 的实现在 EventKit 下要摸 `EKEventStore`（非 Sendable，约定固定线程访问），标 `nonisolated` 只会用未定义行为换编译通过。
+  **新增 seam 时连同实现类和测试 fake 一起标**，否则同样的编译错误会重演
 - `CalendarManager` 是 `@MainActor` 单例（`class CalendarManager: ObservableObject`），内部 `EKEventStore` 操作使用 `async/await`
 - `ReviewViewModel` 的测试需要 `@MainActor`，因为 `ReviewViewModel` 是 MainActor 隔离的
 
@@ -62,12 +65,14 @@ make run         # swift run
   - 通知名：`Notification.Name.createReviewSchedule`
   - 发送方：`一键日历App.swift` 中的 `CommandMenu`
   - 接收方：`ReviewViewModel.init()` 中注册的观察者
-- **视图拆分**：11 个子视图，主容器是 `ContentView`
+- **视图拆分**：15 个子视图，主容器是 `ContentView`
   - 输入/预览类：`TitleInputSection` / `DatePickerSection` / `ReviewPreviewSection` / `IntervalSettingsSection`
-  - 操作/反馈类：`ActionSection` / `HistorySection`（sheet）
+  - 操作/反馈类：`ActionSection` / `RecreateUndoSection` / `HistorySection`（sheet）
   - 日历/权限类：`CalendarPickerSection` / `FirstRunGuideView`（sheet，3 步配置云日历）
   - 窗口设置类：`WindowSettingsSection`（Toggle 控制 `windowFloating`）
   - 日程展示类：`TodayEventsSection`（昨天/今天/明天三段切换 + 卡片列表）
+  - 搜索类：`SearchSheetView` / `SearchResultDetailView`（sheet）
+  - 周末总结类：`WeeklyReviewView`（sheet，spec F1-F9）
 - **`IntervalSettingsSection` 的 `tempIntervals` 是本地 `@State`**，保存时才写入 `viewModel.reviewIntervals`
 
 ### 数据持久化
@@ -113,7 +118,29 @@ Sources/一键日历/
 ├── 一键日历App.swift              # 应用入口 + AppDelegate（窗口浮动层级）
 ├── Models/
 │   ├── ReviewEvent.swift          # 复习事件模型（日期计算 + 备注生成）
-│   └── HistoryEntry.swift         # 历史记录模型（Codable）
+│   ├── HistoryEntry.swift         # 历史记录模型（Codable）
+│   ├── WeeklyEntry.swift          # 周末总结条目（spec F3/F4）
+│   ├── CalendarModels.swift       # 日历权限/账户来源/CalendarInfo/结果类型（对齐 Windows）
+│   └── Theme.swift                # 主题与 ThemeProvider
+├── ViewModels/
+│   ├── ReviewSession.swift        # 无 UI 依赖的创建/撤销/预览核心（对齐 Windows ReviewSession）
+│   ├── DayBrowseModel.swift       # 按日列表 + 标题搜索 + 按 id 删除
+│   ├── ReviewViewModel.swift      # 界面 facade：观察转发 + 通知 + AppKit + sheet
+│   └── WeeklyReviewViewModel.swift # 周末总结状态容器（spec F1-F9，plan §3.2）
+├── Services/
+│   ├── CalendarService.swift      # 日历 seam interface（@MainActor）
+│   ├── CalendarManager.swift      # EventKit adapter（日历 seam 的生产实现）
+│   ├── InMemoryCalendarService.swift # 进程内 adapter，对齐 Windows 同名类型
+│   ├── CalendarEventStore.swift   # 窄 store seam：查找 + 保存全天事件（@MainActor）
+│   ├── CalendarWriteOrchestrator.swift # 写入日历编排：校验→算日→备注键→查重→写入
+│   ├── WriteRules.swift           # 间隔校验 / 备注键 / 备注规范化 / 重复判定
+│   ├── HistoryStore.swift         # 历史记录 store：capped JSON（默认 20）
+│   ├── WeeklyEntryAppending.swift # 周末总结 append seam（@MainActor，macOS 专有）
+│   └── CreateSuccessOutcomes.swift # 纯成功后的持久化编排（history + weekly 双写）
+├── Utils/
+│   ├── DateFormatter+Extension.swift # 日期格式化（中文长格式 + 短格式）
+│   ├── WeekCalculator.swift       # 周次计算（weekStart/weekEnd/weekKey）
+│   └── Color+Hex.swift            # Color ↔ hex 转换（日历账户色）
 ├── Views/
 │   ├── ContentView.swift          # 主容器（ScrollView + VStack）
 │   ├── TitleInputSection.swift    # 标题输入（TextField）
@@ -122,21 +149,22 @@ Sources/一键日历/
 │   ├── CalendarPickerSection.swift # 日历账户选择（Picker 按 source 分组）
 │   ├── FirstRunGuideView.swift    # 首次启动引导 sheet（3 步配置云日历）
 │   ├── ActionSection.swift        # 操作按钮（创建/撤销/结果提示/权限设置）
+│   ├── RecreateUndoSection.swift  # 重新创建 + 撤销区
 │   ├── HistorySection.swift       # 历史记录（ScrollView 最大高度 150）
 │   ├── IntervalSettingsSection.swift # 间隔设置（3 个 TextField + 校验）
 │   ├── WindowSettingsSection.swift   # 窗口置顶开关（Toggle）
-│   └── TodayEventsSection.swift   # 今日日程（卡片列表）
-├── ViewModels/
-│   └── ReviewViewModel.swift      # 业务逻辑 + AppStorage 读写 + 通知监听
-├── Services/
-│   └── CalendarManager.swift      # EventKit 单例封装（创建/撤销/重复检测/日历列表）
-├── Utils/
-│   └── DateFormatter+Extension.swift  # 日期格式化（中文长格式 + 短格式）
+│   ├── TodayEventsSection.swift   # 今日日程（昨天/今天/明天 + 卡片列表）
+│   ├── SearchSheetView.swift      # 日程搜索 sheet
+│   ├── SearchResultDetailView.swift # 搜索结果详情
+│   └── WeeklyReviewView.swift     # 周末总结 sheet 页面（spec F1-F9，plan §4.2）
 └── Resources/zh.lproj/
     └── Localizable.strings        # 中文本地化源文件
 
 Tests/一键日历Tests/
-└── 一键日历Tests.swift            # 单元测试
+├── 一键日历Tests.swift             # 原有单元测试（日期/模型/格式化/校验）
+├── CalendarWriteOrchestratorTests.swift # 规则层 + 写入编排（FakeCalendarEventStore）
+├── InMemoryCalendarServiceTests.swift   # 日历 seam 行为测试
+└── ReviewSessionTests.swift       # 创建成功 outcomes / 复习会话 / 日程浏览
 
 Package.swift                      # SPM 配置（swift-tools-version: 6.0）
 Info.plist                         # 应用元数据 + 权限声明

@@ -69,6 +69,7 @@ struct UndoResult: Sendable {
 enum CalendarError: LocalizedError, Sendable, Equatable {
     case defaultCalendarUnavailable
     case accessDenied
+    case invalidIntervals
 
     var errorDescription: String? {
         switch self {
@@ -76,6 +77,8 @@ enum CalendarError: LocalizedError, Sendable, Equatable {
             return NSLocalizedString("default_calendar_unavailable", comment: "")
         case .accessDenied:
             return NSLocalizedString("permission_required", comment: "")
+        case .invalidIntervals:
+            return "无效的复习间隔"
         }
     }
 }

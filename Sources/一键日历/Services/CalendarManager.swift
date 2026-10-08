@@ -5,8 +5,9 @@ import AppKit
 
 /// EventKit adapter（日历 seam 的 macOS 生产实现）。
 /// 类型名保留 `CalendarManager`；通过 `CalendarService` 对外，不向调用方泄露 EventKit 类型。
+/// create* 委托写入日历编排；本类型实现窄 `CalendarEventStore`。
 @MainActor
-final class CalendarManager: ObservableObject, CalendarService {
+final class CalendarManager: ObservableObject, CalendarService, CalendarEventStore {
     static let shared = CalendarManager()
     private let eventStore = EKEventStore()
     private let logger = Logger(subsystem: "com.yijianrili.app", category: "CalendarManager")
@@ -68,59 +69,18 @@ final class CalendarManager: ObservableObject, CalendarService {
         intervals: [Int],
         calendarId: String?
     ) async throws -> CreateEventsResult {
-        let reviewDates = ReviewEvent.calculateReviewDates(from: baseDate, intervals: intervals)
         let targetCalendar = try resolveEKCalendar(calendarId: calendarId)
-
-        var result = CreateEventsResult()
-        var createdIdentifiers: [String] = []
-
-        for (index, reviewDate) in reviewDates.enumerated() {
-            let noteText = String(format: NSLocalizedString("review_count", comment: ""), "\(index + 1)")
-            do {
-                let hasDuplicate = try checkDuplicate(
-                    title: title,
-                    date: reviewDate,
-                    notes: noteText,
-                    in: targetCalendar
-                )
-
-                let event = EKEvent(eventStore: eventStore)
-                event.title = title
-                event.startDate = reviewDate
-                event.endDate = reviewDate
-                event.isAllDay = true
-                event.notes = noteText
-                event.calendar = targetCalendar
-
-                let alarm = EKAlarm()
-                if let alarmDate = self.alarmDate(for: reviewDate) {
-                    alarm.absoluteDate = alarmDate
-                    event.alarms = [alarm]
-                }
-
-                try eventStore.save(event, span: .thisEvent)
-                result.created.append(reviewDate)
-
-                if let identifier = event.eventIdentifier {
-                    createdIdentifiers.append(identifier)
-                }
-
-                if hasDuplicate {
-                    result.duplicates.append(reviewDate)
-                }
-
-                logger.info("Created event for \(reviewDate.formattedChinese()) in calendar \(targetCalendar.title)")
-            } catch {
-                result.failed.append((reviewDate, error.localizedDescription))
-                logger.error("Failed to create event for \(reviewDate.formattedChinese()): \(error.localizedDescription)")
-            }
+        let outcome = try CalendarWriteOrchestrator.writeReview(
+            title: title,
+            baseDate: baseDate,
+            intervals: intervals,
+            calendarId: targetCalendar.calendarIdentifier,
+            store: self
+        )
+        if !outcome.createdEventIds.isEmpty {
+            lastCreatedEventIdentifiers = outcome.createdEventIds
         }
-
-        if !createdIdentifiers.isEmpty {
-            lastCreatedEventIdentifiers = createdIdentifiers
-        }
-
-        return result
+        return outcome.result
     }
 
     func createSingleEvent(
@@ -129,48 +89,62 @@ final class CalendarManager: ObservableObject, CalendarService {
         calendarId: String?
     ) async throws -> CreateEventsResult {
         let targetCalendar = try resolveEKCalendar(calendarId: calendarId)
-        var result = CreateEventsResult()
-        var createdIdentifiers: [String] = []
+        let outcome = try CalendarWriteOrchestrator.writeSingle(
+            title: title,
+            date: date,
+            calendarId: targetCalendar.calendarIdentifier,
+            store: self
+        )
+        if !outcome.createdEventIds.isEmpty {
+            lastCreatedEventIdentifiers = outcome.createdEventIds
+        }
+        return outcome.result
+    }
 
-        do {
-            let hasDuplicate = try checkDuplicate(title: title, date: date, notes: "", in: targetCalendar)
+    // MARK: - CalendarEventStore
 
-            let event = EKEvent(eventStore: eventStore)
-            event.title = title
-            event.startDate = date
-            event.endDate = date
-            event.isAllDay = true
-            event.notes = ""
-            event.calendar = targetCalendar
+    func events(calendarId: String, day: Date) throws -> [StoredCalendarEvent] {
+        guard let ekCalendar = eventStore.calendar(withIdentifier: calendarId) else { return [] }
+        let cal = Calendar.current
+        let startOfDay = cal.startOfDay(for: day)
+        guard let endOfDay = cal.date(byAdding: .day, value: 1, to: startOfDay) else { return [] }
+        let predicate = eventStore.predicateForEvents(
+            withStart: startOfDay,
+            end: endOfDay,
+            calendars: [ekCalendar]
+        )
+        return eventStore.events(matching: predicate).map { event in
+            StoredCalendarEvent(
+                id: event.eventIdentifier ?? UUID().uuidString,
+                title: event.title ?? "",
+                day: cal.startOfDay(for: event.startDate),
+                rawNotes: event.notes ?? ""
+            )
+        }
+    }
 
-            let alarm = EKAlarm()
-            if let alarmDate = self.alarmDate(for: date) {
-                alarm.absoluteDate = alarmDate
-                event.alarms = [alarm]
-            }
+    func saveAllDay(calendarId: String, title: String, day: Date, notesKey: String) throws -> String {
+        guard let targetCalendar = eventStore.calendar(withIdentifier: calendarId),
+              targetCalendar.allowsContentModifications else {
+            throw CalendarError.defaultCalendarUnavailable
+        }
+        let event = EKEvent(eventStore: eventStore)
+        event.title = title
+        event.startDate = day
+        event.endDate = day
+        event.isAllDay = true
+        event.notes = notesKey
+        event.calendar = targetCalendar
 
-            try eventStore.save(event, span: .thisEvent)
-            result.created.append(date)
-
-            if let identifier = event.eventIdentifier {
-                createdIdentifiers.append(identifier)
-            }
-
-            if hasDuplicate {
-                result.duplicates.append(date)
-            }
-
-            logger.info("Created single event for \(date.formattedChinese()) in calendar \(targetCalendar.title)")
-        } catch {
-            result.failed.append((date, error.localizedDescription))
-            logger.error("Failed to create single event for \(date.formattedChinese()): \(error.localizedDescription)")
+        let alarm = EKAlarm()
+        if let alarmDate = self.alarmDate(for: day) {
+            alarm.absoluteDate = alarmDate
+            event.alarms = [alarm]
         }
 
-        if !createdIdentifiers.isEmpty {
-            lastCreatedEventIdentifiers = createdIdentifiers
-        }
-
-        return result
+        try eventStore.save(event, span: .thisEvent)
+        logger.info("Created event for \(day.formattedChinese()) in calendar \(targetCalendar.title)")
+        return event.eventIdentifier ?? UUID().uuidString
     }
 
     func undoLastCreation() async -> UndoResult {
@@ -280,19 +254,6 @@ final class CalendarManager: ObservableObject, CalendarService {
         }
         logger.error("Default calendar is unavailable")
         throw CalendarError.defaultCalendarUnavailable
-    }
-
-    private func checkDuplicate(title: String, date: Date, notes: String, in calendar: EKCalendar) throws -> Bool {
-        let cal = Calendar.current
-        let startOfDay = cal.startOfDay(for: date)
-        guard let endOfDay = cal.date(byAdding: .day, value: 1, to: startOfDay) else {
-            return false
-        }
-
-        let predicate = eventStore.predicateForEvents(withStart: startOfDay, end: endOfDay, calendars: [calendar])
-        let events = eventStore.events(matching: predicate)
-
-        return events.contains { $0.title == title && $0.notes == notes }
     }
 
     private func alarmDate(for date: Date) -> Date? {

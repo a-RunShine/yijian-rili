@@ -3,10 +3,25 @@ import SwiftUI
 import AppKit
 import Combine
 
+/// 界面 facade：观察转发 + NotificationCenter + AppKit + sheet；业务在复习会话 / 日程浏览。
 @MainActor
 class ReviewViewModel: ObservableObject {
-    @Published var title: String = ""
-    @Published var baseDate: Date = Date()
+    typealias ResultType = ReviewSession.ResultType
+    typealias ScheduleMode = ReviewSession.ScheduleMode
+    typealias DayType = DayBrowseModel.DayType
+
+    let session: ReviewSession
+    let browse: DayBrowseModel
+    let historyStore: HistoryStore
+    private let calendar: CalendarService
+    private let outcomes: CreateSuccessOutcomes
+
+    @Published var title: String = "" {
+        didSet { session.title = title }
+    }
+    @Published var baseDate: Date = Date() {
+        didSet { session.baseDate = baseDate }
+    }
     @Published var reviewDates: [Date] = []
     @Published var authorizationStatus: CalendarAccessStatus = .notDetermined
     @Published var isLoading: Bool = false
@@ -18,204 +33,154 @@ class ReviewViewModel: ObservableObject {
     @Published var showFirstRunGuide: Bool = false
     @Published var showHelpGuide: Bool = false
     @Published var showSearch: Bool = false
-    @Published var searchText: String = ""
+    @Published var searchText: String = "" {
+        didSet { browse.searchText = searchText }
+    }
     @Published var searchResults: [CalendarEventInfo] = []
-    @Published var selectedSearchResult: CalendarEventInfo?
+    @Published var selectedSearchResult: CalendarEventInfo? {
+        didSet { browse.selectedSearchResult = selectedSearchResult }
+    }
     @Published var displayedEvents: [CalendarEventInfo] = []
     @Published var historySearchText: String = ""
-    @Published var scheduleMode: ScheduleMode = .review
+    @Published var scheduleMode: ScheduleMode = .review {
+        didSet { session.scheduleMode = scheduleMode }
+    }
     @Published var currentTheme: Theme = {
         let rawValue = UserDefaults.standard.string(forKey: "themeName") ?? Theme.light.rawValue
         return Theme(rawValue: rawValue) ?? .light
     }()
-    
-    /// 桥接日历 seam 的日历列表（按 source 分组，本地排最后）
+
     @Published var availableCalendars: [CalendarInfo] = []
     @Published var hasCloudCalendar: Bool = false
-    
-    /// 最近一次创建的标题和日期，用于「再建一个」
-    private var lastCreatedTitle: String?
-    private var lastCreatedBaseDate: Date?
-    
-    /// JSON 编码的历史记录数组
-    @AppStorage("historyEntriesData") private var historyEntriesData: String = ""
-    /// 用户选中的目标日历 identifier（空字符串 = 跟随系统默认）
-    @AppStorage("selectedCalendarIdentifier") var selectedCalendarIdentifier: String = ""
-    /// 是否已经展示过首次启动引导
+
+    /// 触发 SwiftUI 刷新历史列表（HistoryStore 变更后递增）。
+    @Published private(set) var historyRevision: Int = 0
+
+    @AppStorage("selectedCalendarIdentifier") var selectedCalendarIdentifier: String = "" {
+        didSet {
+            session.selectedCalendarIdentifier = selectedCalendarIdentifier
+            session.persistSelectedCalendar()
+        }
+    }
     @AppStorage("hasShownFirstRunGuide") private var hasShownFirstRunGuide: Bool = false
-    /// 写入日历 Section 折叠状态（默认折叠，展开后记住）
     @AppStorage("calendarPickerExpanded") var calendarPickerExpanded: Bool = false
-    /// 窗口设置 Section 折叠状态（默认折叠，展开后记住）
     @AppStorage("windowSettingsExpanded") var windowSettingsExpanded: Bool = false
-    
-    /// 复习间隔数组，默认 [3, 7, 30]，通过 @Published 触发 SwiftUI 刷新
-    @Published var reviewIntervals: [Int] = {
-        let raw = UserDefaults.standard.string(forKey: "reviewIntervalsData") ?? "[3,7,30]"
-        guard let data = raw.data(using: .utf8),
-              let intervals = try? JSONDecoder().decode([Int].self, from: data) else {
-            return [3, 7, 30]
-        }
-        return intervals
-    }() {
+
+    @Published var reviewIntervals: [Int] = IntervalRules.defaultIntervals {
         didSet {
-            if let data = try? JSONEncoder().encode(reviewIntervals),
-               let string = String(data: data, encoding: .utf8) {
-                UserDefaults.standard.set(string, forKey: "reviewIntervalsData")
-            }
+            session.reviewIntervals = reviewIntervals
+            session.persistIntervals()
         }
     }
-    
-    /// 自定义预设数组，通过 @Published 触发 SwiftUI 刷新
-    @Published var customPresets: [CustomPreset] = {
-        let raw = UserDefaults.standard.string(forKey: "customPresetsData") ?? "[]"
-        guard let data = raw.data(using: .utf8),
-              let presets = try? JSONDecoder().decode([CustomPreset].self, from: data) else {
-            return []
-        }
-        return presets
-    }() {
+
+    @Published var customPresets: [CustomPreset] = [] {
         didSet {
-            if let data = try? JSONEncoder().encode(customPresets),
-               let string = String(data: data, encoding: .utf8) {
-                UserDefaults.standard.set(string, forKey: "customPresetsData")
-            }
+            session.customPresets = customPresets
+            session.persistCustomPresets()
         }
     }
-    
 
     var historyEntries: [HistoryEntry] {
-        get {
-            guard let data = historyEntriesData.data(using: .utf8),
-                  let entries = try? JSONDecoder().decode([HistoryEntry].self, from: data) else {
-                return []
-            }
-            return entries
-        }
-        set {
-            if let data = try? JSONEncoder().encode(newValue),
-               let string = String(data: data, encoding: .utf8) {
-                historyEntriesData = string
-            }
-        }
+        _ = historyRevision
+        return historyStore.load()
     }
-    
-    private let calendar: CalendarService
+
     private var notificationToken: Any?
     private var activeToken: Any?
     private var resultDismissTask: Task<Void, Never>?
     private var cancellables = Set<AnyCancellable>()
-    
-    /// 当前选中的日历（identifier 失效时返回 nil，会回退到系统默认）
-    var selectedCalendar: CalendarInfo? {
-        guard !selectedCalendarIdentifier.isEmpty else { return nil }
-        return calendar.calendar(withIdentifier: selectedCalendarIdentifier)
-    }
-    
-    /// 当前选中的是否是本地日历（用于 UI 警告）
-    var isSelectedCalendarLocal: Bool {
-        selectedCalendar?.sourceKind == .local
-    }
-    
-    /// 选中的日历显示名（identifier 为空时显示"系统默认"）
-    var selectedCalendarDisplayName: String {
-        if let cal = selectedCalendar { return cal.displayName }
-        return NSLocalizedString("calendar_default_label", comment: "")
-    }
-    
-    enum ResultType {
-        case success
-        case warning
-        case error
-    }
 
-    /// 日程创建模式：艾宾浩斯复习计划（默认） 或 单次日程
-    enum ScheduleMode: String, CaseIterable, Identifiable {
-        case review
-        case single
+    var selectedCalendar: CalendarInfo? { session.selectedCalendar }
+    var isSelectedCalendarLocal: Bool { session.isSelectedCalendarLocal }
+    var selectedCalendarDisplayName: String { session.selectedCalendarDisplayName }
 
-        var id: String { rawValue }
-
-        var displayName: String {
-            switch self {
-            case .review: return NSLocalizedString("schedule_mode_review", comment: "")
-            case .single: return NSLocalizedString("schedule_mode_single", comment: "")
-            }
-        }
-    }
-
-    /// - Parameter calendar: 日历 seam；生产默认 EventKit adapter（`CalendarManager.shared`），测试注入 in-memory。
+    /// - Parameter calendar: 日历 seam；生产默认 EventKit adapter。
     init(calendar: CalendarService = CalendarManager.shared) {
         self.calendar = calendar
-        authorizationStatus = calendar.checkAuthorizationStatus()
-        updateReviewDates()
-        
-        syncCalendarStateFromSeam()
+        let history = HistoryStore()
+        let weekly = WeeklyReviewViewModel()
+        let outcomes = CreateSuccessOutcomes(history: history, weekly: weekly)
+        self.historyStore = history
+        self.weeklyReviewViewModel = weekly
+        self.outcomes = outcomes
+
+        let storedCalendarId = UserDefaults.standard.string(forKey: "selectedCalendarIdentifier") ?? ""
+        self.session = ReviewSession(
+            calendar: calendar,
+            outcomes: outcomes,
+            selectedCalendarIdentifier: storedCalendarId
+        )
+        self.browse = DayBrowseModel(calendar: calendar)
+
+        title = session.title
+        baseDate = session.baseDate
+        reviewDates = session.reviewDates
+        scheduleMode = session.scheduleMode
+        reviewIntervals = session.reviewIntervals
+        customPresets = session.customPresets
+        selectedCalendarIdentifier = session.selectedCalendarIdentifier
+        pullSessionChrome()
+        pullBrowseState()
+
         if let manager = calendar as? CalendarManager {
             manager.$availableCalendars
                 .receive(on: DispatchQueue.main)
-                .assign(to: &$availableCalendars)
+                .sink { [weak self] calendars in
+                    self?.availableCalendars = calendars
+                    self?.session.availableCalendars = calendars
+                }
+                .store(in: &cancellables)
             manager.$hasCloudCalendar
                 .receive(on: DispatchQueue.main)
-                .assign(to: &$hasCloudCalendar)
+                .sink { [weak self] value in
+                    self?.hasCloudCalendar = value
+                    self?.session.hasCloudCalendar = value
+                }
+                .store(in: &cancellables)
             manager.$authorizationStatus
                 .receive(on: DispatchQueue.main)
-                .assign(to: &$authorizationStatus)
+                .sink { [weak self] status in
+                    self?.authorizationStatus = status
+                    self?.session.authorizationStatus = status
+                }
+                .store(in: &cancellables)
         }
-        
-        // 若用户之前选中的日历已失效（如被删除/账户注销），自动清空
-        if !selectedCalendarIdentifier.isEmpty,
-           calendar.calendar(withIdentifier: selectedCalendarIdentifier) == nil {
-            selectedCalendarIdentifier = ""
-        }
-        
+
         notificationToken = NotificationCenter.default.addObserver(
             forName: .createReviewSchedule,
             object: nil,
             queue: .main
         ) { [weak self] _ in
-            Task {
-                await self?.createReviewSchedule()
-            }
+            Task { await self?.createReviewSchedule() }
         }
-        
+
         activeToken = NotificationCenter.default.addObserver(
             forName: .appDidBecomeActive,
             object: nil,
             queue: .main
         ) { [weak self] _ in
             Task { @MainActor [weak self] in
-                guard let self = self else { return }
-                // 用户在系统设置里改了账户后，回来重新扫描
-                self.calendar.refreshAvailableCalendars()
-                self.syncCalendarStateFromSeam()
+                guard let self else { return }
+                self.session.refreshCalendars()
+                self.pullSessionChrome()
                 if self.authorizationStatus == .fullAccess {
                     self.loadDisplayedDayEvents()
                 }
             }
         }
-        
-        // 启动时请求权限并加载今天日程
+
         Task { @MainActor [weak self] in
-            guard let self = self else { return }
+            guard let self else { return }
             if self.authorizationStatus == .notDetermined {
-                let granted = await self.calendar.requestAccess()
-                self.authorizationStatus = self.calendar.checkAuthorizationStatus()
-                self.syncCalendarStateFromSeam()
-                if granted {
-                    self.loadDisplayedDayEvents()
-                }
+                let granted = await self.session.requestAccessIfNeeded()
+                self.pullSessionChrome()
+                if granted { self.loadDisplayedDayEvents() }
             } else if self.authorizationStatus == .fullAccess {
                 self.loadDisplayedDayEvents()
             }
         }
     }
 
-    private func syncCalendarStateFromSeam() {
-        availableCalendars = calendar.availableCalendars
-        hasCloudCalendar = calendar.hasCloudCalendar
-        authorizationStatus = calendar.authorizationStatus
-    }
-    
     @MainActor
     deinit {
         if let token = notificationToken {
@@ -225,235 +190,93 @@ class ReviewViewModel: ObservableObject {
             NotificationCenter.default.removeObserver(token)
         }
     }
-    
-    func updateReviewDates() {
-        switch scheduleMode {
-        case .review:
-            reviewDates = ReviewEvent.calculateReviewDates(from: baseDate, intervals: reviewIntervals)
-        case .single:
-            reviewDates = [baseDate]
-        }
+
+    private func pullSessionChrome() {
+        authorizationStatus = session.authorizationStatus
+        availableCalendars = session.availableCalendars
+        hasCloudCalendar = session.hasCloudCalendar
+        isLoading = session.isLoading
+        resultMessage = session.resultMessage
+        resultType = session.resultType
+        canUndo = session.canUndo
+        canRecreate = session.canRecreate
+        reviewDates = session.reviewDates
+        title = session.title
+        baseDate = session.baseDate
+        selectedCalendarIdentifier = session.selectedCalendarIdentifier
     }
-    
-    /// 主流程：创建复习提醒日程
-    /// 1. 校验标题（非空、≤100字符）
-    /// 2. 检查/请求日历权限
-    /// 3. 调用 CalendarManager 创建事件
-    /// 4. 处理结果并更新 UI
+
+    private func pullBrowseState() {
+        displayedEvents = browse.displayedEvents
+        searchResults = browse.searchResults
+        selectedSearchResult = browse.selectedSearchResult
+        searchText = browse.searchText
+        selectedDayType = browse.selectedDayType
+    }
+
+    private func pushInputsToSession() {
+        session.title = title
+        session.baseDate = baseDate
+        session.scheduleMode = scheduleMode
+        session.reviewIntervals = reviewIntervals
+        session.customPresets = customPresets
+        session.selectedCalendarIdentifier = selectedCalendarIdentifier
+    }
+
+    func updateReviewDates() {
+        pushInputsToSession()
+        session.updateReviewDates()
+        reviewDates = session.reviewDates
+    }
+
     func createReviewSchedule() async {
-        let trimmedTitle = title.trimmingCharacters(in: .whitespaces)
-        
-        guard !trimmedTitle.isEmpty else {
-            resultMessage = NSLocalizedString("empty_title_error", comment: "")
-            resultType = .error
-            return
+        pushInputsToSession()
+        await session.create()
+        pullSessionChrome()
+        if session.consumeHapticFlag() {
+            NSHapticFeedbackManager.defaultPerformer.perform(.generic, performanceTime: .now)
         }
-        
-        guard trimmedTitle.count <= 100 else {
-            resultMessage = NSLocalizedString("title_too_long_error", comment: "")
-            resultType = .error
-            return
+        if session.resultType == .success {
+            refreshHistoryProjection()
+            loadDisplayedDayEvents()
         }
-        
-        isLoading = true
-        defer { isLoading = false }
-        
-        // Check and request permission if needed
-        if authorizationStatus == .notDetermined {
-            let granted = await calendar.requestAccess()
-            authorizationStatus = calendar.checkAuthorizationStatus()
-            syncCalendarStateFromSeam()
-            if !granted {
-                resultMessage = NSLocalizedString("permission_required", comment: "")
-                resultType = .error
-                return
-            }
-        } else if authorizationStatus == .denied {
-            resultMessage = NSLocalizedString("permission_denied", comment: "")
-            resultType = .error
-            return
-        }
-        
-        do {
-            let targetCalendar = selectedCalendar
-            // 选中失效的 identifier 时回退到系统默认，并提示
-            if !selectedCalendarIdentifier.isEmpty && targetCalendar == nil {
-                resultMessage = NSLocalizedString("calendar_selection_invalid", comment: "")
-                resultType = .warning
-                selectedCalendarIdentifier = ""
-                scheduleResultDismissal()
-                return
-            }
-
-            let calendarId = targetCalendar?.identifier
-            let createResult: CreateEventsResult
-            switch scheduleMode {
-            case .review:
-                createResult = try await calendar.createReviewEvents(
-                    title: trimmedTitle,
-                    baseDate: baseDate,
-                    intervals: reviewIntervals,
-                    calendarId: calendarId
-                )
-            case .single:
-                createResult = try await calendar.createSingleEvent(
-                    title: trimmedTitle,
-                    date: baseDate,
-                    calendarId: calendarId
-                )
-            }
-            let created = createResult.created
-            let duplicates = createResult.duplicates
-            let failed = createResult.failed
-
-            if !failed.isEmpty {
-                let failedDates = failed.map { $0.date.formattedChinese() }.joined(separator: "、")
-                resultMessage = String(format: NSLocalizedString("error_message", comment: ""), failedDates)
-                resultType = .error
-            } else if !duplicates.isEmpty {
-                let dupDates = duplicates.map { $0.formattedChinese() }.joined(separator: "、")
-                resultMessage = String(format: NSLocalizedString("warning_message", comment: ""), dupDates)
-                resultType = .warning
-            } else {
-                if scheduleMode == .single {
-                    let dateString = baseDate.formattedChinese()
-                    resultMessage = String(format: NSLocalizedString("single_success_message", comment: ""), dateString)
-                } else {
-                    let createdDates = created.map { $0.formattedChinese() }.joined(separator: "、")
-                    resultMessage = String(format: NSLocalizedString("success_message", comment: ""), createdDates)
-                }
-                resultType = .success
-
-                NSHapticFeedbackManager.defaultPerformer.perform(.generic, performanceTime: .now)
-
-                // Save for recreate
-                lastCreatedTitle = trimmedTitle
-                lastCreatedBaseDate = baseDate
-                canRecreate = true
-
-                // Add to history (同步写入 weekly entries，spec F8 不受 20 上限影响)
-                addHistoryEntry(
-                    title: trimmedTitle,
-                    baseDate: baseDate,
-                    reviewDates: created,
-                    type: scheduleMode == .single ? .single : .review
-                )
-
-                // Enable undo
-                canUndo = true
-
-                // Clear inputs after success
-                title = ""
-                baseDate = Date()
-                updateReviewDates()
-
-                // 刷新当前查看的日程
-                loadDisplayedDayEvents()
-            }
-        } catch {
-            resultMessage = error.localizedDescription
-            resultType = .error
-        }
-
         scheduleResultDismissal()
     }
-    
-    /// 撤销最近一次创建的复习日程
+
     func undoReviewSchedule() async {
-        let undo = await calendar.undoLastCreation()
-        let title = lastCreatedTitle ?? ""
-        
-        if undo.success {
-            if title.isEmpty {
-                resultMessage = String(format: NSLocalizedString("undo_success", comment: ""), "\(undo.deletedCount)")
-            } else {
-                resultMessage = String(format: NSLocalizedString("undo_success_with_title", comment: ""), title, "\(undo.deletedCount)")
-            }
-            resultType = .success
-        } else {
-            resultMessage = String(format: NSLocalizedString("undo_partial", comment: ""), "\(undo.alreadyDeletedCount)")
-            resultType = .warning
-        }
-        
-        canUndo = false
-        canRecreate = false
+        await session.undo()
+        pullSessionChrome()
         loadDisplayedDayEvents()
         scheduleResultDismissal()
     }
-    
+
     func openSystemSettings() {
         if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Calendars") {
             NSWorkspace.shared.open(url)
         }
     }
-    
-    // MARK: - Day Events
-    
-    enum DayType: String, CaseIterable, Identifiable {
-        case yesterday
-        case today
-        case tomorrow
-        
-        var id: String { rawValue }
-        
-        var label: String {
-            switch self {
-            case .yesterday: return NSLocalizedString("yesterday_button", comment: "")
-            case .today: return NSLocalizedString("today_button", comment: "")
-            case .tomorrow: return NSLocalizedString("tomorrow_button", comment: "")
-            }
-        }
-        
-        var dayOffset: Int {
-            switch self {
-            case .yesterday: return -1
-            case .today: return 0
-            case .tomorrow: return 1
-            }
-        }
-        
-        var sectionTitle: String {
-            switch self {
-            case .yesterday: return NSLocalizedString("yesterday_events", comment: "")
-            case .today: return NSLocalizedString("today_events", comment: "")
-            case .tomorrow: return NSLocalizedString("tomorrow_events", comment: "")
-            }
-        }
-        
-        var emptyHint: String {
-            switch self {
-            case .yesterday: return NSLocalizedString("yesterday_no_events", comment: "")
-            case .today: return NSLocalizedString("today_no_events", comment: "")
-            case .tomorrow: return NSLocalizedString("tomorrow_no_events", comment: "")
-            }
-        }
+
+    @Published var selectedDayType: DayType = .today {
+        didSet { browse.selectedDayType = selectedDayType }
     }
-    
-    /// 当前查看的日期类型（默认今天，不持久化）
-    @Published var selectedDayType: DayType = .today
-    
-    /// 当前查看的日期（由 selectedDayType 计算）
-    var displayedDate: Date {
-        date(for: selectedDayType)
-    }
-    
+
+    var displayedDate: Date { browse.displayedDate }
+
     func date(for dayType: DayType) -> Date {
-        Calendar.current.date(byAdding: .day, value: dayType.dayOffset, to: Date()) ?? Date()
+        browse.date(for: dayType)
     }
-    
+
     func loadDisplayedDayEvents() {
-        displayedEvents = calendar.fetchEvents(on: displayedDate)
+        browse.loadDisplayedDayEvents()
+        displayedEvents = browse.displayedEvents
     }
-    
-    /// 用户切换日期按钮时调用
+
     func selectDayType(_ dayType: DayType) {
-        selectedDayType = dayType
-        loadDisplayedDayEvents()
+        browse.selectDayType(dayType)
+        selectedDayType = browse.selectedDayType
+        displayedEvents = browse.displayedEvents
     }
-    
-    // MARK: - Result Auto-Dismiss
-    
-    /// 成功/警告提示 4 秒后自动消失，错误提示保留
+
     private func scheduleResultDismissal() {
         resultDismissTask?.cancel()
         guard resultType == .success || resultType == .warning else { return }
@@ -463,178 +286,127 @@ class ReviewViewModel: ObservableObject {
             await MainActor.run {
                 self?.resultMessage = nil
                 self?.resultType = nil
+                self?.session.resultMessage = nil
+                self?.session.resultType = nil
             }
         }
     }
-    
-    // MARK: - Recreate
 
     func recreateLastSchedule() {
-        guard let title = lastCreatedTitle, let baseDate = lastCreatedBaseDate else { return }
-        self.title = title
-        self.baseDate = baseDate
-        updateReviewDates()
-        canRecreate = false
-    }
-    
-    // MARK: - History
-    
-    private func addHistoryEntry(title: String,
-                                  baseDate: Date,
-                                  reviewDates: [Date],
-                                  type: HistoryEntry.ScheduleType = .review) {
-        var entries = historyEntries
-        let newEntry = HistoryEntry(
-            title: title,
-            baseDate: baseDate,
-            reviewDates: reviewDates,
-            creationDate: Date(),
-            type: type
-        )
-        entries.insert(newEntry, at: 0)
-
-        // Limit to 20 entries
-        if entries.count > 20 {
-            entries = Array(entries.prefix(20))
-        }
-
-        historyEntries = entries
-
-        // 同步追加 weekly entry（独立存储，不受 20 上限影响，spec F8）
-        weeklyReviewViewModel.appendWeeklyEntry(from: newEntry)
+        session.recreateLastSchedule()
+        pullSessionChrome()
+        canRecreate = session.canRecreate
     }
 
-    // MARK: - 周末总结
+    private func refreshHistoryProjection() {
+        historyRevision &+= 1
+    }
 
-    /// 周末总结入口：懒构造 ViewModel（避免 init 时抢占 AppStorage 默认值）
-    lazy var weeklyReviewViewModel: WeeklyReviewViewModel = {
-        WeeklyReviewViewModel()
-    }()
+    let weeklyReviewViewModel: WeeklyReviewViewModel
 
-    /// 显示周末总结 sheet（spec F1）
     @Published var showWeeklyReview: Bool = false
 
     func openWeeklyReview() {
-        // 每次打开跳到当前周
         weeklyReviewViewModel.jumpToCurrentWeek()
         showWeeklyReview = true
     }
-    
+
     func selectHistoryEntry(_ entry: HistoryEntry) {
-        title = entry.title
-        baseDate = entry.baseDate
-        updateReviewDates()
+        session.selectHistoryEntry(entry)
+        pullSessionChrome()
         showHistory = false
     }
-    
+
     func clearHistory() {
-        historyEntries = []
-    }
-    
-    func deleteHistoryEntry(at offsets: IndexSet) {
-        var entries = historyEntries
-        entries.remove(atOffsets: offsets)
-        historyEntries = entries
-    }
-    
-    var filteredHistoryEntries: [HistoryEntry] {
-        guard !historySearchText.isEmpty else { return historyEntries }
-        return historyEntries.filter { $0.title.localizedCaseInsensitiveContains(historySearchText) }
-    }
-    
-    // MARK: - Interval Presets
-    
-    func applyPreset(_ preset: IntervalPreset) {
-        reviewIntervals = preset.intervals
-        updateReviewDates()
-    }
-    
-    // MARK: - Interval Settings
-    
-    func resetIntervalsToDefault() {
-        reviewIntervals = [3, 7, 30]
-        updateReviewDates()
-    }
-    
-    func validateIntervals(_ intervals: [Int]) -> Bool {
-        guard !intervals.isEmpty else { return false }
-        guard intervals.count <= 10 else { return false }
-        // 每个间隔必须在 1~365 范围内
-        guard intervals.allSatisfy({ $0 >= 1 && $0 <= 365 }) else { return false }
-        // 间隔必须严格递增（不允许时间倒退的复习计划）
-        for i in 1..<intervals.count {
-            if intervals[i] <= intervals[i - 1] { return false }
-        }
-        return true
+        outcomes.clearHistory()
+        refreshHistoryProjection()
     }
 
-    // MARK: - Custom Presets
+    func deleteHistoryEntry(_ entry: HistoryEntry) {
+        outcomes.removeHistory(id: entry.id)
+        refreshHistoryProjection()
+    }
+
+    func deleteHistoryEntry(at offsets: IndexSet) {
+        let entries = historyEntries
+        for index in offsets {
+            guard entries.indices.contains(index) else { continue }
+            outcomes.removeHistory(id: entries[index].id)
+        }
+        refreshHistoryProjection()
+    }
+
+    var filteredHistoryEntries: [HistoryEntry] {
+        historyStore.filter(historySearchText)
+    }
+
+    func applyPreset(_ preset: IntervalPreset) {
+        session.applyPreset(preset)
+        reviewIntervals = session.reviewIntervals
+        reviewDates = session.reviewDates
+    }
+
+    func resetIntervalsToDefault() {
+        session.resetIntervalsToDefault()
+        reviewIntervals = session.reviewIntervals
+        reviewDates = session.reviewDates
+    }
+
+    func validateIntervals(_ intervals: [Int]) -> Bool {
+        session.validateIntervals(intervals)
+    }
 
     func saveCustomPreset(name: String) {
-        let trimmed = name.trimmingCharacters(in: .whitespaces)
-        guard !trimmed.isEmpty else { return }
-        // 防止重名
-        guard !customPresets.contains(where: { $0.name == trimmed }) else { return }
-        let preset = CustomPreset(name: trimmed, intervals: reviewIntervals)
-        var presets = customPresets
-        presets.append(preset)
-        customPresets = presets
+        session.reviewIntervals = reviewIntervals
+        session.saveCustomPreset(name: name)
+        customPresets = session.customPresets
     }
 
     func applyCustomPreset(_ preset: CustomPreset) {
-        reviewIntervals = preset.intervals
-        updateReviewDates()
+        session.applyCustomPreset(preset)
+        reviewIntervals = session.reviewIntervals
+        reviewDates = session.reviewDates
     }
 
     func deleteCustomPreset(id: UUID) {
-        customPresets = customPresets.filter { $0.id != id }
+        session.deleteCustomPreset(id: id)
+        customPresets = session.customPresets
     }
 
     func hasDuplicatePresetName(_ name: String) -> Bool {
-        let trimmed = name.trimmingCharacters(in: .whitespaces)
-        return customPresets.contains(where: { $0.name == trimmed })
+        session.hasDuplicatePresetName(name)
     }
-    
-    // MARK: - Window Settings
-    
-    /// 窗口是否置顶（浮动层级）。默认 true，老用户行为不变
+
     @Published var windowFloating: Bool = UserDefaults.standard.object(forKey: "windowFloating") as? Bool ?? true {
         didSet { UserDefaults.standard.set(windowFloating, forKey: "windowFloating") }
     }
-    
-    /// 把当前 windowFloating 偏好应用到所有窗口
+
     func applyWindowLevel() {
         let level: NSWindow.Level = windowFloating ? .floating : .normal
         NSApp.windows.forEach { $0.level = level }
     }
-    
-    // MARK: - First Run Guide
-    
-    /// 启动 3 秒后若没有云日历且未引导过，自动弹出引导
+
     func scheduleFirstRunGuideIfNeeded() {
         guard !hasShownFirstRunGuide else { return }
         guard authorizationStatus == .fullAccess else { return }
         guard !hasCloudCalendar else { return }
-        
+
         Task { @MainActor [weak self] in
             try? await Task.sleep(nanoseconds: 3_000_000_000)
-            guard let self = self, !Task.isCancelled else { return }
-            // 再次校验（3s 内用户可能已经手动加账户）
+            guard let self, !Task.isCancelled else { return }
             guard !self.hasShownFirstRunGuide, !self.hasCloudCalendar else { return }
             self.showFirstRunGuide = true
         }
     }
-    
+
     func dismissFirstRunGuide() {
         showFirstRunGuide = false
         hasShownFirstRunGuide = true
     }
-    
+
     func openHelpGuide() {
         showHelpGuide = true
     }
-    
-    // MARK: - Theme
 
     func setTheme(_ theme: Theme) {
         withAnimation(.easeInOut(duration: 0.3)) {
@@ -643,37 +415,27 @@ class ReviewViewModel: ObservableObject {
         UserDefaults.standard.set(theme.rawValue, forKey: "themeName")
     }
 
-    // MARK: - Search
-
-    /// 在未来 90 天内搜索标题包含关键词的事件
     func performSearch() {
-        let trimmed = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else {
-            searchResults = []
-            return
-        }
-        searchResults = calendar.searchEvents(query: trimmed, daysAhead: 90)
+        browse.searchText = searchText
+        browse.performSearch()
+        searchResults = browse.searchResults
     }
 
-    /// 删除搜索到的单条日程，成功后从 searchResults 移除
     @discardableResult
     func deleteSearchResult(_ event: CalendarEventInfo) -> Bool {
-        let success = calendar.deleteEvent(id: event.id)
-        if success {
-            searchResults.removeAll { $0.id == event.id }
-        }
+        let success = browse.deleteSearchResult(event)
+        searchResults = browse.searchResults
+        selectedSearchResult = browse.selectedSearchResult
+        displayedEvents = browse.displayedEvents
         return success
     }
 
-    /// 关闭搜索 sheet 时重置状态
     func resetSearch() {
-        searchText = ""
-        searchResults = []
-        selectedSearchResult = nil
+        browse.resetSearch()
+        pullBrowseState()
     }
 }
 
-/// 用户自定义预设方案
 struct CustomPreset: Codable, Identifiable, Equatable {
     let id: UUID
     let name: String
@@ -690,7 +452,7 @@ enum IntervalPreset: String, CaseIterable {
     case classic
     case exam
     case daily
-    
+
     var displayName: String {
         switch self {
         case .classic: return NSLocalizedString("preset_classic", comment: "")
@@ -698,7 +460,7 @@ enum IntervalPreset: String, CaseIterable {
         case .daily: return NSLocalizedString("preset_daily", comment: "")
         }
     }
-    
+
     var intervals: [Int] {
         switch self {
         case .classic: return [1, 2, 4, 7, 15]
