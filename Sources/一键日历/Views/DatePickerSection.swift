@@ -1,7 +1,13 @@
 import SwiftUI
+import AppKit
 
 struct DatePickerSection: View {
     @ObservedObject var viewModel: ReviewViewModel
+    @State private var showCalendar = false
+
+    private var fieldShape: RoundedRectangle {
+        RoundedRectangle(cornerRadius: 10, style: .continuous)
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -10,27 +16,41 @@ struct DatePickerSection: View {
                 .fontWeight(.semibold)
                 .foregroundColor(viewModel.currentTheme.secondaryTextColor ?? .secondary)
 
-            DatePicker("", selection: $viewModel.baseDate, displayedComponents: .date)
-                .datePickerStyle(.compact)
-                .labelsHidden()
+            Button {
+                showCalendar.toggle()
+            } label: {
+                HStack(spacing: 8) {
+                    Text(viewModel.baseDate.formattedChinese())
+                        .font(.body)
+                        .foregroundColor(viewModel.currentTheme.primaryTextColor ?? .primary)
+                    Spacer(minLength: 0)
+                    Image(systemName: "calendar")
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundColor(viewModel.currentTheme.secondaryTextColor ?? .secondary)
+                }
                 .padding(.horizontal, 10)
-                .padding(.vertical, 8)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(
-                    RoundedRectangle(cornerRadius: 8)
-                        .fill(viewModel.currentTheme.cardBackgroundColor)
-                )
+                .padding(.vertical, 7)
+                .frame(maxWidth: .infinity, minHeight: 30, alignment: .leading)
+                .background(fieldShape.fill(Color(nsColor: .textBackgroundColor)))
                 .overlay(
-                    RoundedRectangle(cornerRadius: 8)
-                        .strokeBorder(
-                            (viewModel.currentTheme.secondaryTextColor ?? .secondary).opacity(0.28),
-                            lineWidth: 1
-                        )
+                    fieldShape.strokeBorder(Color(nsColor: .separatorColor), lineWidth: 1)
                 )
-                .clipShape(RoundedRectangle(cornerRadius: 8))
+                .clipShape(fieldShape)
+            }
+            .buttonStyle(.plain)
+            .popover(isPresented: $showCalendar, arrowEdge: .bottom) {
+                DatePicker(
+                    "",
+                    selection: $viewModel.baseDate,
+                    displayedComponents: .date
+                )
+                .datePickerStyle(.graphical)
+                .labelsHidden()
+                .padding(12)
                 .onChange(of: viewModel.baseDate) { _, _ in
                     viewModel.updateReviewDates()
                 }
+            }
 
             HStack(spacing: 6) {
                 Button(NSLocalizedString("today_button", comment: "")) {
