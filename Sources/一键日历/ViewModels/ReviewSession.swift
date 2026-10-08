@@ -44,6 +44,7 @@ final class ReviewSession {
 
     private var lastCreatedTitle: String?
     private var lastCreatedBaseDate: Date?
+    private var lastRecordedHistoryEntryID: UUID?
 
     private(set) var shouldPlayHaptic: Bool = false
 
@@ -355,6 +356,7 @@ final class ReviewSession {
     func undo() async {
         let undo = await calendar.undoLastCreation()
         let undoneTitle = lastCreatedTitle ?? ""
+        let recordedID = lastRecordedHistoryEntryID
 
         if undo.success {
             if undoneTitle.isEmpty {
@@ -372,6 +374,10 @@ final class ReviewSession {
             resultType = .warning
         }
 
+        if let recordedID {
+            outcomes.discardRecorded(id: recordedID)
+        }
+        lastRecordedHistoryEntryID = nil
         canUndo = false
         canRecreate = false
     }
@@ -392,6 +398,7 @@ final class ReviewSession {
             sharedDetail: sharedDetail
         )
         outcomes.record(entry)
+        lastRecordedHistoryEntryID = entry.id
         title = ""
         detail = ""
         baseDate = Date()

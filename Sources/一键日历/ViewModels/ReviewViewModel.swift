@@ -270,6 +270,7 @@ class ReviewViewModel: ObservableObject {
     func undoReviewSchedule() async {
         await session.undo()
         pullSessionChrome()
+        refreshHistoryProjection()
         loadDisplayedDayEvents()
         scheduleResultDismissal()
     }

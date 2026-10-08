@@ -130,6 +130,30 @@ final class ReviewViewModelCalendarInjectionTests: XCTestCase {
         XCTAssertEqual(viewModel.selectedSegment, .create)
     }
 
+    func testUndoClearsTodayCreatedAndWeeklyViaFacade() async {
+        let calendar = InMemoryCalendarService(grantAccessByDefault: true)
+        let viewModel = ReviewViewModel(calendar: calendar)
+        let marker = "tip-smoke-undo-\(UUID().uuidString.prefix(8))"
+        viewModel.title = marker
+        viewModel.baseDate = date(2026, 2, 1)
+        viewModel.scheduleMode = .single
+        viewModel.updateReviewDates()
+
+        await viewModel.createReviewSchedule()
+        XCTAssertEqual(viewModel.resultType, .success)
+        XCTAssertTrue(viewModel.todayCreatedEntries.contains(where: { $0.title == marker }))
+        XCTAssertTrue(
+            viewModel.weeklyReviewViewModel.weeklyEntries.contains(where: { $0.title == marker })
+        )
+
+        await viewModel.undoReviewSchedule()
+        XCTAssertFalse(viewModel.canUndo)
+        XCTAssertFalse(viewModel.todayCreatedEntries.contains(where: { $0.title == marker }))
+        XCTAssertFalse(
+            viewModel.weeklyReviewViewModel.weeklyEntries.contains(where: { $0.title == marker })
+        )
+    }
+
     func testDetailBindingRoundsTripToSession() async {
         let calendar = InMemoryCalendarService(grantAccessByDefault: true)
         let viewModel = ReviewViewModel(calendar: calendar)

@@ -162,6 +162,8 @@ struct ContentView: View {
 
                 TodayCreatedSection(viewModel: viewModel)
 
+                weeklyReviewEntryCard
+
                 Text(NSLocalizedString("today_segment_footer", comment: ""))
                     .font(.caption)
                     .foregroundColor(viewModel.currentTheme.secondaryTextColor ?? .secondary)
@@ -191,33 +193,35 @@ struct ContentView: View {
                 WindowSettingsSection(viewModel: viewModel, forceExpanded: true)
 
                 settingsHistoryCard
-
-                Button(action: {
-                    viewModel.openWeeklyReview()
-                }) {
-                    HStack {
-                        Image(systemName: "calendar.badge.clock")
-                        Text(NSLocalizedString("weekly_review_button", comment: ""))
-                            .font(.subheadline)
-                        Spacer()
-                        if !viewModel.weeklyReviewViewModel.entriesInCurrentWeek.isEmpty {
-                            Text("\(viewModel.weeklyReviewViewModel.entriesInCurrentWeek.count)")
-                                .font(.caption2)
-                                .foregroundColor(.white)
-                                .padding(.horizontal, 6)
-                                .padding(.vertical, 2)
-                                .background(viewModel.currentTheme.accentColor ?? Color.accentColor)
-                                .clipShape(Capsule())
-                        }
-                    }
-                }
-                .buttonStyle(.plain)
-                .padding()
-                .background(viewModel.currentTheme.cardBackgroundColor)
-                .cornerRadius(10)
             }
             .padding()
         }
+    }
+
+    private var weeklyReviewEntryCard: some View {
+        Button(action: {
+            viewModel.openWeeklyReview()
+        }) {
+            HStack {
+                Image(systemName: "calendar.badge.clock")
+                Text(NSLocalizedString("weekly_review_button", comment: ""))
+                    .font(.subheadline)
+                Spacer()
+                if !viewModel.weeklyReviewViewModel.entriesInCurrentWeek.isEmpty {
+                    Text("\(viewModel.weeklyReviewViewModel.entriesInCurrentWeek.count)")
+                        .font(.caption2)
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(viewModel.currentTheme.accentColor ?? Color.accentColor)
+                        .clipShape(Capsule())
+                }
+            }
+        }
+        .buttonStyle(.plain)
+        .padding()
+        .background(viewModel.currentTheme.cardBackgroundColor)
+        .cornerRadius(10)
     }
 
     private var settingsChrome: some View {

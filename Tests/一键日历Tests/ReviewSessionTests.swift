@@ -5,10 +5,18 @@ import XCTest
 final class FakeWeeklyAppender: WeeklyEntryAppending {
     private(set) var appended: [HistoryEntry] = []
     private(set) var appendCallCount = 0
+    private(set) var removedIDs: [UUID] = []
+    private(set) var removeCallCount = 0
 
     func appendWeeklyEntry(from historyEntry: HistoryEntry) {
         appendCallCount += 1
         appended.append(historyEntry)
+    }
+
+    func removeWeeklyEntries(id: UUID) {
+        removeCallCount += 1
+        removedIDs.append(id)
+        appended.removeAll { $0.id == id }
     }
 }
 
@@ -150,23 +158,46 @@ final class ReviewSessionTests: XCTestCase {
         XCTAssertEqual(weekly.appendCallCount, 0)
     }
 
-    func testUndoAfterCreateDoesNotClearHistoryOrWeekly() async {
-        let calendar = InMemoryCalendarService()
-        let (session, history, weekly) = CreateSuccessTestSupport.makeSession(calendar: calendar)
-        session.title = "可撤销"
+    func testUndoAfterCreateClearsTodayCreatedAndWeeklySource() async throws {
+        let suiteName = "undo-today-weekly-\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defaults.removePersistentDomain(forName: suiteName)
+
+        let calendar = InMemoryCalendarService(grantAccessByDefault: true)
+        let history = HistoryStore(defaults: defaults)
+        let weekly = WeeklyReviewViewModel(defaults: defaults)
+        let outcomes = CreateSuccessOutcomes(history: history, weekly: weekly)
+        let session = ReviewSession(calendar: calendar, outcomes: outcomes)
+
+        session.title = "可撤销批次"
         session.baseDate = CreateSuccessTestSupport.date(2026, 2, 1)
         session.scheduleMode = .single
         await session.create()
+
+        XCTAssertEqual(session.resultType, .success)
         XCTAssertTrue(session.canUndo)
-        XCTAssertEqual(history.load().count, 1)
-        XCTAssertEqual(weekly.appendCallCount, 1)
+        let created = history.load()
+        XCTAssertEqual(created.count, 1)
+        let batchID = try XCTUnwrap(created.first?.id)
+        XCTAssertEqual(session.todayCreatedEntries().map(\.id), [batchID])
+        XCTAssertTrue(
+            weekly.weeklyEntries.contains(where: { $0.id == batchID }),
+            "周末总结 source must include the batch after create"
+        )
 
         await session.undo()
+
         XCTAssertFalse(session.canUndo)
         XCTAssertEqual(session.resultType, .success)
         XCTAssertTrue(calendar.lastCreatedEventIdentifiers.isEmpty)
-        XCTAssertEqual(history.load().count, 1, "undo 不删历史")
-        XCTAssertEqual(weekly.appendCallCount, 1, "undo 不触达 weekly")
+        XCTAssertTrue(history.load().isEmpty, "undo must remove 今日所建 batch from history")
+        XCTAssertTrue(session.todayCreatedEntries().isEmpty)
+        XCTAssertFalse(
+            weekly.weeklyEntries.contains(where: { $0.id == batchID }),
+            "周末总结 source must not include the undone batch"
+        )
+
+        defaults.removePersistentDomain(forName: suiteName)
     }
 
     func testCreateWithDetailWritesKeyFirstLineNotes() async {
@@ -277,7 +308,7 @@ final class ReviewSessionTests: XCTestCase {
         XCTAssertEqual(entry.type, .review)
     }
 
-    func testUpdateSharedDetailRewritesOnlyDetailAcrossSeries() async {
+    func testUpdateSharedDetailRewritesOnlyDetailAcrossSeries() async throws {
         let calendar = InMemoryCalendarService(grantAccessByDefault: true)
         let (session, history, weekly) = CreateSuccessTestSupport.makeSession(calendar: calendar)
         session.title = "系列编辑"
@@ -310,7 +341,7 @@ final class ReviewSessionTests: XCTestCase {
         XCTAssertEqual(NormalizeNotes.normalize(d3[0].notes), "第3次复习")
     }
 
-    func testUpdateSharedDetailPartialSuccessWhenSomeEventsMissing() async {
+    func testUpdateSharedDetailPartialSuccessWhenSomeEventsMissing() async throws {
         let calendar = InMemoryCalendarService(grantAccessByDefault: true)
         let (session, history, _) = CreateSuccessTestSupport.makeSession(calendar: calendar)
         session.title = "部分缺失"

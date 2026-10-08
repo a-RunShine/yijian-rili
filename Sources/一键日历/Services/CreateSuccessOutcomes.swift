@@ -23,6 +23,11 @@ final class CreateSuccessOutcomes {
         history.remove(id: id)
     }
 
+    func discardRecorded(id: UUID) {
+        history.remove(id: id)
+        weekly.removeWeeklyEntries(id: id)
+    }
+
     func updateSharedDetail(id: UUID, sharedDetail: String?) {
         guard let existing = history.load().first(where: { $0.id == id }) else { return }
         history.replace(existing.withSharedDetail(sharedDetail))
