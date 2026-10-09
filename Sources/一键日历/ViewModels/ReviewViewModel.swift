@@ -9,18 +9,42 @@ class ReviewViewModel: ObservableObject {
     typealias ScheduleMode = ReviewSession.ScheduleMode
     typealias DayType = DayBrowseModel.DayType
 
+    enum MainSegment: String, CaseIterable, Identifiable {
+        case create
+        case today
+        case settings
+
+        var id: String { rawValue }
+
+        var title: String {
+            switch self {
+            case .create: return NSLocalizedString("segment_create", comment: "")
+            case .today: return NSLocalizedString("segment_today", comment: "")
+            case .settings: return NSLocalizedString("segment_settings", comment: "")
+            }
+        }
+    }
+
     let session: ReviewSession
     let browse: DayBrowseModel
     let historyStore: HistoryStore
     private let calendar: CalendarService
     private let outcomes: CreateSuccessOutcomes
 
+    @Published var selectedSegment: MainSegment = .create
     @Published var title: String = "" {
         didSet { session.title = title }
+    }
+    @Published var detail: String = "" {
+        didSet { session.detail = detail }
     }
     @Published var baseDate: Date = Date() {
         didSet { session.baseDate = baseDate }
     }
+    @Published var sharedDetailDraft: String = ""
+    @Published var editingSharedDetailEntryID: UUID?
+    @Published var sharedDetailEditOutcomeVisible: Bool = false
+    @Published var sharedDetailResultOnToday: Bool = false
     @Published var reviewDates: [Date] = []
     @Published var authorizationStatus: CalendarAccessStatus = .notDetermined
     @Published var isLoading: Bool = false
@@ -36,9 +60,12 @@ class ReviewViewModel: ObservableObject {
         didSet { browse.searchText = searchText }
     }
     @Published var searchResults: [CalendarEventInfo] = []
+    @Published var searchHits: [SearchHit] = []
     @Published var selectedSearchResult: CalendarEventInfo? {
         didSet { browse.selectedSearchResult = selectedSearchResult }
     }
+    @Published var selectedSearchHit: SearchHit?
+    @Published var seriesPendingDelete: SearchHit?
     @Published var displayedEvents: [CalendarEventInfo] = []
     @Published var historySearchText: String = ""
     @Published var scheduleMode: ScheduleMode = .review {
@@ -110,6 +137,7 @@ class ReviewViewModel: ObservableObject {
         self.browse = DayBrowseModel(calendar: calendar)
 
         title = session.title
+        detail = session.detail
         baseDate = session.baseDate
         reviewDates = session.reviewDates
         scheduleMode = session.scheduleMode
@@ -199,6 +227,7 @@ class ReviewViewModel: ObservableObject {
         canRecreate = session.canRecreate
         reviewDates = session.reviewDates
         title = session.title
+        detail = session.detail
         baseDate = session.baseDate
         selectedCalendarIdentifier = session.selectedCalendarIdentifier
     }
@@ -209,10 +238,26 @@ class ReviewViewModel: ObservableObject {
         selectedSearchResult = browse.selectedSearchResult
         searchText = browse.searchText
         selectedDayType = browse.selectedDayType
+        rebuildSearchHits()
+    }
+
+    private func rebuildSearchHits() {
+        _ = historyRevision
+        searchHits = SearchCollapse.collapse(
+            rawHits: browse.searchResults,
+            history: historyStore.load(),
+            eventById: { [calendar] id in calendar.event(withId: id) }
+        )
+        if let selected = selectedSearchHit,
+           !searchHits.contains(where: { $0.id == selected.id }) {
+            selectedSearchHit = nil
+            selectedSearchResult = nil
+        }
     }
 
     private func pushInputsToSession() {
         session.title = title
+        session.detail = detail
         session.baseDate = baseDate
         session.scheduleMode = scheduleMode
         session.reviewIntervals = reviewIntervals
@@ -243,6 +288,7 @@ class ReviewViewModel: ObservableObject {
     func undoReviewSchedule() async {
         await session.undo()
         pullSessionChrome()
+        refreshHistoryProjection()
         loadDisplayedDayEvents()
         scheduleResultDismissal()
     }
@@ -285,6 +331,10 @@ class ReviewViewModel: ObservableObject {
                 self?.resultType = nil
                 self?.session.resultMessage = nil
                 self?.session.resultType = nil
+                self?.sharedDetailResultOnToday = false
+                if self?.sharedDetailEditOutcomeVisible == true {
+                    self?.finishSharedDetailEditSheet()
+                }
             }
         }
     }
@@ -312,6 +362,74 @@ class ReviewViewModel: ObservableObject {
         session.selectHistoryEntry(entry)
         pullSessionChrome()
         showHistory = false
+        selectedSegment = .create
+    }
+
+    var todayCreatedEntries: [HistoryEntry] {
+        _ = historyRevision
+        return session.todayCreatedEntries()
+    }
+
+    var editingSharedDetailEntry: HistoryEntry? {
+        guard let editingSharedDetailEntryID else { return nil }
+        return historyEntries.first(where: { $0.id == editingSharedDetailEntryID })
+    }
+
+    var canEditSharedDetailForSelection: Bool {
+        guard let entry = editingSharedDetailEntry else { return false }
+        return !entry.createdEventIdentifiers.isEmpty
+    }
+
+    func beginSharedDetailEdit(for entry: HistoryEntry) {
+        sharedDetailEditOutcomeVisible = false
+        sharedDetailResultOnToday = false
+        if showHistory {
+            showHistory = false
+        }
+        editingSharedDetailEntryID = entry.id
+        sharedDetailDraft = entry.sharedDetail ?? ""
+    }
+
+    func cancelSharedDetailEdit() {
+        let hadOutcome = sharedDetailEditOutcomeVisible
+        finishSharedDetailEditSheet()
+        if hadOutcome {
+            sharedDetailResultOnToday = resultMessage != nil
+            scheduleResultDismissal()
+        }
+    }
+
+    func dismissSharedDetailEditAfterOutcome() {
+        sharedDetailEditOutcomeVisible = false
+        finishSharedDetailEditSheet()
+        sharedDetailResultOnToday = resultMessage != nil
+        scheduleResultDismissal()
+    }
+
+    private func finishSharedDetailEditSheet() {
+        editingSharedDetailEntryID = nil
+        sharedDetailDraft = ""
+        sharedDetailEditOutcomeVisible = false
+    }
+
+    @discardableResult
+    func commitSharedDetailEdit() -> SharedDetailUpdateOutcome {
+        guard let entry = editingSharedDetailEntry else { return .unavailable }
+        let outcome = updateSharedDetail(for: entry, detail: sharedDetailDraft)
+        sharedDetailEditOutcomeVisible = true
+        sharedDetailResultOnToday = false
+        scheduleResultDismissal()
+        return outcome
+    }
+
+    @discardableResult
+    func updateSharedDetail(for entry: HistoryEntry, detail: String) -> SharedDetailUpdateOutcome {
+        let outcome = session.updateSharedDetail(for: entry, detail: detail)
+        pullSessionChrome()
+        if case .updated = outcome {
+            refreshHistoryProjection()
+        }
+        return outcome
     }
 
     func clearHistory() {
@@ -422,19 +540,81 @@ class ReviewViewModel: ObservableObject {
         browse.searchText = searchText
         browse.performSearch()
         searchResults = browse.searchResults
+        rebuildSearchHits()
     }
 
     @discardableResult
     func deleteSearchResult(_ event: CalendarEventInfo) -> Bool {
+        deleteSearchHit(
+            SearchHit(
+                id: event.id,
+                kind: .single,
+                title: event.title,
+                members: [event]
+            )
+        )
+    }
+
+    @discardableResult
+    func deleteSearchHit(_ hit: SearchHit) -> Bool {
+        guard !hit.needsSelectiveDelete else { return false }
+        guard let event = hit.members.first else { return false }
         let success = browse.deleteSearchResult(event)
         searchResults = browse.searchResults
         selectedSearchResult = browse.selectedSearchResult
         displayedEvents = browse.displayedEvents
+        if success {
+            session.removeEventsFromRecorded(ids: [event.id])
+            refreshHistoryProjection()
+            rebuildSearchHits()
+            if selectedSearchHit?.id == hit.id {
+                selectedSearchHit = nil
+            }
+        }
         return success
+    }
+
+    @discardableResult
+    func deleteSearchHitMembers(ids: [String]) -> (deletedCount: Int, missingCount: Int) {
+        let outcome = browse.deleteEvents(ids: ids)
+        searchResults = browse.searchResults
+        selectedSearchResult = browse.selectedSearchResult
+        displayedEvents = browse.displayedEvents
+        if outcome.deletedCount > 0 {
+            session.removeEventsFromRecorded(ids: ids)
+            refreshHistoryProjection()
+            rebuildSearchHits()
+            if let selected = selectedSearchHit,
+               selected.members.contains(where: { ids.contains($0.id) }) {
+                selectedSearchHit = searchHits.first(where: { $0.id == selected.id })
+                selectedSearchResult = selectedSearchHit?.representative
+            }
+        }
+        seriesPendingDelete = nil
+        return outcome
+    }
+
+    func beginSeriesDelete(_ hit: SearchHit) {
+        guard hit.needsSelectiveDelete else { return }
+        seriesPendingDelete = hit
+    }
+
+    func selectSearchHit(_ hit: SearchHit) {
+        selectedSearchHit = hit
+        selectedSearchResult = hit.representative
+        browse.selectedSearchResult = hit.representative
+    }
+
+    func clearSearchSelection() {
+        selectedSearchHit = nil
+        selectedSearchResult = nil
+        browse.selectedSearchResult = nil
     }
 
     func resetSearch() {
         browse.resetSearch()
+        selectedSearchHit = nil
+        seriesPendingDelete = nil
         pullBrowseState()
     }
 }

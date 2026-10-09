@@ -65,7 +65,8 @@ final class InMemoryCalendarService: CalendarService, CalendarEventStore {
         title: String,
         baseDate: Date,
         intervals: [Int],
-        calendarId: String?
+        calendarId: String?,
+        detail: String? = nil
     ) async throws -> CreateEventsResult {
         try ensureAccess()
         let calendar = try resolveCalendar(calendarId)
@@ -74,7 +75,8 @@ final class InMemoryCalendarService: CalendarService, CalendarEventStore {
             baseDate: baseDate,
             intervals: intervals,
             calendarId: calendar.identifier,
-            store: self
+            store: self,
+            detail: detail
         )
         if !outcome.createdEventIds.isEmpty {
             lastCreated = outcome.createdEventIds
@@ -86,7 +88,8 @@ final class InMemoryCalendarService: CalendarService, CalendarEventStore {
     func createSingleEvent(
         title: String,
         date: Date,
-        calendarId: String?
+        calendarId: String?,
+        detail: String? = nil
     ) async throws -> CreateEventsResult {
         try ensureAccess()
         let calendar = try resolveCalendar(calendarId)
@@ -94,7 +97,8 @@ final class InMemoryCalendarService: CalendarService, CalendarEventStore {
             title: title,
             date: date,
             calendarId: calendar.identifier,
-            store: self
+            store: self,
+            detail: detail
         )
         if !outcome.createdEventIds.isEmpty {
             lastCreated = outcome.createdEventIds
@@ -118,13 +122,12 @@ final class InMemoryCalendarService: CalendarService, CalendarEventStore {
         }
     }
 
-    func saveAllDay(calendarId: String, title: String, day: Date, notesKey: String) throws -> String {
+    func saveAllDay(calendarId: String, title: String, day: Date, notes: String) throws -> String {
         guard let calendar = calendars.first(where: { $0.identifier == calendarId }) else {
             throw CalendarError.defaultCalendarUnavailable
         }
         let start = Calendar.current.startOfDay(for: day)
         let end = Calendar.current.date(byAdding: .day, value: 1, to: start) ?? start
-        let rawNotes = Self.storageNotes(from: notesKey)
         let id = nextId()
         events.append(
             CalendarEventInfo(
@@ -133,7 +136,7 @@ final class InMemoryCalendarService: CalendarService, CalendarEventStore {
                 start: start,
                 end: end,
                 isAllDay: true,
-                notes: rawNotes,
+                notes: notes,
                 calendarId: calendar.identifier,
                 calendarTitle: calendar.title,
                 calendarSourceTitle: calendar.sourceTitle,
@@ -176,11 +179,39 @@ final class InMemoryCalendarService: CalendarService, CalendarEventStore {
             }
     }
 
+    func event(withId id: String) -> CalendarEventInfo? {
+        events.first(where: { $0.id == id })
+    }
+
     @discardableResult
     func deleteEvent(id: String) -> Bool {
         let before = events.count
         events.removeAll { $0.id == id }
         return events.count < before
+    }
+
+    func eventNotes(id: String) -> String? {
+        guard let event = events.first(where: { $0.id == id }) else { return nil }
+        return event.notes ?? ""
+    }
+
+    @discardableResult
+    func updateEventNotes(id: String, notes: String) -> Bool {
+        guard let index = events.firstIndex(where: { $0.id == id }) else { return false }
+        let old = events[index]
+        events[index] = CalendarEventInfo(
+            id: old.id,
+            title: old.title,
+            start: old.start,
+            end: old.end,
+            isAllDay: old.isAllDay,
+            notes: notes,
+            calendarId: old.calendarId,
+            calendarTitle: old.calendarTitle,
+            calendarSourceTitle: old.calendarSourceTitle,
+            colorHex: old.colorHex
+        )
+        return true
     }
 
     func searchEvents(query: String, daysAhead: Int) -> [CalendarEventInfo] {
@@ -213,13 +244,6 @@ final class InMemoryCalendarService: CalendarService, CalendarEventStore {
             throw CalendarError.defaultCalendarUnavailable
         }
         return fallback
-    }
-
-    private static func storageNotes(from notesKey: String) -> String {
-        if notesKey.isEmpty {
-            return "提醒建议：当天 09:00"
-        }
-        return "\(notesKey)\n提醒建议：当天 09:00"
     }
 
     private static func sortCalendars(_ calendars: [CalendarInfo]) -> [CalendarInfo] {

@@ -11,13 +11,50 @@
 "command_menu" = "操作";
 "create_review_schedule" = "创建复习计划";
 
+// Segments
+"segment_create" = "创建";
+"segment_today" = "日程";
+"segment_settings" = "设置";
+
+// Create segment
+"create_segment_title" = "写一条复习";
+"create_segment_subtitle" = "标题 → 日期 → 预览 → 一键写入日历";
+"create_settings_hint" = "间隔与日历账户在「设置」";
+"detail_label" = "详情";
+"enter_detail" = "可选：随复习系列写入日历备注";
+"base_date_label" = "基准日期";
+"review_preview_title" = "复习预览";
+"review_preview_intervals" = "复习预览 · %@";
+
+// Today segment
+"today_segment_title" = "日程";
+"today_segment_subtitle" = "浏览与搜索，不和创建流抢第一屏";
+"today_search_placeholder" = "搜索标题…";
+"today_segment_footer" = "列表可滚动 · 无底部主按钮";
+"today_created_title" = "今日所建";
+"today_created_empty" = "今天还没有创建复习批次";
+"today_created_edit_detail" = "编辑系列详情";
+"today_created_edit_unavailable" = "无法编辑（缺少日程标识）";
+"shared_detail_sheet_title" = "系列共享详情";
+"shared_detail_save" = "保存详情";
+"shared_detail_cancel" = "取消";
+"shared_detail_done" = "完成";
+
+// Settings segment
+"settings_segment_title" = "设置";
+"settings_segment_subtitle" = "低频项集中，不挤占创建第一屏";
+"window_section_title" = "窗口";
+"window_always_on_top" = "始终置顶";
+"history_cap_hint" = "最多 20 条 · 与周末总结分离";
+"interval_save_refresh_hint" = "保存后才刷新创建预览";
+
 // ContentView
 "title" = "标题";
 "date" = "日期";
 "review_plan" = "复习计划";
 "review_count" = "第%@次复习";
 "create_button" = "一键创建";
-"enter_title" = "输入复习内容";
+"enter_title" = "例如：Swift 并发";
 "empty_title_error" = "请输入标题";
 "title_too_long_error" = "标题长度不能超过100个字符";
 "permission_required" = "需要日历权限才能创建日程";
@@ -32,6 +69,12 @@
 "undo_success" = "成功撤销%@个日程";
 "undo_success_with_title" = "已撤销「%@」的%@个日程";
 "undo_partial" = "%@个日程已被删除或不存在";
+
+// Shared detail
+"shared_detail_unavailable" = "该历史记录无法编辑共享详情（缺少日程标识）";
+"shared_detail_success" = "已更新%@个日程的共享详情";
+"shared_detail_partial" = "已更新%@个日程，%@个日程已删除或不存在";
+"shared_detail_all_missing" = "%@个日程已被删除或不存在";
 
 // History
 "history_title" = "历史记录";
@@ -186,6 +229,12 @@
 "search_delete_cancel" = "取消";
 "search_delete_confirm_action" = "删除";
 "search_delete_success" = "已删除日程";
+"series_search_row_subtitle" = "复习计划 · %@次";
+"series_search_member_count" = "系列共 %@ 次复习";
+"series_delete_title" = "选择要删除的复习";
+"series_delete_subtitle" = "「%@」";
+"series_delete_confirm" = "删除所选";
+"series_delete_member_fallback" = "第%@次复习";
 
 // Weekly Review (周末总结)
 "weekly_review_button" = "周末总结";

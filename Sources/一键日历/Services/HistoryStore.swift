@@ -41,6 +41,13 @@ final class HistoryStore {
         save(load().filter { $0.id != id })
     }
 
+    func replace(_ entry: HistoryEntry) {
+        var list = load()
+        guard let index = list.firstIndex(where: { $0.id == entry.id }) else { return }
+        list[index] = entry
+        save(list)
+    }
+
     func clear() {
         save([])
     }
@@ -49,5 +56,9 @@ final class HistoryStore {
         let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return load() }
         return load().filter { $0.title.localizedCaseInsensitiveContains(trimmed) }
+    }
+
+    func created(on day: Date, calendar: Calendar = .current) -> [HistoryEntry] {
+        load().filter { calendar.isDate($0.creationDate, inSameDayAs: day) }
     }
 }

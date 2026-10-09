@@ -7,7 +7,8 @@ enum CalendarWriteOrchestrator {
         baseDate: Date,
         intervals: [Int],
         calendarId: String,
-        store: CalendarEventStore
+        store: CalendarEventStore,
+        detail: String? = nil
     ) throws -> CalendarWriteOutcome {
         guard IntervalRules.validate(intervals) else {
             throw CalendarError.invalidIntervals
@@ -16,21 +17,29 @@ enum CalendarWriteOrchestrator {
         let items = dates.enumerated().map { index, date in
             (date: date, notesKey: ReviewNoteKey.forIndex(index))
         }
-        return try writeAllDayEvents(title: title, items: items, calendarId: calendarId, store: store)
+        return try writeAllDayEvents(
+            title: title,
+            items: items,
+            calendarId: calendarId,
+            store: store,
+            detail: detail
+        )
     }
 
     static func writeSingle(
         title: String,
         date: Date,
         calendarId: String,
-        store: CalendarEventStore
+        store: CalendarEventStore,
+        detail: String? = nil
     ) throws -> CalendarWriteOutcome {
         let day = Calendar.current.startOfDay(for: date)
         return try writeAllDayEvents(
             title: title,
             items: [(date: day, notesKey: ReviewNoteKey.single)],
             calendarId: calendarId,
-            store: store
+            store: store,
+            detail: detail
         )
     }
 
@@ -38,7 +47,8 @@ enum CalendarWriteOrchestrator {
         title: String,
         items: [(date: Date, notesKey: String)],
         calendarId: String,
-        store: CalendarEventStore
+        store: CalendarEventStore,
+        detail: String? = nil
     ) throws -> CalendarWriteOutcome {
         var result = CreateEventsResult()
         var createdIds: [String] = []
@@ -55,11 +65,12 @@ enum CalendarWriteOrchestrator {
                 ) {
                     result.duplicates.append(day)
                 }
+                let notes = ReviewNotes.compose(key: item.notesKey, detail: detail)
                 let id = try store.saveAllDay(
                     calendarId: calendarId,
                     title: title,
                     day: day,
-                    notesKey: item.notesKey
+                    notes: notes
                 )
                 result.created.append(day)
                 createdIds.append(id)
@@ -69,5 +80,28 @@ enum CalendarWriteOrchestrator {
         }
 
         return CalendarWriteOutcome(result: result, createdEventIds: createdIds)
+    }
+
+    static func rewriteSharedDetail(
+        identifiers: [String],
+        detail: String?,
+        eventNotes: (String) -> String?,
+        updateEventNotes: (String, String) -> Bool
+    ) -> (updated: Int, missing: Int) {
+        var updated = 0
+        var missing = 0
+        for identifier in identifiers {
+            guard let existingNotes = eventNotes(identifier) else {
+                missing += 1
+                continue
+            }
+            let rewritten = ReviewNotes.replacingDetail(in: existingNotes, detail: detail)
+            if updateEventNotes(identifier, rewritten) {
+                updated += 1
+            } else {
+                missing += 1
+            }
+        }
+        return (updated: updated, missing: missing)
     }
 }

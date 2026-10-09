@@ -214,6 +214,15 @@ final class WeeklyReviewViewModel: ObservableObject, WeeklyEntryAppending {
         revision &+= 1
     }
 
+    func removeWeeklyEntries(id: UUID) {
+        var entries = weeklyEntries
+        let before = entries.count
+        entries.removeAll { $0.id == id }
+        guard entries.count != before else { return }
+        persistWeeklyEntries(entries)
+        revision &+= 1
+    }
+
     func persistWeeklyEntries(_ entries: [WeeklyEntry]) {
         if let data = try? JSONEncoder().encode(entries),
            let string = String(data: data, encoding: .utf8) {

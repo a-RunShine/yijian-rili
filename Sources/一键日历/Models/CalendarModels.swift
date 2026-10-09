@@ -59,6 +59,11 @@ struct UndoResult: Sendable {
     var alreadyDeletedCount: Int
 }
 
+enum SharedDetailUpdateOutcome: Equatable, Sendable {
+    case unavailable
+    case updated(updated: Int, missing: Int)
+}
+
 enum CalendarError: LocalizedError, Sendable, Equatable {
     case defaultCalendarUnavailable
     case accessDenied

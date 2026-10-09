@@ -5,31 +5,52 @@ struct ActionSection: View {
 
     var body: some View {
         VStack(spacing: 10) {
-            Button(action: {
-                Task {
-                    await viewModel.createReviewSchedule()
-                }
-            }) {
-                if viewModel.isLoading {
-                    ProgressView()
-                        .progressViewStyle(CircularProgressViewStyle())
-                } else {
-                    HStack(spacing: 4) {
-                        Text(viewModel.scheduleMode == .single
-                             ? NSLocalizedString("single_create_button", comment: "")
-                             : NSLocalizedString("create_button", comment: ""))
-                            .font(.headline)
-                        Text("⌘↵")
-                            .font(.caption)
-                            .opacity(0.7)
+            HStack(spacing: 12) {
+                Button(action: {
+                    Task {
+                        await viewModel.createReviewSchedule()
+                    }
+                }) {
+                    if viewModel.isLoading {
+                        ProgressView()
+                            .progressViewStyle(CircularProgressViewStyle())
+                            .frame(maxWidth: .infinity)
+                    } else {
+                        HStack(spacing: 4) {
+                            Text(viewModel.scheduleMode == .single
+                                 ? NSLocalizedString("single_create_button", comment: "")
+                                 : NSLocalizedString("create_button", comment: ""))
+                                .font(.headline)
+                            Text("⌘↵")
+                                .font(.caption)
+                                .opacity(0.7)
+                        }
+                        .frame(maxWidth: .infinity)
                     }
                 }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.large)
+                .tint(viewModel.currentTheme.accentColor ?? .accentColor)
+                .disabled(viewModel.isLoading)
+
+                if viewModel.canUndo {
+                    Button(action: {
+                        Task {
+                            await viewModel.undoReviewSchedule()
+                        }
+                    }) {
+                        Text(NSLocalizedString("undo_button", comment: ""))
+                            .font(.headline)
+                            .frame(width: 88)
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.large)
+                    .tint(viewModel.currentTheme.accentColor ?? .accentColor)
+                    .disabled(viewModel.isLoading)
+                    .transition(.opacity.combined(with: .move(edge: .trailing)))
+                }
             }
-            .buttonStyle(.borderedProminent)
-            .controlSize(.large)
-            .tint(viewModel.currentTheme.accentColor ?? .accentColor)
-            .disabled(viewModel.isLoading)
-            .frame(maxWidth: .infinity)
+            .animation(.easeInOut(duration: 0.2), value: viewModel.canUndo)
 
             if let message = viewModel.resultMessage, let type = viewModel.resultType {
                 let (icon, color, bg): (String, Color, Color) = {

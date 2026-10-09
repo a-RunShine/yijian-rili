@@ -56,7 +56,7 @@ struct HistorySection: View {
                 ScrollView {
                     VStack(spacing: 0) {
                         ForEach(Array(viewModel.filteredHistoryEntries.enumerated()), id: \.element.id) { index, entry in
-                            HStack {
+                            HStack(alignment: .top, spacing: 8) {
                                 Button(action: {
                                     viewModel.selectHistoryEntry(entry)
                                 }) {
@@ -67,6 +67,12 @@ struct HistorySection: View {
                                                 .lineLimit(1)
                                             HStack(spacing: 4) {
                                                 Text(entry.baseDate.formattedChinese())
+                                                    .font(.caption)
+                                                    .foregroundColor(viewModel.currentTheme.secondaryTextColor ?? .secondary)
+                                                Text("·")
+                                                    .font(.caption)
+                                                    .foregroundColor(viewModel.currentTheme.secondaryTextColor ?? .secondary)
+                                                Text(scheduleTypeLabel(entry.type))
                                                     .font(.caption)
                                                     .foregroundColor(viewModel.currentTheme.secondaryTextColor ?? .secondary)
                                                 Text("·")
@@ -84,14 +90,30 @@ struct HistorySection: View {
                                 }
                                 .buttonStyle(PlainButtonStyle())
 
-                                Button(action: {
-                                    deleteEntry(entry)
-                                }) {
-                                    Image(systemName: "trash")
-                                        .foregroundColor(.red)
+                                VStack(spacing: 4) {
+                                    if entry.createdEventIdentifiers.isEmpty {
+                                        Text(NSLocalizedString("today_created_edit_unavailable", comment: ""))
+                                            .font(.caption2)
+                                            .foregroundColor(viewModel.currentTheme.secondaryTextColor ?? .secondary)
+                                            .frame(maxWidth: 72, alignment: .trailing)
+                                    } else {
+                                        Button(NSLocalizedString("today_created_edit_detail", comment: "")) {
+                                            viewModel.beginSharedDetailEdit(for: entry)
+                                        }
+                                        .buttonStyle(.borderless)
+                                        .controlSize(.small)
+                                        .foregroundColor(viewModel.currentTheme.accentColor ?? .accentColor)
+                                    }
+
+                                    Button(action: {
+                                        deleteEntry(entry)
+                                    }) {
+                                        Image(systemName: "trash")
+                                            .foregroundColor(.red)
+                                    }
+                                    .buttonStyle(.borderless)
+                                    .help(NSLocalizedString("delete_history", comment: ""))
                                 }
-                                .buttonStyle(.borderless)
-                                .help(NSLocalizedString("delete_history", comment: ""))
                             }
                             .padding(.vertical, 6)
 
@@ -104,6 +126,13 @@ struct HistorySection: View {
             }
         }
         .padding()
+    }
+
+    private func scheduleTypeLabel(_ type: HistoryEntry.ScheduleType) -> String {
+        switch type {
+        case .review: return NSLocalizedString("schedule_mode_review", comment: "")
+        case .single: return NSLocalizedString("schedule_mode_single", comment: "")
+        }
     }
 
     private func deleteEntry(_ entry: HistoryEntry) {

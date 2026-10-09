@@ -2,6 +2,7 @@ import SwiftUI
 
 struct RecreateUndoSection: View {
     @ObservedObject var viewModel: ReviewViewModel
+    var showsUndo: Bool = true
 
     var body: some View {
         HStack(spacing: 10) {
@@ -19,7 +20,7 @@ struct RecreateUndoSection: View {
                 ))
             }
 
-            if viewModel.canUndo {
+            if showsUndo && viewModel.canUndo {
                 Button(action: {
                     Task {
                         await viewModel.undoReviewSchedule()

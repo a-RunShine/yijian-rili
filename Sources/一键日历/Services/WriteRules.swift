@@ -57,6 +57,27 @@ enum ReviewNoteKey {
     static let single = ""
 }
 
+enum ReviewNotes {
+    static let reminderLine = "提醒建议：当天 09:00"
+
+    static func compose(key: String, detail: String?) -> String {
+        let trimmedDetail = detail?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        var lines: [String] = []
+        if !key.isEmpty {
+            lines.append(key)
+        }
+        lines.append(reminderLine)
+        if !trimmedDetail.isEmpty {
+            lines.append(trimmedDetail)
+        }
+        return lines.joined(separator: "\n")
+    }
+
+    static func replacingDetail(in notes: String, detail: String?) -> String {
+        compose(key: NormalizeNotes.normalize(notes), detail: detail)
+    }
+}
+
 enum NormalizeNotes {
     static func normalize(_ details: String?) -> String {
         guard let details, !details.isEmpty else { return "" }

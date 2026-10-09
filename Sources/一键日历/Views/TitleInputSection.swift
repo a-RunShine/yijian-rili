@@ -8,8 +8,11 @@ struct TitleInputSection: View {
         VStack(alignment: .leading, spacing: 8) {
             scheduleModePicker
 
-            Label(NSLocalizedString("title", comment: ""), systemImage: "pencil.line")
-                .font(.headline)
+            Text(NSLocalizedString("title", comment: ""))
+                .font(.caption)
+                .fontWeight(.semibold)
+                .foregroundColor(viewModel.currentTheme.secondaryTextColor ?? .secondary)
+
             TextField(NSLocalizedString("enter_title", comment: ""), text: $viewModel.title)
                 .textFieldStyle(RoundedBorderTextFieldStyle())
                 .focused($isFocused)
@@ -26,9 +29,6 @@ struct TitleInputSection: View {
                 }
             }
         }
-        .padding()
-        .background(viewModel.currentTheme.cardBackgroundColor)
-        .cornerRadius(10)
         .onAppear {
             isFocused = true
         }

@@ -26,6 +26,7 @@ final class ReviewSession {
     private let outcomes: CreateSuccessOutcomes
 
     var title: String = ""
+    var detail: String = ""
     var baseDate: Date = Date()
     var reviewDates: [Date] = []
     var scheduleMode: ScheduleMode = .review
@@ -43,6 +44,7 @@ final class ReviewSession {
 
     private var lastCreatedTitle: String?
     private var lastCreatedBaseDate: Date?
+    private var lastRecordedHistoryEntryID: UUID?
 
     private(set) var shouldPlayHaptic: Bool = false
 
@@ -194,6 +196,70 @@ final class ReviewSession {
         canRecreate = false
     }
 
+    func todayCreatedEntries(now: Date = Date(), calendar: Calendar = .current) -> [HistoryEntry] {
+        outcomes.todayCreatedEntries(now: now, calendar: calendar)
+    }
+
+    @discardableResult
+    func discardRecordedContainingEvent(id: String) -> UUID? {
+        outcomes.discardRecordedContainingEvent(id: id)
+    }
+
+    @discardableResult
+    func removeEventsFromRecorded(ids: [String]) -> RemoveEventsFromRecordedOutcome {
+        outcomes.removeEventsFromRecorded(ids: ids)
+    }
+
+    @discardableResult
+    func updateSharedDetail(for entry: HistoryEntry, detail: String) -> SharedDetailUpdateOutcome {
+        resultMessage = nil
+        resultType = nil
+
+        let identifiers = entry.createdEventIdentifiers
+        guard !identifiers.isEmpty else {
+            resultMessage = NSLocalizedString("shared_detail_unavailable", comment: "")
+            resultType = .warning
+            return .unavailable
+        }
+
+        let detailForWrite = Self.optionalDetail(from: detail)
+        let counts = CalendarWriteOrchestrator.rewriteSharedDetail(
+            identifiers: identifiers,
+            detail: detailForWrite,
+            eventNotes: { [calendar] id in calendar.eventNotes(id: id) },
+            updateEventNotes: { [calendar] id, notes in calendar.updateEventNotes(id: id, notes: notes) }
+        )
+        let updated = counts.updated
+        let missing = counts.missing
+
+        if updated > 0 {
+            outcomes.updateSharedDetail(id: entry.id, sharedDetail: detailForWrite)
+        }
+
+        if missing == 0 {
+            resultMessage = String(
+                format: NSLocalizedString("shared_detail_success", comment: ""),
+                "\(updated)"
+            )
+            resultType = .success
+        } else if updated > 0 {
+            resultMessage = String(
+                format: NSLocalizedString("shared_detail_partial", comment: ""),
+                "\(updated)",
+                "\(missing)"
+            )
+            resultType = .warning
+        } else {
+            resultMessage = String(
+                format: NSLocalizedString("shared_detail_all_missing", comment: ""),
+                "\(missing)"
+            )
+            resultType = .warning
+        }
+
+        return .updated(updated: updated, missing: missing)
+    }
+
     func consumeHapticFlag() -> Bool {
         let flag = shouldPlayHaptic
         shouldPlayHaptic = false
@@ -206,6 +272,7 @@ final class ReviewSession {
         resultType = nil
 
         let trimmedTitle = title.trimmingCharacters(in: .whitespaces)
+        let detailForWrite = Self.optionalDetail(from: detail)
 
         guard !trimmedTitle.isEmpty else {
             resultMessage = NSLocalizedString("empty_title_error", comment: "")
@@ -255,13 +322,15 @@ final class ReviewSession {
                     title: trimmedTitle,
                     baseDate: baseDate,
                     intervals: reviewIntervals,
-                    calendarId: calendarId
+                    calendarId: calendarId,
+                    detail: detailForWrite
                 )
             case .single:
                 createResult = try await calendar.createSingleEvent(
                     title: trimmedTitle,
                     date: baseDate,
-                    calendarId: calendarId
+                    calendarId: calendarId,
+                    detail: detailForWrite
                 )
             }
 
@@ -282,7 +351,11 @@ final class ReviewSession {
                     resultMessage = String(format: NSLocalizedString("success_message", comment: ""), createdDates)
                 }
                 resultType = .success
-                onCreateSuccess(trimmed: trimmedTitle, created: createResult.created)
+                onCreateSuccess(
+                    trimmed: trimmedTitle,
+                    created: createResult.created,
+                    sharedDetail: detailForWrite
+                )
             }
         } catch {
             resultMessage = error.localizedDescription
@@ -293,6 +366,7 @@ final class ReviewSession {
     func undo() async {
         let undo = await calendar.undoLastCreation()
         let undoneTitle = lastCreatedTitle ?? ""
+        let recordedID = lastRecordedHistoryEntryID
 
         if undo.success {
             if undoneTitle.isEmpty {
@@ -310,11 +384,15 @@ final class ReviewSession {
             resultType = .warning
         }
 
+        if let recordedID {
+            outcomes.discardRecorded(id: recordedID)
+        }
+        lastRecordedHistoryEntryID = nil
         canUndo = false
         canRecreate = false
     }
 
-    private func onCreateSuccess(trimmed: String, created: [Date]) {
+    private func onCreateSuccess(trimmed: String, created: [Date], sharedDetail: String?) {
         shouldPlayHaptic = true
         lastCreatedTitle = trimmed
         lastCreatedBaseDate = baseDate
@@ -325,12 +403,21 @@ final class ReviewSession {
             baseDate: baseDate,
             reviewDates: created,
             creationDate: Date(),
-            type: scheduleMode == .single ? .single : .review
+            type: scheduleMode == .single ? .single : .review,
+            createdEventIdentifiers: calendar.lastCreatedEventIdentifiers,
+            sharedDetail: sharedDetail
         )
         outcomes.record(entry)
+        lastRecordedHistoryEntryID = entry.id
         title = ""
+        detail = ""
         baseDate = Date()
         updateReviewDates()
+    }
+
+    private static func optionalDetail(from raw: String) -> String? {
+        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
     }
 
     private static func loadIntervals() -> [Int] {

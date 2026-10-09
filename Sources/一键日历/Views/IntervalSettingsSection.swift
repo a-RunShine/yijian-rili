@@ -7,6 +7,7 @@ struct IntervalEntry: Identifiable {
 
 struct IntervalSettingsSection: View {
     @ObservedObject var viewModel: ReviewViewModel
+    var forceExpanded: Bool = false
     @State private var tempIntervals: [IntervalEntry] = [IntervalEntry(value: "3"), IntervalEntry(value: "7"), IntervalEntry(value: "30")]
     @State private var showError: Bool = false
     @State private var errorMessage: String = ""
@@ -20,6 +21,8 @@ struct IntervalSettingsSection: View {
     @State private var hasInitialized: Bool = false
 
     private let maxIntervalCount = 10
+
+    private var expanded: Bool { forceExpanded || isExpanded }
 
     private var savedSnapshot: [Int] {
         guard let data = savedSnapshotJSON.data(using: .utf8),
@@ -53,33 +56,41 @@ struct IntervalSettingsSection: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Button(action: {
-                withAnimation(.easeInOut(duration: 0.25)) {
-                    isExpanded.toggle()
-                }
-            }) {
-                HStack {
-                    Label(NSLocalizedString("interval_settings_title", comment: ""), systemImage: "slider.horizontal.3")
-                        .font(.headline)
-                    Spacer()
-                    if let custom = activeCustomPreset {
-                        Text(custom.name)
-                            .font(.caption)
-                            .foregroundColor(viewModel.currentTheme.secondaryTextColor ?? .secondary)
-                    } else if let preset = activePreset {
-                        Text(preset.displayName)
+            if forceExpanded {
+                Text(NSLocalizedString("interval_settings_title", comment: ""))
+                    .font(.caption)
+                    .fontWeight(.semibold)
+                    .foregroundColor(viewModel.currentTheme.secondaryTextColor ?? .secondary)
+                    .padding(.bottom, 8)
+            } else {
+                Button(action: {
+                    withAnimation(.easeInOut(duration: 0.25)) {
+                        isExpanded.toggle()
+                    }
+                }) {
+                    HStack {
+                        Label(NSLocalizedString("interval_settings_title", comment: ""), systemImage: "slider.horizontal.3")
+                            .font(.headline)
+                        Spacer()
+                        if let custom = activeCustomPreset {
+                            Text(custom.name)
+                                .font(.caption)
+                                .foregroundColor(viewModel.currentTheme.secondaryTextColor ?? .secondary)
+                        } else if let preset = activePreset {
+                            Text(preset.displayName)
+                                .font(.caption)
+                                .foregroundColor(viewModel.currentTheme.secondaryTextColor ?? .secondary)
+                        }
+                        Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
                             .font(.caption)
                             .foregroundColor(viewModel.currentTheme.secondaryTextColor ?? .secondary)
                     }
-                    Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
-                        .font(.caption)
-                        .foregroundColor(viewModel.currentTheme.secondaryTextColor ?? .secondary)
+                    .contentShape(Rectangle())
                 }
-                .contentShape(Rectangle())
+                .buttonStyle(.plain)
             }
-            .buttonStyle(.plain)
 
-            if isExpanded {
+            if expanded {
                 VStack(alignment: .leading, spacing: 10) {
                     HStack(spacing: 6) {
                         ForEach(IntervalPreset.allCases, id: \.self) { preset in
@@ -212,6 +223,12 @@ struct IntervalSettingsSection: View {
                         .controlSize(.small)
                         .tint(viewModel.currentTheme.accentColor ?? .accentColor)
 
+                        if forceExpanded {
+                            Text(NSLocalizedString("interval_save_refresh_hint", comment: ""))
+                                .font(.caption)
+                                .foregroundColor(viewModel.currentTheme.secondaryTextColor ?? .secondary)
+                        }
+
                         Button(NSLocalizedString("reset_intervals", comment: "")) {
                             viewModel.resetIntervalsToDefault()
                             tempIntervals = viewModel.reviewIntervals.map { IntervalEntry(value: String($0)) }
@@ -221,12 +238,16 @@ struct IntervalSettingsSection: View {
                         .controlSize(.small)
                     }
                 }
-                .padding(.top, 10)
+                .padding(forceExpanded ? 12 : 0)
+                .padding(.top, forceExpanded ? 12 : 10)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(forceExpanded ? viewModel.currentTheme.cardBackgroundColor : Color.clear)
+                .cornerRadius(forceExpanded ? 10 : 0)
                 .transition(.opacity.combined(with: .move(edge: .top)))
             }
         }
-        .padding()
-        .background(viewModel.currentTheme.cardBackgroundColor)
+        .padding(forceExpanded ? 0 : 16)
+        .background(forceExpanded ? Color.clear : viewModel.currentTheme.cardBackgroundColor)
         .cornerRadius(10)
         .onAppear {
             guard !hasInitialized else { return }
