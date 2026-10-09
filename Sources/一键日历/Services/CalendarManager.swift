@@ -194,6 +194,11 @@ final class CalendarManager: ObservableObject, CalendarService, CalendarEventSto
             .map { Self.mapEvent($0) }
     }
 
+    func event(withId id: String) -> CalendarEventInfo? {
+        guard let event = eventStore.event(withIdentifier: id) else { return nil }
+        return Self.mapEvent(event)
+    }
+
     @discardableResult
     func deleteEvent(id: String) -> Bool {
         guard let event = eventStore.event(withIdentifier: id) else {

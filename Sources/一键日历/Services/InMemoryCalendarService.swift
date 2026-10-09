@@ -179,6 +179,10 @@ final class InMemoryCalendarService: CalendarService, CalendarEventStore {
             }
     }
 
+    func event(withId id: String) -> CalendarEventInfo? {
+        events.first(where: { $0.id == id })
+    }
+
     @discardableResult
     func deleteEvent(id: String) -> Bool {
         let before = events.count

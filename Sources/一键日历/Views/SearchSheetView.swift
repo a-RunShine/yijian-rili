@@ -3,14 +3,17 @@ import SwiftUI
 struct SearchSheetView: View {
     @ObservedObject var viewModel: ReviewViewModel
     @FocusState private var isFieldFocused: Bool
-    @State private var eventPendingDelete: CalendarEventInfo?
+    @State private var hitPendingDelete: SearchHit?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            if let event = viewModel.selectedSearchResult {
+            if let hit = viewModel.selectedSearchHit {
                 Group {
-                    detailHeader
-                    SearchResultDetailView(viewModel: viewModel, event: event)
+                    detailHeader(for: hit)
+                    SearchResultDetailView(viewModel: viewModel, event: hit.representative)
+                    if hit.isSeries {
+                        seriesMembersHint(hit)
+                    }
                 }
                 .id("search-detail")
                 .transition(.asymmetric(
@@ -33,39 +36,50 @@ struct SearchSheetView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .padding()
-        .animation(.spring(response: 0.4, dampingFraction: 0.85), value: viewModel.selectedSearchResult?.id)
+        .animation(.spring(response: 0.4, dampingFraction: 0.85), value: viewModel.selectedSearchHit?.id)
         .onAppear {
-            isFieldFocused = viewModel.selectedSearchResult == nil
+            isFieldFocused = viewModel.selectedSearchHit == nil
         }
         .alert(
             NSLocalizedString("search_delete_confirm_title", comment: ""),
             isPresented: Binding(
-                get: { eventPendingDelete != nil },
-                set: { if !$0 { eventPendingDelete = nil } }
+                get: { hitPendingDelete != nil },
+                set: { if !$0 { hitPendingDelete = nil } }
             ),
-            presenting: eventPendingDelete
-        ) { event in
+            presenting: hitPendingDelete
+        ) { hit in
             Button(NSLocalizedString("search_delete_cancel", comment: ""), role: .cancel) {
-                eventPendingDelete = nil
+                hitPendingDelete = nil
             }
             Button(NSLocalizedString("search_delete_confirm_action", comment: ""), role: .destructive) {
-                performDelete(event)
+                performDirectDelete(hit)
             }
-        } message: { event in
+        } message: { hit in
             Text(String(
                 format: NSLocalizedString("search_delete_confirm_message", comment: ""),
-                event.title.isEmpty ? NSLocalizedString("untitled", comment: "") : event.title
+                hit.title.isEmpty ? NSLocalizedString("untitled", comment: "") : hit.title
             ))
+        }
+        .sheet(item: $viewModel.seriesPendingDelete) { hit in
+            SeriesDeleteSheet(viewModel: viewModel, hit: hit)
         }
     }
 
-    private func performDelete(_ event: CalendarEventInfo) {
-        eventPendingDelete = nil
-        let success = viewModel.deleteSearchResult(event)
-        if success, viewModel.selectedSearchResult?.id == event.id {
+    private func performDirectDelete(_ hit: SearchHit) {
+        hitPendingDelete = nil
+        let success = viewModel.deleteSearchHit(hit)
+        if success, viewModel.selectedSearchHit?.id == hit.id {
             withAnimation(.spring(response: 0.4, dampingFraction: 0.85)) {
-                viewModel.selectedSearchResult = nil
+                viewModel.clearSearchSelection()
             }
+        }
+    }
+
+    private func requestDelete(_ hit: SearchHit) {
+        if hit.needsSelectiveDelete {
+            viewModel.beginSeriesDelete(hit)
+        } else {
+            hitPendingDelete = hit
         }
     }
 
@@ -84,11 +98,11 @@ struct SearchSheetView: View {
         }
     }
 
-    private var detailHeader: some View {
+    private func detailHeader(for hit: SearchHit) -> some View {
         HStack {
             Button {
                 withAnimation(.spring(response: 0.4, dampingFraction: 0.85)) {
-                    viewModel.selectedSearchResult = nil
+                    viewModel.clearSearchSelection()
                 }
             } label: {
                 Label(NSLocalizedString("search_back", comment: ""), systemImage: "chevron.left")
@@ -96,16 +110,14 @@ struct SearchSheetView: View {
             }
             .buttonStyle(.borderless)
             Spacer()
-            if let event = viewModel.selectedSearchResult {
-                Button {
-                    eventPendingDelete = event
-                } label: {
-                    Image(systemName: "trash")
-                        .foregroundColor(.red)
-                }
-                .buttonStyle(.borderless)
-                .help(NSLocalizedString("search_delete_button", comment: ""))
+            Button {
+                requestDelete(hit)
+            } label: {
+                Image(systemName: "trash")
+                    .foregroundColor(.red)
             }
+            .buttonStyle(.borderless)
+            .help(NSLocalizedString("search_delete_button", comment: ""))
             Button {
                 viewModel.showSearch = false
             } label: {
@@ -114,6 +126,17 @@ struct SearchSheetView: View {
             }
             .buttonStyle(.borderless)
         }
+    }
+
+    private func seriesMembersHint(_ hit: SearchHit) -> some View {
+        Text(
+            String(
+                format: NSLocalizedString("series_search_member_count", comment: ""),
+                "\(hit.members.count)"
+            )
+        )
+        .font(.caption)
+        .foregroundColor(viewModel.currentTheme.secondaryTextColor ?? .secondary)
     }
 
     private var searchField: some View {
@@ -132,6 +155,7 @@ struct SearchSheetView: View {
                 Button {
                     viewModel.searchText = ""
                     viewModel.searchResults = []
+                    viewModel.searchHits = []
                     isFieldFocused = true
                 } label: {
                     Image(systemName: "xmark.circle.fill")
@@ -151,7 +175,7 @@ struct SearchSheetView: View {
     private var searchBody: some View {
         let trimmed = viewModel.searchText.trimmingCharacters(in: .whitespacesAndNewlines)
         if !trimmed.isEmpty {
-            Text(String(format: NSLocalizedString("search_result_count", comment: ""), "\(viewModel.searchResults.count)"))
+            Text(String(format: NSLocalizedString("search_result_count", comment: ""), "\(viewModel.searchHits.count)"))
                 .font(.caption)
                 .foregroundColor(viewModel.currentTheme.secondaryTextColor ?? .secondary)
         }
@@ -161,7 +185,7 @@ struct SearchSheetView: View {
                 .font(.caption)
                 .foregroundColor(viewModel.currentTheme.secondaryTextColor ?? .secondary)
                 .frame(maxWidth: .infinity, alignment: .leading)
-        } else if viewModel.searchResults.isEmpty {
+        } else if viewModel.searchHits.isEmpty {
             Text(NSLocalizedString("search_no_results", comment: ""))
                 .font(.caption)
                 .foregroundColor(viewModel.currentTheme.secondaryTextColor ?? .secondary)
@@ -169,9 +193,9 @@ struct SearchSheetView: View {
         } else {
             ScrollView {
                 VStack(spacing: 0) {
-                    ForEach(Array(viewModel.searchResults.enumerated()), id: \.element.id) { index, event in
-                        searchRow(event)
-                        if index < viewModel.searchResults.count - 1 {
+                    ForEach(Array(viewModel.searchHits.enumerated()), id: \.element.id) { index, hit in
+                        searchRow(hit)
+                        if index < viewModel.searchHits.count - 1 {
                             Divider()
                         }
                     }
@@ -180,11 +204,12 @@ struct SearchSheetView: View {
         }
     }
 
-    private func searchRow(_ event: CalendarEventInfo) -> some View {
-        HStack(spacing: 4) {
+    private func searchRow(_ hit: SearchHit) -> some View {
+        let event = hit.representative
+        return HStack(spacing: 4) {
             Button {
                 withAnimation(.spring(response: 0.4, dampingFraction: 0.85)) {
-                    viewModel.selectedSearchResult = event
+                    viewModel.selectSearchHit(hit)
                 }
             } label: {
                 HStack(spacing: 8) {
@@ -193,24 +218,35 @@ struct SearchSheetView: View {
                         .frame(width: 8, height: 8)
 
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(event.title.isEmpty ? NSLocalizedString("untitled", comment: "") : event.title)
+                        Text(hit.title.isEmpty ? NSLocalizedString("untitled", comment: "") : hit.title)
                             .font(.subheadline)
                             .lineLimit(1)
                         HStack(spacing: 4) {
-                            Text(event.start.formattedChinese())
+                            if hit.isSeries {
+                                Text(
+                                    String(
+                                        format: NSLocalizedString("series_search_row_subtitle", comment: ""),
+                                        "\(hit.members.count)"
+                                    )
+                                )
                                 .font(.caption)
                                 .foregroundColor(viewModel.currentTheme.secondaryTextColor ?? .secondary)
-                            Text("·")
-                                .font(.caption)
-                                .foregroundColor(viewModel.currentTheme.secondaryTextColor ?? .secondary)
-                            if event.isAllDay {
-                                Text(NSLocalizedString("all_day", comment: ""))
-                                    .font(.caption)
-                                    .foregroundColor(viewModel.currentTheme.secondaryTextColor ?? .secondary)
                             } else {
-                                Text(event.start.formattedTime())
+                                Text(event.start.formattedChinese())
                                     .font(.caption)
                                     .foregroundColor(viewModel.currentTheme.secondaryTextColor ?? .secondary)
+                                Text("·")
+                                    .font(.caption)
+                                    .foregroundColor(viewModel.currentTheme.secondaryTextColor ?? .secondary)
+                                if event.isAllDay {
+                                    Text(NSLocalizedString("all_day", comment: ""))
+                                        .font(.caption)
+                                        .foregroundColor(viewModel.currentTheme.secondaryTextColor ?? .secondary)
+                                } else {
+                                    Text(event.start.formattedTime())
+                                        .font(.caption)
+                                        .foregroundColor(viewModel.currentTheme.secondaryTextColor ?? .secondary)
+                                }
                             }
                         }
                     }
@@ -224,7 +260,7 @@ struct SearchSheetView: View {
             .buttonStyle(.plain)
 
             Button {
-                eventPendingDelete = event
+                requestDelete(hit)
             } label: {
                 Image(systemName: "trash")
                     .foregroundColor(.red)

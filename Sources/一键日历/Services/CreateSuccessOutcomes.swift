@@ -30,13 +30,30 @@ final class CreateSuccessOutcomes {
 
     @discardableResult
     func discardRecordedContainingEvent(id: String) -> UUID? {
-        guard let entry = history.load().first(where: {
-            $0.createdEventIdentifiers.contains(id)
-        }) else {
+        switch removeEventsFromRecorded(ids: [id]) {
+        case .discarded(let entryID):
+            return entryID
+        case .updated, .noMatch:
             return nil
         }
-        discardRecorded(id: entry.id)
-        return entry.id
+    }
+
+    @discardableResult
+    func removeEventsFromRecorded(ids: [String]) -> RemoveEventsFromRecordedOutcome {
+        let idSet = Set(ids)
+        guard !idSet.isEmpty else { return .noMatch }
+        guard let entry = history.load().first(where: {
+            $0.createdEventIdentifiers.contains(where: idSet.contains)
+        }) else {
+            return .noMatch
+        }
+        let remaining = entry.createdEventIdentifiers.filter { !idSet.contains($0) }
+        if remaining.isEmpty {
+            discardRecorded(id: entry.id)
+            return .discarded(id: entry.id)
+        }
+        history.replace(entry.withCreatedEventIdentifiers(remaining))
+        return .updated(id: entry.id, remainingIdentifiers: remaining)
     }
 
     func updateSharedDetail(id: UUID, sharedDetail: String?) {

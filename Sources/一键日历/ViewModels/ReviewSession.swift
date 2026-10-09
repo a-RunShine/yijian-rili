@@ -206,6 +206,11 @@ final class ReviewSession {
     }
 
     @discardableResult
+    func removeEventsFromRecorded(ids: [String]) -> RemoveEventsFromRecordedOutcome {
+        outcomes.removeEventsFromRecorded(ids: ids)
+    }
+
+    @discardableResult
     func updateSharedDetail(for entry: HistoryEntry, detail: String) -> SharedDetailUpdateOutcome {
         resultMessage = nil
         resultType = nil

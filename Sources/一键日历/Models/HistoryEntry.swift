@@ -51,6 +51,19 @@ struct HistoryEntry: Identifiable, Codable {
         )
     }
 
+    func withCreatedEventIdentifiers(_ identifiers: [String]) -> HistoryEntry {
+        HistoryEntry(
+            id: id,
+            title: title,
+            baseDate: baseDate,
+            reviewDates: reviewDates,
+            creationDate: creationDate,
+            type: type,
+            createdEventIdentifiers: identifiers,
+            sharedDetail: sharedDetail
+        )
+    }
+
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         id = try c.decode(UUID.self, forKey: .id)

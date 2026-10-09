@@ -229,6 +229,12 @@
 "search_delete_cancel" = "取消";
 "search_delete_confirm_action" = "删除";
 "search_delete_success" = "已删除日程";
+"series_search_row_subtitle" = "复习计划 · %@次";
+"series_search_member_count" = "系列共 %@ 次复习";
+"series_delete_title" = "选择要删除的复习";
+"series_delete_subtitle" = "「%@」";
+"series_delete_confirm" = "删除所选";
+"series_delete_member_fallback" = "第%@次复习";
 
 // Weekly Review (周末总结)
 "weekly_review_button" = "周末总结";

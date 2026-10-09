@@ -33,6 +33,7 @@ protocol CalendarService: AnyObject {
     func undoLastCreation() async -> UndoResult
 
     func fetchEvents(on date: Date) -> [CalendarEventInfo]
+    func event(withId id: String) -> CalendarEventInfo?
     @discardableResult
     func deleteEvent(id: String) -> Bool
     func searchEvents(query: String, daysAhead: Int) -> [CalendarEventInfo]

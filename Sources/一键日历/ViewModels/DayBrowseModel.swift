@@ -82,15 +82,29 @@ final class DayBrowseModel {
 
     @discardableResult
     func deleteSearchResult(_ event: CalendarEventInfo) -> Bool {
-        let success = calendar.deleteEvent(id: event.id)
-        if success {
-            searchResults.removeAll { $0.id == event.id }
-            if selectedSearchResult?.id == event.id {
+        deleteEvents(ids: [event.id]).deletedCount > 0
+    }
+
+    @discardableResult
+    func deleteEvents(ids: [String]) -> (deletedCount: Int, missingCount: Int) {
+        var deletedCount = 0
+        var missingCount = 0
+        let idSet = Set(ids)
+        for id in idSet {
+            if calendar.deleteEvent(id: id) {
+                deletedCount += 1
+            } else {
+                missingCount += 1
+            }
+        }
+        if deletedCount > 0 {
+            searchResults.removeAll { idSet.contains($0.id) }
+            if let selected = selectedSearchResult, idSet.contains(selected.id) {
                 selectedSearchResult = nil
             }
             loadDisplayedDayEvents()
         }
-        return success
+        return (deletedCount, missingCount)
     }
 
     func resetSearch() {

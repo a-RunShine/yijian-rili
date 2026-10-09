@@ -158,6 +158,43 @@ final class ReviewSessionTests: XCTestCase {
         XCTAssertEqual(weekly.appendCallCount, 0)
     }
 
+    func testRemoveEventsFromRecordedPartialThenDiscard() async throws {
+        let suiteName = "series-remove-\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defaults.removePersistentDomain(forName: suiteName)
+
+        let calendar = InMemoryCalendarService(grantAccessByDefault: true)
+        let history = HistoryStore(defaults: defaults)
+        let weekly = WeeklyReviewViewModel(defaults: defaults)
+        let outcomes = CreateSuccessOutcomes(history: history, weekly: weekly)
+        let session = ReviewSession(calendar: calendar, outcomes: outcomes)
+
+        session.title = "系列部分删"
+        session.baseDate = Date()
+        session.scheduleMode = .review
+        session.reviewIntervals = [3, 7, 30]
+        session.updateReviewDates()
+        await session.create()
+
+        let batchID = try XCTUnwrap(history.load().first?.id)
+        let ids = try XCTUnwrap(history.load().first?.createdEventIdentifiers)
+        XCTAssertEqual(ids.count, 3)
+
+        let partial = session.removeEventsFromRecorded(ids: [ids[0]])
+        XCTAssertEqual(partial, .updated(id: batchID, remainingIdentifiers: Array(ids.dropFirst())))
+        XCTAssertEqual(history.load().first?.createdEventIdentifiers.count, 2)
+        XCTAssertTrue(weekly.weeklyEntries.contains(where: { $0.id == batchID }))
+
+        let rest = Array(ids.dropFirst())
+        let full = session.removeEventsFromRecorded(ids: rest)
+        XCTAssertEqual(full, .discarded(id: batchID))
+        XCTAssertTrue(history.load().isEmpty)
+        XCTAssertTrue(session.todayCreatedEntries().isEmpty)
+        XCTAssertFalse(weekly.weeklyEntries.contains(where: { $0.id == batchID }))
+
+        defaults.removePersistentDomain(forName: suiteName)
+    }
+
     func testDiscardRecordedContainingEventClearsTodayCreatedAndWeeklySource() async throws {
         let suiteName = "delete-today-weekly-\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suiteName)!
