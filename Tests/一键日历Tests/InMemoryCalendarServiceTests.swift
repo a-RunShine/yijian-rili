@@ -154,6 +154,42 @@ final class ReviewViewModelCalendarInjectionTests: XCTestCase {
         )
     }
 
+    func testDeleteSearchResultClearsTodayCreatedAndWeeklyViaFacade() async {
+        let calendar = InMemoryCalendarService(grantAccessByDefault: true)
+        let viewModel = ReviewViewModel(calendar: calendar)
+        let marker = "tip-smoke-del-\(UUID().uuidString.prefix(8))"
+        let eventDay = Date()
+        viewModel.title = marker
+        viewModel.baseDate = eventDay
+        viewModel.scheduleMode = .single
+        viewModel.updateReviewDates()
+
+        await viewModel.createReviewSchedule()
+        XCTAssertEqual(viewModel.resultType, .success)
+        let batchID = viewModel.todayCreatedEntries.first(where: { $0.title == marker })?.id
+        XCTAssertNotNil(batchID)
+        XCTAssertTrue(
+            viewModel.weeklyReviewViewModel.weeklyEntries.contains(where: { $0.title == marker })
+        )
+
+        viewModel.searchText = marker
+        viewModel.performSearch()
+        XCTAssertEqual(viewModel.searchResults.count, 1, "search must find the created event")
+        let event = viewModel.searchResults[0]
+        XCTAssertTrue(viewModel.deleteSearchResult(event))
+
+        XCTAssertTrue(calendar.fetchEvents(on: eventDay).isEmpty)
+        XCTAssertFalse(viewModel.todayCreatedEntries.contains(where: { $0.title == marker }))
+        XCTAssertFalse(
+            viewModel.historyEntries.contains(where: { $0.id == batchID }),
+            "delete-from-browse must discard 今日所建 batch"
+        )
+        XCTAssertFalse(
+            viewModel.weeklyReviewViewModel.weeklyEntries.contains(where: { $0.title == marker }),
+            "delete-from-browse must discard 周末总结 source"
+        )
+    }
+
     func testDetailBindingRoundsTripToSession() async {
         let calendar = InMemoryCalendarService(grantAccessByDefault: true)
         let viewModel = ReviewViewModel(calendar: calendar)

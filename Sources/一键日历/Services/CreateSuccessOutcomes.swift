@@ -28,6 +28,17 @@ final class CreateSuccessOutcomes {
         weekly.removeWeeklyEntries(id: id)
     }
 
+    @discardableResult
+    func discardRecordedContainingEvent(id: String) -> UUID? {
+        guard let entry = history.load().first(where: {
+            $0.createdEventIdentifiers.contains(id)
+        }) else {
+            return nil
+        }
+        discardRecorded(id: entry.id)
+        return entry.id
+    }
+
     func updateSharedDetail(id: UUID, sharedDetail: String?) {
         guard let existing = history.load().first(where: { $0.id == id }) else { return }
         history.replace(existing.withSharedDetail(sharedDetail))

@@ -530,6 +530,10 @@ class ReviewViewModel: ObservableObject {
         searchResults = browse.searchResults
         selectedSearchResult = browse.selectedSearchResult
         displayedEvents = browse.displayedEvents
+        if success {
+            session.discardRecordedContainingEvent(id: event.id)
+            refreshHistoryProjection()
+        }
         return success
     }
 

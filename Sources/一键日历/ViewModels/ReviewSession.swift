@@ -201,6 +201,11 @@ final class ReviewSession {
     }
 
     @discardableResult
+    func discardRecordedContainingEvent(id: String) -> UUID? {
+        outcomes.discardRecordedContainingEvent(id: id)
+    }
+
+    @discardableResult
     func updateSharedDetail(for entry: HistoryEntry, detail: String) -> SharedDetailUpdateOutcome {
         resultMessage = nil
         resultType = nil

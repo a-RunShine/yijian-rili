@@ -158,6 +158,38 @@ final class ReviewSessionTests: XCTestCase {
         XCTAssertEqual(weekly.appendCallCount, 0)
     }
 
+    func testDiscardRecordedContainingEventClearsTodayCreatedAndWeeklySource() async throws {
+        let suiteName = "delete-today-weekly-\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defaults.removePersistentDomain(forName: suiteName)
+
+        let calendar = InMemoryCalendarService(grantAccessByDefault: true)
+        let history = HistoryStore(defaults: defaults)
+        let weekly = WeeklyReviewViewModel(defaults: defaults)
+        let outcomes = CreateSuccessOutcomes(history: history, weekly: weekly)
+        let session = ReviewSession(calendar: calendar, outcomes: outcomes)
+
+        session.title = "搜索删除批次"
+        session.baseDate = CreateSuccessTestSupport.date(2026, 2, 1)
+        session.scheduleMode = .single
+        await session.create()
+
+        let batchID = try XCTUnwrap(history.load().first?.id)
+        let eventID = try XCTUnwrap(calendar.lastCreatedEventIdentifiers.first)
+        XCTAssertEqual(session.todayCreatedEntries().map(\.id), [batchID])
+        XCTAssertTrue(weekly.weeklyEntries.contains(where: { $0.id == batchID }))
+
+        XCTAssertTrue(calendar.deleteEvent(id: eventID))
+        let discarded = session.discardRecordedContainingEvent(id: eventID)
+
+        XCTAssertEqual(discarded, batchID)
+        XCTAssertTrue(history.load().isEmpty)
+        XCTAssertTrue(session.todayCreatedEntries().isEmpty)
+        XCTAssertFalse(weekly.weeklyEntries.contains(where: { $0.id == batchID }))
+
+        defaults.removePersistentDomain(forName: suiteName)
+    }
+
     func testUndoAfterCreateClearsTodayCreatedAndWeeklySource() async throws {
         let suiteName = "undo-today-weekly-\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suiteName)!
