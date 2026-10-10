@@ -16,6 +16,47 @@ final class WriteRulesTests: XCTestCase {
         XCTAssertEqual(NormalizeNotes.normalize("  第2次复习  "), "第2次复习")
     }
 
+    func testNotesDetailExtractStripsReviewKeyAndReminder() {
+        XCTAssertEqual(NotesDetail.extract(nil), "")
+        XCTAssertEqual(NotesDetail.extract(""), "")
+        XCTAssertEqual(
+            NotesDetail.extract("第1次复习\n提醒建议：当天 09:00"),
+            ""
+        )
+        XCTAssertEqual(
+            NotesDetail.extract("第2次复习\n提醒建议：当天 09:00\n课堂补充"),
+            "课堂补充"
+        )
+        XCTAssertEqual(
+            NotesDetail.extract("提醒建议：当天 09:00\n单次备注"),
+            "单次备注"
+        )
+        XCTAssertEqual(
+            NotesDetail.extract("提醒建议：当天 09:00"),
+            ""
+        )
+        XCTAssertEqual(
+            NotesDetail.extract("第3次复习\n提醒建议：当天 09:00\n第一行\n第二行"),
+            "第一行\n第二行"
+        )
+        XCTAssertEqual(
+            NotesDetail.extract("第1次复习\n提醒建议：当天 09:00\n  两端空白  "),
+            "两端空白"
+        )
+        XCTAssertEqual(
+            NotesDetail.extract(ReviewNotes.compose(key: "第1次复习", detail: "共享详情")),
+            "共享详情"
+        )
+        XCTAssertEqual(
+            NotesDetail.extract(ReviewNotes.compose(key: "", detail: "仅单次")),
+            "仅单次"
+        )
+        XCTAssertEqual(
+            NotesDetail.extract(ReviewNotes.compose(key: "第2次复习", detail: nil)),
+            ""
+        )
+    }
+
     func testReviewNotesComposeKeepsKeyFirstLine() {
         XCTAssertEqual(
             ReviewNotes.compose(key: "第1次复习", detail: nil),

@@ -95,7 +95,8 @@ struct TodayEventsSection: View {
     }
 
     private func eventCard(_ event: CalendarEventInfo) -> some View {
-        HStack(alignment: .top, spacing: 10) {
+        let detail = NotesDetail.extract(event.notes)
+        return HStack(alignment: .top, spacing: 10) {
             RoundedRectangle(cornerRadius: 2)
                 .fill(Color(hex: event.colorHex) ?? Color(red: 0.051, green: 0.580, blue: 0.533))
                 .frame(width: 4)
@@ -106,6 +107,12 @@ struct TodayEventsSection: View {
                     .fontWeight(.medium)
                     .foregroundColor(viewModel.currentTheme.primaryTextColor)
                     .lineLimit(2)
+                if !detail.isEmpty {
+                    Text(detail)
+                        .font(.caption)
+                        .foregroundColor(viewModel.currentTheme.secondaryTextColor ?? .secondary)
+                        .lineLimit(2)
+                }
                 HStack(spacing: 4) {
                     Text(event.isAllDay ? NSLocalizedString("all_day", comment: "") : event.start.formattedTime())
                     Text("·")

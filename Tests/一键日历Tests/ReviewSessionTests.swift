@@ -512,4 +512,44 @@ final class DayBrowseModelTests: XCTestCase {
         browse.performSearch()
         XCTAssertTrue(browse.searchResults.isEmpty)
     }
+
+    func testDisplayedEventsExposeExtractableNotesDetailForEachDay() async throws {
+        let calendar = InMemoryCalendarService()
+        let cal = Calendar.current
+        let today = cal.startOfDay(for: Date())
+        let yesterday = cal.date(byAdding: .day, value: -1, to: today)!
+        let tomorrow = cal.date(byAdding: .day, value: 1, to: today)!
+
+        _ = try await calendar.createSingleEvent(
+            title: "昨日条目", date: yesterday, calendarId: nil, detail: "昨详情"
+        )
+        _ = try await calendar.createReviewEvents(
+            title: "今日复习",
+            baseDate: cal.date(byAdding: .day, value: -3, to: today)!,
+            intervals: [3, 7, 30],
+            calendarId: nil,
+            detail: "今详情"
+        )
+        _ = try await calendar.createSingleEvent(
+            title: "明日条目", date: tomorrow, calendarId: nil, detail: "明详情"
+        )
+
+        let browse = DayBrowseModel(calendar: calendar)
+
+        browse.selectDayType(.yesterday)
+        XCTAssertEqual(
+            browse.displayedEvents.map { NotesDetail.extract($0.notes) },
+            ["昨详情"]
+        )
+
+        browse.selectDayType(.today)
+        let todayDetails = browse.displayedEvents.map { NotesDetail.extract($0.notes) }
+        XCTAssertTrue(todayDetails.contains("今详情"))
+
+        browse.selectDayType(.tomorrow)
+        XCTAssertEqual(
+            browse.displayedEvents.map { NotesDetail.extract($0.notes) },
+            ["明详情"]
+        )
+    }
 }

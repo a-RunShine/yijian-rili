@@ -90,6 +90,27 @@ enum NormalizeNotes {
     }
 }
 
+enum NotesDetail {
+    static func extract(_ notes: String?) -> String {
+        guard let notes, !notes.isEmpty else { return "" }
+        var lines = notes.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
+        if let first = lines.first, isReviewKeyLine(first) {
+            lines.removeFirst()
+        }
+        lines.removeAll { line in
+            line.trimmingCharacters(in: .whitespacesAndNewlines).hasPrefix("提醒建议")
+        }
+        return lines.joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private static func isReviewKeyLine(_ line: String) -> Bool {
+        let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmed.hasPrefix("第"), trimmed.hasSuffix("次复习") else { return false }
+        let number = trimmed.dropFirst().dropLast("次复习".count)
+        return !number.isEmpty && number.allSatisfy(\.isNumber)
+    }
+}
+
 enum DuplicateMatch {
     static func isDuplicate(
         title: String,
