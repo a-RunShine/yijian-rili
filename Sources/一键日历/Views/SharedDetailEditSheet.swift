@@ -35,11 +35,29 @@ struct SharedDetailEditSheet: View {
                 }
             }
 
-            TextField(NSLocalizedString("enter_detail", comment: ""), text: $viewModel.sharedDetailDraft, axis: .vertical)
-                .lineLimit(8...20)
-                .frame(minHeight: 160, alignment: .topLeading)
-                .textFieldStyle(.roundedBorder)
-                .disabled(!viewModel.canEditSharedDetailForSelection || viewModel.sharedDetailEditOutcomeVisible)
+            // macOS TextField(axis: .vertical) + roundedBorder ignores minHeight visually;
+            // TextEditor matches WeeklyReviewView and keeps a real multi-line editing plane.
+            ZStack(alignment: .topLeading) {
+                if viewModel.sharedDetailDraft.isEmpty {
+                    Text(NSLocalizedString("enter_detail", comment: ""))
+                        .foregroundColor((viewModel.currentTheme.secondaryTextColor ?? .secondary).opacity(0.6))
+                        .padding(.horizontal, 5)
+                        .padding(.vertical, 8)
+                        .allowsHitTesting(false)
+                }
+                TextEditor(text: $viewModel.sharedDetailDraft)
+                    .font(.body)
+                    .scrollContentBackground(.hidden)
+                    .frame(minHeight: 160, maxHeight: 280, alignment: .topLeading)
+                    .disabled(!viewModel.canEditSharedDetailForSelection || viewModel.sharedDetailEditOutcomeVisible)
+            }
+            .padding(6)
+            .background(viewModel.currentTheme.cardBackgroundColor)
+            .overlay(
+                RoundedRectangle(cornerRadius: 8)
+                    .stroke((viewModel.currentTheme.secondaryTextColor ?? .secondary).opacity(0.35), lineWidth: 1)
+            )
+            .accessibilityElement(children: .contain)
 
             if !viewModel.canEditSharedDetailForSelection {
                 Text(NSLocalizedString("shared_detail_unavailable", comment: ""))
