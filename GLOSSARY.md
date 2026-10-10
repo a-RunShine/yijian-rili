@@ -65,6 +65,10 @@ _Avoid_: ReviewViewModel.commitHistoryEntry, pendingHistoryEntry 通道
 macOS 侧专有——Windows 侧无对应 interface，直接 concrete 持有 `WeeklyReviewService`。
 _Avoid_: 在 outcomes 里直接拼 WeeklyEntry
 
+**历史系列查找**:
+按日历事件 id 在历史记录中定位对应系列（`createdEventIdentifiers` 包含该 id）；供日程浏览卡片打开系列共享详情。
+_Avoid_: 按标题模糊匹配
+
 **历史记录 store**:
 最近创建记录的 capped JSON 持久化（默认 20）；与周末总结物理分离。
 _Avoid_: 当作周末总结的唯一数据源

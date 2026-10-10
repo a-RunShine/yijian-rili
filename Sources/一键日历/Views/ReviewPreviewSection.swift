@@ -26,11 +26,6 @@ struct ReviewPreviewSection: View {
                     }
                 }
 
-                Text(NSLocalizedString("create_settings_hint", comment: ""))
-                    .font(.caption)
-                    .foregroundColor(viewModel.currentTheme.secondaryTextColor ?? .secondary)
-                    .padding(.top, 2)
-
                 if viewModel.reviewDates.allSatisfy({ Calendar.current.startOfDay(for: $0) < Calendar.current.startOfDay(for: Date()) }) {
                     HStack(spacing: 4) {
                         Image(systemName: "exclamationmark.triangle")

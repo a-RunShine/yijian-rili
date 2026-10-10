@@ -33,6 +33,23 @@ struct SharedDetailEditSheet: View {
                         .font(.caption)
                         .foregroundColor(viewModel.currentTheme.secondaryTextColor ?? .secondary)
                 }
+            } else if let event = viewModel.browseSharedDetailUnavailableEvent {
+                Text(event.title.isEmpty ? NSLocalizedString("untitled", comment: "") : event.title)
+                    .font(.subheadline)
+                    .foregroundColor(viewModel.currentTheme.secondaryTextColor ?? .secondary)
+                HStack(spacing: 4) {
+                    Text(event.isAllDay ? NSLocalizedString("all_day", comment: "") : event.start.formattedTime())
+                        .font(.caption)
+                        .foregroundColor(viewModel.currentTheme.secondaryTextColor ?? .secondary)
+                    Text("·")
+                        .font(.caption)
+                        .foregroundColor(viewModel.currentTheme.secondaryTextColor ?? .secondary)
+                    Text((event.calendarTitle?.isEmpty == false)
+                         ? (event.calendarTitle ?? "")
+                         : NSLocalizedString("calendar_default_label", comment: ""))
+                        .font(.caption)
+                        .foregroundColor(viewModel.currentTheme.secondaryTextColor ?? .secondary)
+                }
             }
 
             // macOS TextField(axis: .vertical) + roundedBorder ignores minHeight visually;
