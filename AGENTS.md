@@ -13,6 +13,7 @@ Agent 操作契约（always-loaded）。发版、CalDAV 同步、Windows 细节�
 
 - **禁止在代码里写注释**——`///`、`//`、`/* */`、`// MARK:` 都不行。意图靠命名与结构；领域规则写进 `GLOSSARY.md` 或 `docs/*/spec.md` / `plan.md`。本文件与 `docs/` 下 Markdown 不受此限。
 - **`@MainActor`**：所有 UI / ViewModel，以及 `Services/` 下 seam protocol 与全部实现者（含测试 fake）必须标 `@MainActor`。Swift 6 下 `@MainActor` 类型不能满足 `nonisolated` 协议要求；EventKit 侧也需要固定线程约定。新增 seam 时实现与 fake 一起标。
+- **Issue 与 PR 的标题、描述尽可能用中文。**
 
 ## 构建与验证
 
