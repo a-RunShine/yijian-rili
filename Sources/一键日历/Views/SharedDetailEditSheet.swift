@@ -36,7 +36,8 @@ struct SharedDetailEditSheet: View {
             }
 
             TextField(NSLocalizedString("enter_detail", comment: ""), text: $viewModel.sharedDetailDraft, axis: .vertical)
-                .lineLimit(3...6)
+                .lineLimit(8...20)
+                .frame(minHeight: 160, alignment: .topLeading)
                 .textFieldStyle(.roundedBorder)
                 .disabled(!viewModel.canEditSharedDetailForSelection || viewModel.sharedDetailEditOutcomeVisible)
 

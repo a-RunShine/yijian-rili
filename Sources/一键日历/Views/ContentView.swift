@@ -51,7 +51,7 @@ struct ContentView: View {
             set: { if !$0 { viewModel.cancelSharedDetailEdit() } }
         )) {
             SharedDetailEditSheet(viewModel: viewModel)
-                .frame(width: 340, height: 360)
+                .frame(width: 380, height: 480)
         }
         .onAppear {
             viewModel.scheduleFirstRunGuideIfNeeded()
@@ -153,16 +153,18 @@ struct ContentView: View {
     private var todaySegment: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 14) {
-                segmentHeader(
-                    title: NSLocalizedString("today_segment_title", comment: ""),
-                    subtitle: NSLocalizedString("today_segment_subtitle", comment: "")
-                )
+                HStack(alignment: .center, spacing: 8) {
+                    Text(NSLocalizedString("today_segment_title", comment: ""))
+                        .font(.title2)
+                        .fontWeight(.bold)
+                        .foregroundColor(viewModel.currentTheme.primaryTextColor)
+                    Spacer(minLength: 8)
+                    weeklyReviewTitleButton
+                }
 
                 TodayEventsSection(viewModel: viewModel)
 
                 TodayCreatedSection(viewModel: viewModel)
-
-                weeklyReviewEntryCard
 
                 Text(NSLocalizedString("today_segment_footer", comment: ""))
                     .font(.caption)
@@ -198,30 +200,36 @@ struct ContentView: View {
         }
     }
 
-    private var weeklyReviewEntryCard: some View {
+    private var weeklyReviewTitleButton: some View {
         Button(action: {
             viewModel.openWeeklyReview()
         }) {
-            HStack {
+            HStack(spacing: 4) {
                 Image(systemName: "calendar.badge.clock")
+                    .font(.caption)
                 Text(NSLocalizedString("weekly_review_button", comment: ""))
-                    .font(.subheadline)
-                Spacer()
+                    .font(.caption)
+                    .fontWeight(.semibold)
                 if !viewModel.weeklyReviewViewModel.entriesInCurrentWeek.isEmpty {
                     Text("\(viewModel.weeklyReviewViewModel.entriesInCurrentWeek.count)")
                         .font(.caption2)
                         .foregroundColor(.white)
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 2)
+                        .padding(.horizontal, 5)
+                        .padding(.vertical, 1)
                         .background(viewModel.currentTheme.accentColor ?? Color.accentColor)
                         .clipShape(Capsule())
                 }
             }
+            .foregroundColor(viewModel.currentTheme.primaryTextColor ?? .primary)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 5)
+            .background(
+                RoundedRectangle(cornerRadius: 8)
+                    .fill((viewModel.currentTheme.secondaryTextColor ?? .secondary).opacity(0.12))
+            )
         }
         .buttonStyle(.plain)
-        .padding()
-        .background(viewModel.currentTheme.cardBackgroundColor)
-        .cornerRadius(10)
+        .help(NSLocalizedString("weekly_review_button", comment: ""))
     }
 
     private var settingsChrome: some View {
