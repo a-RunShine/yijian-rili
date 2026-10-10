@@ -49,7 +49,12 @@ struct TodayEventsSection: View {
                     .cornerRadius(10)
             } else {
                 ForEach(viewModel.displayedEvents) { event in
-                    eventCard(event)
+                    Button {
+                        viewModel.beginSharedDetailEditFromBrowse(event)
+                    } label: {
+                        eventCard(event)
+                    }
+                    .buttonStyle(.plain)
                 }
             }
         }

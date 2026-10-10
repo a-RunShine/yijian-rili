@@ -43,6 +43,7 @@ class ReviewViewModel: ObservableObject {
     }
     @Published var sharedDetailDraft: String = ""
     @Published var editingSharedDetailEntryID: UUID?
+    @Published var browseSharedDetailUnavailableEvent: CalendarEventInfo?
     @Published var sharedDetailEditOutcomeVisible: Bool = false
     @Published var sharedDetailResultOnToday: Bool = false
     @Published var reviewDates: [Date] = []
@@ -376,18 +377,46 @@ class ReviewViewModel: ObservableObject {
     }
 
     var canEditSharedDetailForSelection: Bool {
+        guard browseSharedDetailUnavailableEvent == nil else { return false }
         guard let entry = editingSharedDetailEntry else { return false }
         return !entry.createdEventIdentifiers.isEmpty
+    }
+
+    var isSharedDetailSheetPresented: Bool {
+        editingSharedDetailEntryID != nil || browseSharedDetailUnavailableEvent != nil
     }
 
     func beginSharedDetailEdit(for entry: HistoryEntry) {
         sharedDetailEditOutcomeVisible = false
         sharedDetailResultOnToday = false
+        browseSharedDetailUnavailableEvent = nil
         if showHistory {
             showHistory = false
         }
         editingSharedDetailEntryID = entry.id
         sharedDetailDraft = entry.sharedDetail ?? ""
+    }
+
+    func beginSharedDetailEditFromBrowse(_ event: CalendarEventInfo) {
+        sharedDetailEditOutcomeVisible = false
+        sharedDetailResultOnToday = false
+        if showHistory {
+            showHistory = false
+        }
+        if let entry = HistorySeriesLookup.entry(containingEventId: event.id, in: historyEntries) {
+            browseSharedDetailUnavailableEvent = nil
+            editingSharedDetailEntryID = entry.id
+            let fromHistory = (entry.sharedDetail ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            if fromHistory.isEmpty {
+                sharedDetailDraft = NotesDetail.extract(event.notes)
+            } else {
+                sharedDetailDraft = entry.sharedDetail ?? ""
+            }
+        } else {
+            editingSharedDetailEntryID = nil
+            browseSharedDetailUnavailableEvent = event
+            sharedDetailDraft = NotesDetail.extract(event.notes)
+        }
     }
 
     func cancelSharedDetailEdit() {
@@ -408,6 +437,7 @@ class ReviewViewModel: ObservableObject {
 
     private func finishSharedDetailEditSheet() {
         editingSharedDetailEntryID = nil
+        browseSharedDetailUnavailableEvent = nil
         sharedDetailDraft = ""
         sharedDetailEditOutcomeVisible = false
     }
@@ -428,6 +458,7 @@ class ReviewViewModel: ObservableObject {
         pullSessionChrome()
         if case .updated = outcome {
             refreshHistoryProjection()
+            loadDisplayedDayEvents()
         }
         return outcome
     }

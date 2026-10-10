@@ -320,6 +320,79 @@ final class ReviewViewModelCalendarInjectionTests: XCTestCase {
         XCTAssertEqual(viewModel.resultType, .success)
     }
 
+
+    func testBeginSharedDetailEditFromBrowseResolvesHistoryAndUsesSharedDetail() async {
+        let calendar = InMemoryCalendarService(grantAccessByDefault: true)
+        let viewModel = ReviewViewModel(calendar: calendar)
+        viewModel.title = "浏览点开"
+        viewModel.detail = "初始详情"
+        viewModel.baseDate = date(2026, 1, 31)
+        viewModel.reviewIntervals = [3, 7, 30]
+        viewModel.scheduleMode = .review
+        viewModel.updateReviewDates()
+        await viewModel.createReviewSchedule()
+
+        guard let entry = viewModel.historyEntries.first,
+              let eventId = entry.createdEventIdentifiers.first else {
+            return XCTFail("expected created event id")
+        }
+
+        let event = calendar.event(withId: eventId)!
+        viewModel.beginSharedDetailEditFromBrowse(event)
+
+        XCTAssertEqual(viewModel.editingSharedDetailEntryID, entry.id)
+        XCTAssertNil(viewModel.browseSharedDetailUnavailableEvent)
+        XCTAssertEqual(viewModel.sharedDetailDraft, "初始详情")
+        XCTAssertTrue(viewModel.canEditSharedDetailForSelection)
+    }
+
+    func testBeginSharedDetailEditFromBrowseFillsDraftFromNotesWhenSharedDetailNil() async {
+        let calendar = InMemoryCalendarService(grantAccessByDefault: true)
+        let viewModel = ReviewViewModel(calendar: calendar)
+        viewModel.title = "从备注填"
+        viewModel.detail = ""
+        viewModel.baseDate = date(2026, 1, 31)
+        viewModel.reviewIntervals = [3, 7, 30]
+        viewModel.scheduleMode = .review
+        viewModel.updateReviewDates()
+        await viewModel.createReviewSchedule()
+
+        guard let entry = viewModel.historyEntries.first,
+              let eventId = entry.createdEventIdentifiers.first else {
+            return XCTFail("expected created event id")
+        }
+        XCTAssertNil(entry.sharedDetail)
+
+        let composed = ReviewNotes.compose(key: "第1次复习", detail: "从日历备注")
+        calendar.updateEventNotes(id: eventId, notes: composed)
+        let event = calendar.event(withId: eventId)!
+
+        viewModel.beginSharedDetailEditFromBrowse(event)
+
+        XCTAssertEqual(viewModel.editingSharedDetailEntryID, entry.id)
+        XCTAssertEqual(viewModel.sharedDetailDraft, "从日历备注")
+    }
+
+    func testBeginSharedDetailEditFromBrowseUnavailableWhenUnmatched() {
+        let viewModel = ReviewViewModel(calendar: InMemoryCalendarService(grantAccessByDefault: true))
+        let event = CalendarEventInfo(
+            id: "holiday-1",
+            title: "国庆节",
+            start: date(2026, 10, 1),
+            end: date(2026, 10, 1),
+            isAllDay: true,
+            notes: nil,
+            calendarId: nil,
+            calendarTitle: "中国大陆节假日",
+            calendarSourceTitle: nil,
+            colorHex: nil
+        )
+        viewModel.beginSharedDetailEditFromBrowse(event)
+        XCTAssertNil(viewModel.editingSharedDetailEntryID)
+        XCTAssertEqual(viewModel.browseSharedDetailUnavailableEvent?.id, "holiday-1")
+        XCTAssertFalse(viewModel.canEditSharedDetailForSelection)
+    }
+
     func testSharedDetailUnavailableWhenNoIdentifiers() {
         let viewModel = ReviewViewModel(calendar: InMemoryCalendarService(grantAccessByDefault: true))
         let legacy = HistoryEntry(

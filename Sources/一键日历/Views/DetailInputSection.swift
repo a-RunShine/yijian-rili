@@ -10,9 +10,25 @@ struct DetailInputSection: View {
                 .fontWeight(.semibold)
                 .foregroundColor(viewModel.currentTheme.secondaryTextColor ?? .secondary)
 
-            TextField(NSLocalizedString("enter_detail", comment: ""), text: $viewModel.detail, axis: .vertical)
-                .lineLimit(2...4)
-                .textFieldStyle(.roundedBorder)
+            ZStack(alignment: .topLeading) {
+                if viewModel.detail.isEmpty {
+                    Text(NSLocalizedString("enter_detail", comment: ""))
+                        .foregroundColor((viewModel.currentTheme.secondaryTextColor ?? .secondary).opacity(0.6))
+                        .padding(.horizontal, 5)
+                        .padding(.vertical, 8)
+                        .allowsHitTesting(false)
+                }
+                TextEditor(text: $viewModel.detail)
+                    .font(.body)
+                    .scrollContentBackground(.hidden)
+                    .frame(minHeight: 120, maxHeight: 220, alignment: .topLeading)
+            }
+            .padding(6)
+            .background(viewModel.currentTheme.cardBackgroundColor)
+            .overlay(
+                RoundedRectangle(cornerRadius: 8)
+                    .stroke((viewModel.currentTheme.secondaryTextColor ?? .secondary).opacity(0.35), lineWidth: 1)
+            )
         }
     }
 }

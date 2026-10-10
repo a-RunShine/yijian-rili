@@ -47,7 +47,7 @@ struct ContentView: View {
             WeeklyReviewView(viewModel: viewModel.weeklyReviewViewModel)
         }
         .sheet(isPresented: Binding(
-            get: { viewModel.editingSharedDetailEntryID != nil },
+            get: { viewModel.isSharedDetailSheetPresented },
             set: { if !$0 { viewModel.cancelSharedDetailEdit() } }
         )) {
             SharedDetailEditSheet(viewModel: viewModel)
@@ -179,11 +179,11 @@ struct ContentView: View {
     private var settingsSegment: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 14) {
-                HStack(alignment: .top) {
-                    segmentHeader(
-                        title: NSLocalizedString("settings_segment_title", comment: ""),
-                        subtitle: NSLocalizedString("settings_segment_subtitle", comment: "")
-                    )
+                HStack(alignment: .center, spacing: 8) {
+                    Text(NSLocalizedString("settings_segment_title", comment: ""))
+                        .font(.title2)
+                        .fontWeight(.bold)
+                        .foregroundColor(viewModel.currentTheme.primaryTextColor)
                     Spacer(minLength: 8)
                     settingsChrome
                 }
