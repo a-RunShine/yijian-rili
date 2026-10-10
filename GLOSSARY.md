@@ -32,6 +32,10 @@ _Avoid_: 把「CalendarManager」当作领域概念
 用于重复检测的稳定备注身份；复习为「第N次复习」，单次为空字符串。
 _Avoid_: EventKit notes 原文, Details 全文
 
+**备注详情提取**:
+从事件备注原文去掉「第N次复习」首行（如有）与「提醒建议」行后，剩余非空内容即为用户详情（`NotesDetail.extract`）。
+_Avoid_: NormalizeNotes（只取首行作备注键）
+
 **重复检测**:
 同一目标日历内，按标题 + 日历日 + 规范化后的复习备注键判断是否已存在写入。
 _Avoid_: 仅比标题
