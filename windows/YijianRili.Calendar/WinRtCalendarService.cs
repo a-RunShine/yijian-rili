@@ -16,6 +16,8 @@ public sealed class WinRtCalendarService : ICalendarService
     private AppointmentStore? _store;
     private List<CalendarInfo> _calendars = new();
     private readonly List<string> _lastCreated = new();
+    private string? _lastError;
+    private bool _looksLikeMissingPackageIdentity;
 
     public CalendarAccessStatus AuthorizationStatus { get; private set; } = CalendarAccessStatus.NotDetermined;
 
@@ -25,8 +27,21 @@ public sealed class WinRtCalendarService : ICalendarService
 
     public IReadOnlyList<string> LastCreatedEventIdentifiers => _lastCreated.ToArray();
 
+    public CalendarDiagnostics GetDiagnostics()
+        => new()
+        {
+            Status = AuthorizationStatus,
+            CalendarCount = _calendars.Count,
+            WritableCount = _calendars.Count(c => c.AllowsContentModifications),
+            LastError = _lastError,
+            LooksLikeMissingPackageIdentity = _looksLikeMissingPackageIdentity
+                || (AuthorizationStatus == CalendarAccessStatus.FullAccess && _calendars.Count == 0)
+        };
+
     public async Task<bool> RequestAccessAsync(CancellationToken cancellationToken = default)
     {
+        _lastError = null;
+        _looksLikeMissingPackageIdentity = false;
         try
         {
             _store = await AppointmentManager
@@ -38,19 +53,32 @@ public sealed class WinRtCalendarService : ICalendarService
                 ? CalendarAccessStatus.Denied
                 : CalendarAccessStatus.FullAccess;
 
-            if (AuthorizationStatus == CalendarAccessStatus.FullAccess)
-                await RefreshAvailableCalendarsAsync(cancellationToken).ConfigureAwait(false);
+            if (_store is null)
+            {
+                _lastError = "系统拒绝打开日历存储（可能缺少 appointments 能力或未用 MSIX 安装）";
+                _looksLikeMissingPackageIdentity = true;
+                return false;
+            }
 
-            return AuthorizationStatus == CalendarAccessStatus.FullAccess;
+            await RefreshAvailableCalendarsAsync(cancellationToken).ConfigureAwait(false);
+            return true;
         }
-        catch (UnauthorizedAccessException)
+        catch (UnauthorizedAccessException ex)
         {
             AuthorizationStatus = CalendarAccessStatus.Denied;
+            _lastError = ex.Message;
+            _looksLikeMissingPackageIdentity = true;
             return false;
         }
-        catch (Exception)
+        catch (Exception ex)
         {
             AuthorizationStatus = CalendarAccessStatus.Denied;
+            _lastError = ex.Message;
+            // 未打包常见：缺少 package identity
+            _looksLikeMissingPackageIdentity =
+                ex.Message.Contains("package", StringComparison.OrdinalIgnoreCase) ||
+                ex.Message.Contains("capability", StringComparison.OrdinalIgnoreCase) ||
+                ex.HResult == unchecked((int)0x80070005);
             return false;
         }
     }
@@ -66,15 +94,27 @@ public sealed class WinRtCalendarService : ICalendarService
             return;
         }
 
-        var winCalendars = await _store
-            .FindAppointmentCalendarsAsync()
-            .AsTask(cancellationToken)
-            .ConfigureAwait(false);
+        try
+        {
+            var winCalendars = await _store
+                .FindAppointmentCalendarsAsync()
+                .AsTask(cancellationToken)
+                .ConfigureAwait(false);
 
-        _calendars = winCalendars
-            .Where(c => c.CanCreateOrUpdateAppointments)
-            .Select(MapCalendar)
-            .ToList();
+            // 列出全部日历（含只读），避免 Google 源偶发 CanCreate=false 时列表空白
+            _calendars = winCalendars.Select(MapCalendar).ToList();
+
+            if (_calendars.Count == 0)
+            {
+                _lastError = "日历存储已打开，但未枚举到任何日历";
+                _looksLikeMissingPackageIdentity = true;
+            }
+        }
+        catch (Exception ex)
+        {
+            _calendars = new List<CalendarInfo>();
+            _lastError = ex.Message;
+        }
     }
 
     public CalendarInfo? GetCalendar(string identifier)
@@ -243,7 +283,7 @@ public sealed class WinRtCalendarService : ICalendarService
 
         var granted = await RequestAccessAsync(cancellationToken).ConfigureAwait(false);
         if (!granted || _store is null)
-            throw new CalendarServiceException("日历权限未授予或系统日历不可用");
+            throw new CalendarServiceException(GetDiagnostics().UserHint);
         return _store;
     }
 
@@ -259,15 +299,20 @@ public sealed class WinRtCalendarService : ICalendarService
 
         if (!string.IsNullOrEmpty(calendarId))
         {
-            var chosen = calendars.FirstOrDefault(c => c.LocalId == calendarId && c.CanCreateOrUpdateAppointments);
-            if (chosen is not null) return chosen;
+            var chosen = calendars.FirstOrDefault(c => c.LocalId == calendarId);
+            if (chosen is null)
+                throw new CalendarServiceException("所选日历已失效，请重新选择");
+            if (!chosen.CanCreateOrUpdateAppointments)
+                throw new CalendarServiceException("所选日历为只读，请选择可写入的 Google/Outlook 日历");
+            return chosen;
         }
 
         var writable = calendars.Where(c => c.CanCreateOrUpdateAppointments).ToList();
+        if (writable.Count == 0)
+            throw new CalendarServiceException(GetDiagnostics().UserHint);
+
         var cloud = writable.FirstOrDefault(c => MapSourceKind(c) == CalendarSourceKind.Cloud);
-        return cloud
-               ?? writable.FirstOrDefault()
-               ?? throw new CalendarServiceException("默认日历不可用");
+        return cloud ?? writable[0];
     }
 
     private static Appointment BuildAllDayAppointment(string title, DateTime date, string notesKey)
@@ -340,10 +385,13 @@ public sealed class WinRtCalendarService : ICalendarService
     private static CalendarInfo MapCalendar(AppointmentCalendar calendar)
     {
         var kind = MapSourceKind(calendar);
+        var title = calendar.DisplayName ?? "日历";
+        if (!calendar.CanCreateOrUpdateAppointments)
+            title += "（只读）";
         return new CalendarInfo
         {
             Id = calendar.LocalId,
-            Title = calendar.DisplayName,
+            Title = title,
             SourceTitle = string.IsNullOrWhiteSpace(calendar.SourceDisplayName)
                 ? (kind == CalendarSourceKind.Local ? "本地" : "账户")
                 : calendar.SourceDisplayName,

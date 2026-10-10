@@ -115,6 +115,12 @@ public sealed class MainViewModel : INotifyPropertyChanged
 
     public bool LocalCalendarWarningVisible => Session.IsSelectedCalendarLocal;
 
+    public bool EmptyCalendarWarningVisible
+        => _calendar.GetDiagnostics().WritableCount == 0;
+
+    public string EmptyCalendarWarningMessage
+        => _calendar.GetDiagnostics().UserHint;
+
     public string StatusText
     {
         get => _statusText;
@@ -241,6 +247,8 @@ public sealed class MainViewModel : INotifyPropertyChanged
         }
 
         OnPropertyChanged(nameof(LocalCalendarWarningVisible));
+        OnPropertyChanged(nameof(EmptyCalendarWarningVisible));
+        OnPropertyChanged(nameof(EmptyCalendarWarningMessage));
         CalendarsRevision++;
     }
 
