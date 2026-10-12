@@ -76,3 +76,7 @@ _Avoid_: 当作周末总结的唯一数据源
 **复习间隔 commit**:
 接收间隔 draft（字符串列表）→ parse/校验 → 成功则持久化已提交间隔并刷新复习预览；View 只编辑 draft 并映射结构化失败。
 _Avoid_: View 内自拼校验后再赋值并手调 updateReviewDates；公开 validateIntervals 当作写入 API
+
+**复习完成态**:
+某次复习 occurrence（日历事件 id）上的未标记 / 完成 / 跳过状态；由复习会话写入并持久化，周末总结只消费展示；不得写入或复用创建条目级 `reviewedIds`。
+_Avoid_: F6 已复习勾选, WeeklyReviewViewModel.reviewedIds（完成态存储）

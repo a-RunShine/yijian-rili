@@ -82,6 +82,7 @@ class ReviewViewModel: ObservableObject {
     @Published var hasCloudCalendar: Bool = false
 
     @Published private(set) var historyRevision: Int = 0
+    @Published private(set) var occurrenceRevision: Int = 0
 
     @AppStorage("selectedCalendarIdentifier") var selectedCalendarIdentifier: String = "" {
         didSet {
@@ -126,16 +127,22 @@ class ReviewViewModel: ObservableObject {
         let history = HistoryStore()
         let weekly = WeeklyReviewViewModel()
         let outcomes = CreateSuccessOutcomes(history: history, weekly: weekly)
+        let occurrenceStatuses = OccurrenceStatusStore()
         self.historyStore = history
         self.weeklyReviewViewModel = weekly
         self.outcomes = outcomes
 
         let storedCalendarId = UserDefaults.standard.string(forKey: "selectedCalendarIdentifier") ?? ""
-        self.session = ReviewSession(
+        let session = ReviewSession(
             calendar: calendar,
             outcomes: outcomes,
+            occurrenceStatuses: occurrenceStatuses,
             selectedCalendarIdentifier: storedCalendarId
         )
+        self.session = session
+        weekly.occurrenceMaterialProvider = { start, end in
+            session.occurrenceMaterials(weekStart: start, weekEnd: end)
+        }
         self.browse = DayBrowseModel(calendar: calendar)
 
         title = session.title
@@ -366,7 +373,19 @@ class ReviewViewModel: ObservableObject {
 
     func openWeeklyReview() {
         weeklyReviewViewModel.jumpToCurrentWeek()
+        weeklyReviewViewModel.refreshOccurrenceMaterials()
         showWeeklyReview = true
+    }
+
+    func occurrenceStatus(for eventId: String) -> OccurrenceStatus {
+        _ = occurrenceRevision
+        return session.occurrenceStatus(for: eventId)
+    }
+
+    func setOccurrenceStatus(eventId: String, status: OccurrenceStatus) {
+        session.setOccurrenceStatus(eventId: eventId, status: status)
+        occurrenceRevision &+= 1
+        weeklyReviewViewModel.refreshOccurrenceMaterials()
     }
 
     func selectHistoryEntry(_ entry: HistoryEntry) {

@@ -17,6 +17,8 @@ final class WeeklyReviewViewModel: ObservableObject, WeeklyEntryAppending {
 
     let themeProvider: ThemeProvider
 
+    var occurrenceMaterialProvider: ((Date, Date) -> [OccurrenceReviewMaterial])?
+
     @Published private(set) var revision: Int = 0
 
     private let defaults: UserDefaults
@@ -95,6 +97,15 @@ final class WeeklyReviewViewModel: ObservableObject, WeeklyEntryAppending {
 
     var realEntriesInCurrentWeek: [WeeklyEntry] {
         entriesInCurrentWeek.filter { !$0.isPreOccupiedNextWeek }
+    }
+
+    var occurrenceMaterialsInCurrentWeek: [OccurrenceReviewMaterial] {
+        _ = revision
+        return occurrenceMaterialProvider?(currentWeekStart, currentWeekEnd) ?? []
+    }
+
+    func refreshOccurrenceMaterials() {
+        revision &+= 1
     }
 
     var reviewedCount: Int {

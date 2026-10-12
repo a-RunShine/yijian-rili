@@ -743,3 +743,151 @@ final class DayBrowseModelTests: XCTestCase {
         )
     }
 }
+
+@MainActor
+final class OccurrenceStatusTests: XCTestCase {
+    func testMarkDonePersistsAcrossSessionReload() async throws {
+        let suiteName = "occurrence-done-\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defaults.removePersistentDomain(forName: suiteName)
+
+        let calendar = InMemoryCalendarService(grantAccessByDefault: true)
+        let history = HistoryStore(defaults: defaults)
+        let weekly = WeeklyReviewViewModel(defaults: defaults)
+        let statuses = OccurrenceStatusStore(defaults: defaults)
+        let outcomes = CreateSuccessOutcomes(history: history, weekly: weekly)
+        let session = ReviewSession(calendar: calendar, outcomes: outcomes, occurrenceStatuses: statuses)
+
+        session.title = "完成态"
+        session.baseDate = Date()
+        session.scheduleMode = .review
+        session.reviewIntervals = [3, 7, 30]
+        session.updateReviewDates()
+        await session.create()
+
+        let eventId = try XCTUnwrap(history.load().first?.createdEventIdentifiers.first)
+        XCTAssertEqual(session.occurrenceStatus(for: eventId), .unmarked)
+
+        session.setOccurrenceStatus(eventId: eventId, status: .done)
+        XCTAssertEqual(session.occurrenceStatus(for: eventId), .done)
+
+        let reloaded = OccurrenceStatusStore(defaults: defaults)
+        let session2 = ReviewSession(calendar: calendar, outcomes: outcomes, occurrenceStatuses: reloaded)
+        XCTAssertEqual(session2.occurrenceStatus(for: eventId), .done)
+
+        defaults.removePersistentDomain(forName: suiteName)
+    }
+
+    func testMarkSkippedShowsInWeeklyMaterialsWithoutTouchingReviewedIds() async throws {
+        let suiteName = "occurrence-weekly-\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defaults.removePersistentDomain(forName: suiteName)
+
+        let calendar = InMemoryCalendarService(grantAccessByDefault: true)
+        let history = HistoryStore(defaults: defaults)
+        let weekly = WeeklyReviewViewModel(defaults: defaults)
+        let statuses = OccurrenceStatusStore(defaults: defaults)
+        let outcomes = CreateSuccessOutcomes(history: history, weekly: weekly)
+        let session = ReviewSession(calendar: calendar, outcomes: outcomes, occurrenceStatuses: statuses)
+
+        let today = Calendar.current.startOfDay(for: Date())
+        session.title = "跳过素材"
+        session.baseDate = today
+        session.scheduleMode = .single
+        session.updateReviewDates()
+        await session.create()
+
+        let batchID = try XCTUnwrap(history.load().first?.id)
+        let eventId = try XCTUnwrap(history.load().first?.createdEventIdentifiers.first)
+        weekly.toggleReviewed(batchID)
+        let reviewedBefore = weekly.reviewedIds
+
+        session.setOccurrenceStatus(eventId: eventId, status: .skipped)
+
+        let weekStart = WeekCalculator.weekStart(for: today)
+        let weekEnd = WeekCalculator.weekEnd(for: weekStart)
+        let materials = session.occurrenceMaterials(weekStart: weekStart, weekEnd: weekEnd)
+        XCTAssertEqual(materials.count, 1)
+        XCTAssertEqual(materials[0].eventId, eventId)
+        XCTAssertEqual(materials[0].status, .skipped)
+        XCTAssertEqual(materials[0].title, "跳过素材")
+        XCTAssertEqual(weekly.reviewedIds, reviewedBefore)
+        XCTAssertTrue(weekly.reviewedIds.contains(batchID))
+
+        weekly.occurrenceMaterialProvider = { start, end in
+            session.occurrenceMaterials(weekStart: start, weekEnd: end)
+        }
+        let display = weekly.occurrenceMaterialsInCurrentWeek
+        XCTAssertEqual(display.count, 1)
+        XCTAssertEqual(display[0].status, .skipped)
+        XCTAssertEqual(display[0].eventId, eventId)
+        XCTAssertEqual(weekly.reviewedIds, reviewedBefore)
+
+        defaults.removePersistentDomain(forName: suiteName)
+    }
+
+    func testRemoveEventsFromRecordedClearsOccurrenceStatus() async throws {
+        let suiteName = "occurrence-clear-\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defaults.removePersistentDomain(forName: suiteName)
+
+        let calendar = InMemoryCalendarService(grantAccessByDefault: true)
+        let history = HistoryStore(defaults: defaults)
+        let weekly = WeeklyReviewViewModel(defaults: defaults)
+        let statuses = OccurrenceStatusStore(defaults: defaults)
+        let outcomes = CreateSuccessOutcomes(history: history, weekly: weekly)
+        let session = ReviewSession(calendar: calendar, outcomes: outcomes, occurrenceStatuses: statuses)
+
+        session.title = "清理完成态"
+        session.baseDate = Date()
+        session.scheduleMode = .review
+        session.reviewIntervals = [3, 7, 30]
+        session.updateReviewDates()
+        await session.create()
+
+        let ids = try XCTUnwrap(history.load().first?.createdEventIdentifiers)
+        XCTAssertEqual(ids.count, 3)
+        session.setOccurrenceStatus(eventId: ids[0], status: .done)
+        session.setOccurrenceStatus(eventId: ids[1], status: .skipped)
+        XCTAssertEqual(session.occurrenceStatus(for: ids[0]), .done)
+
+        _ = session.removeEventsFromRecorded(ids: [ids[0]])
+
+        XCTAssertEqual(session.occurrenceStatus(for: ids[0]), .unmarked)
+        XCTAssertEqual(session.occurrenceStatus(for: ids[1]), .skipped)
+
+        defaults.removePersistentDomain(forName: suiteName)
+    }
+
+    func testReconcileClearsOccurrenceStatusForMissingEvents() async throws {
+        let suiteName = "occurrence-reconcile-\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defaults.removePersistentDomain(forName: suiteName)
+
+        let calendar = InMemoryCalendarService(grantAccessByDefault: true)
+        let history = HistoryStore(defaults: defaults)
+        let weekly = WeeklyReviewViewModel(defaults: defaults)
+        let statuses = OccurrenceStatusStore(defaults: defaults)
+        let outcomes = CreateSuccessOutcomes(history: history, weekly: weekly)
+        let session = ReviewSession(calendar: calendar, outcomes: outcomes, occurrenceStatuses: statuses)
+
+        session.title = "对账清完成态"
+        session.baseDate = Date()
+        session.scheduleMode = .review
+        session.reviewIntervals = [3, 7, 30]
+        session.updateReviewDates()
+        await session.create()
+
+        let ids = try XCTUnwrap(history.load().first?.createdEventIdentifiers)
+        session.setOccurrenceStatus(eventId: ids[0], status: .done)
+        session.setOccurrenceStatus(eventId: ids[1], status: .skipped)
+        XCTAssertTrue(calendar.deleteEvent(id: ids[0]))
+
+        session.reconcileRecordedWithCalendar()
+
+        XCTAssertEqual(session.occurrenceStatus(for: ids[0]), .unmarked)
+        XCTAssertEqual(session.occurrenceStatus(for: ids[1]), .skipped)
+
+        defaults.removePersistentDomain(forName: suiteName)
+    }
+}

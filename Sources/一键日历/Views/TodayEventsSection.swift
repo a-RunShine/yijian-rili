@@ -49,12 +49,7 @@ struct TodayEventsSection: View {
                     .cornerRadius(10)
             } else {
                 ForEach(viewModel.displayedEvents) { event in
-                    Button {
-                        viewModel.beginSharedDetailEditFromBrowse(event)
-                    } label: {
-                        eventCard(event)
-                    }
-                    .buttonStyle(.plain)
+                    eventCard(event)
                 }
             }
         }
@@ -101,34 +96,78 @@ struct TodayEventsSection: View {
 
     private func eventCard(_ event: CalendarEventInfo) -> some View {
         let detail = NotesDetail.extract(event.notes)
-        return HStack(alignment: .top, spacing: 10) {
-            RoundedRectangle(cornerRadius: 2)
-                .fill(Color(hex: event.colorHex) ?? Color(red: 0.051, green: 0.580, blue: 0.533))
-                .frame(width: 4)
+        let status = viewModel.occurrenceStatus(for: event.id)
+        return VStack(alignment: .leading, spacing: 8) {
+            Button {
+                viewModel.beginSharedDetailEditFromBrowse(event)
+            } label: {
+                HStack(alignment: .top, spacing: 10) {
+                    RoundedRectangle(cornerRadius: 2)
+                        .fill(Color(hex: event.colorHex) ?? Color(red: 0.051, green: 0.580, blue: 0.533))
+                        .frame(width: 4)
 
-            VStack(alignment: .leading, spacing: 4) {
-                Text(event.title.isEmpty ? NSLocalizedString("untitled", comment: "") : event.title)
-                    .font(.subheadline)
-                    .fontWeight(.medium)
-                    .foregroundColor(viewModel.currentTheme.primaryTextColor)
-                    .lineLimit(2)
-                if !detail.isEmpty {
-                    Text(detail)
+                    VStack(alignment: .leading, spacing: 4) {
+                        HStack(alignment: .firstTextBaseline, spacing: 6) {
+                            Text(event.title.isEmpty ? NSLocalizedString("untitled", comment: "") : event.title)
+                                .font(.subheadline)
+                                .fontWeight(.medium)
+                                .foregroundColor(viewModel.currentTheme.primaryTextColor)
+                                .lineLimit(2)
+                            if status != .unmarked {
+                                Text(status == .done
+                                      ? NSLocalizedString("occurrence_status_done", comment: "")
+                                      : NSLocalizedString("occurrence_status_skipped", comment: ""))
+                                    .font(.caption2)
+                                    .foregroundColor(viewModel.currentTheme.accentColor ?? .accentColor)
+                                    .padding(.horizontal, 5)
+                                    .padding(.vertical, 1)
+                                    .background((viewModel.currentTheme.accentColor ?? .accentColor).opacity(0.12))
+                                    .cornerRadius(4)
+                            }
+                            Spacer(minLength: 0)
+                        }
+                        if !detail.isEmpty {
+                            Text(detail)
+                                .font(.caption)
+                                .foregroundColor(viewModel.currentTheme.secondaryTextColor ?? .secondary)
+                                .lineLimit(2)
+                        }
+                        HStack(spacing: 4) {
+                            Text(event.isAllDay ? NSLocalizedString("all_day", comment: "") : event.start.formattedTime())
+                            Text("·")
+                            Text((event.calendarTitle?.isEmpty == false)
+                                 ? (event.calendarTitle ?? "")
+                                 : NSLocalizedString("calendar_default_label", comment: ""))
+                        }
                         .font(.caption)
                         .foregroundColor(viewModel.currentTheme.secondaryTextColor ?? .secondary)
-                        .lineLimit(2)
+                    }
+                    Spacer(minLength: 0)
                 }
-                HStack(spacing: 4) {
-                    Text(event.isAllDay ? NSLocalizedString("all_day", comment: "") : event.start.formattedTime())
-                    Text("·")
-                    Text((event.calendarTitle?.isEmpty == false)
-                         ? (event.calendarTitle ?? "")
-                         : NSLocalizedString("calendar_default_label", comment: ""))
-                }
-                .font(.caption)
-                .foregroundColor(viewModel.currentTheme.secondaryTextColor ?? .secondary)
             }
-            Spacer(minLength: 0)
+            .buttonStyle(.plain)
+
+            HStack(spacing: 8) {
+                occurrenceActionButton(
+                    title: NSLocalizedString("occurrence_mark_done", comment: ""),
+                    selected: status == .done
+                ) {
+                    viewModel.setOccurrenceStatus(
+                        eventId: event.id,
+                        status: status == .done ? .unmarked : .done
+                    )
+                }
+                occurrenceActionButton(
+                    title: NSLocalizedString("occurrence_mark_skipped", comment: ""),
+                    selected: status == .skipped
+                ) {
+                    viewModel.setOccurrenceStatus(
+                        eventId: event.id,
+                        status: status == .skipped ? .unmarked : .skipped
+                    )
+                }
+                Spacer(minLength: 0)
+            }
         }
         .padding(12)
         .background(viewModel.currentTheme.cardBackgroundColor)
@@ -137,5 +176,30 @@ struct TodayEventsSection: View {
             RoundedRectangle(cornerRadius: 10)
                 .stroke((viewModel.currentTheme.secondaryTextColor ?? .secondary).opacity(0.2), lineWidth: 1)
         )
+    }
+
+    private func occurrenceActionButton(
+        title: String,
+        selected: Bool,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            Text(title)
+                .font(.caption)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(
+                    selected
+                        ? (viewModel.currentTheme.accentColor ?? .accentColor).opacity(0.2)
+                        : (viewModel.currentTheme.secondaryTextColor ?? .secondary).opacity(0.08)
+                )
+                .foregroundColor(
+                    selected
+                        ? (viewModel.currentTheme.accentColor ?? .accentColor)
+                        : (viewModel.currentTheme.secondaryTextColor ?? .secondary)
+                )
+                .cornerRadius(6)
+        }
+        .buttonStyle(.plain)
     }
 }
