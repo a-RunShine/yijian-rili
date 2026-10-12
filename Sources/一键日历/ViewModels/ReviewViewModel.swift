@@ -42,6 +42,7 @@ class ReviewViewModel: ObservableObject {
         didSet { session.baseDate = baseDate }
     }
     @Published var sharedDetailDraft: String = ""
+    @Published var seriesTitleDraft: String = ""
     @Published var editingSharedDetailEntryID: UUID?
     @Published var browseSharedDetailUnavailableEvent: CalendarEventInfo?
     @Published var sharedDetailEditOutcomeVisible: Bool = false
@@ -423,6 +424,7 @@ class ReviewViewModel: ObservableObject {
             showHistory = false
         }
         editingSharedDetailEntryID = entry.id
+        seriesTitleDraft = entry.title
         sharedDetailDraft = entry.sharedDetail ?? ""
     }
 
@@ -435,6 +437,7 @@ class ReviewViewModel: ObservableObject {
         if let entry = HistorySeriesLookup.entry(containingEventId: event.id, in: historyEntries) {
             browseSharedDetailUnavailableEvent = nil
             editingSharedDetailEntryID = entry.id
+            seriesTitleDraft = entry.title
             let fromHistory = (entry.sharedDetail ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
             if fromHistory.isEmpty {
                 sharedDetailDraft = NotesDetail.extract(event.notes)
@@ -444,6 +447,7 @@ class ReviewViewModel: ObservableObject {
         } else {
             editingSharedDetailEntryID = nil
             browseSharedDetailUnavailableEvent = event
+            seriesTitleDraft = event.title
             sharedDetailDraft = NotesDetail.extract(event.notes)
         }
     }
@@ -468,17 +472,27 @@ class ReviewViewModel: ObservableObject {
         editingSharedDetailEntryID = nil
         browseSharedDetailUnavailableEvent = nil
         sharedDetailDraft = ""
+        seriesTitleDraft = ""
         sharedDetailEditOutcomeVisible = false
     }
 
     @discardableResult
     func commitSharedDetailEdit() -> SharedDetailUpdateOutcome {
         guard let entry = editingSharedDetailEntry else { return .unavailable }
-        let outcome = updateSharedDetail(for: entry, detail: sharedDetailDraft)
+        let trimmedTitle = seriesTitleDraft.trimmingCharacters(in: .whitespacesAndNewlines)
+        var titleOutcome: SharedDetailUpdateOutcome = .unavailable
+        if !trimmedTitle.isEmpty, trimmedTitle != entry.title {
+            titleOutcome = updateSeriesTitle(for: entry, title: seriesTitleDraft)
+        }
+        let detailEntry = editingSharedDetailEntry ?? entry
+        let detailOutcome = updateSharedDetail(for: detailEntry, detail: sharedDetailDraft)
         sharedDetailEditOutcomeVisible = true
         sharedDetailResultOnToday = false
         scheduleResultDismissal()
-        return outcome
+        if case .updated(_, let missing) = titleOutcome, missing > 0 {
+            return titleOutcome
+        }
+        return detailOutcome
     }
 
     @discardableResult
@@ -488,6 +502,18 @@ class ReviewViewModel: ObservableObject {
         if case .updated = outcome {
             refreshHistoryProjection()
             loadDisplayedDayEvents()
+        }
+        return outcome
+    }
+
+    @discardableResult
+    func updateSeriesTitle(for entry: HistoryEntry, title: String) -> SharedDetailUpdateOutcome {
+        let outcome = session.updateSeriesTitle(for: entry, title: title)
+        pullSessionChrome()
+        if case .updated(let updated, _) = outcome, updated > 0 {
+            refreshHistoryProjection()
+            loadDisplayedDayEvents()
+            rebuildSearchHits()
         }
         return outcome
     }

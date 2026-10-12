@@ -214,6 +214,25 @@ final class InMemoryCalendarService: CalendarService, CalendarEventStore {
         return true
     }
 
+    @discardableResult
+    func updateEventTitle(id: String, title: String) -> Bool {
+        guard let index = events.firstIndex(where: { $0.id == id }) else { return false }
+        let old = events[index]
+        events[index] = CalendarEventInfo(
+            id: old.id,
+            title: title,
+            start: old.start,
+            end: old.end,
+            isAllDay: old.isAllDay,
+            notes: old.notes,
+            calendarId: old.calendarId,
+            calendarTitle: old.calendarTitle,
+            calendarSourceTitle: old.calendarSourceTitle,
+            colorHex: old.colorHex
+        )
+        return true
+    }
+
     func searchEvents(query: String, daysAhead: Int) -> [CalendarEventInfo] {
         let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty, authorizationStatus == .fullAccess else { return [] }

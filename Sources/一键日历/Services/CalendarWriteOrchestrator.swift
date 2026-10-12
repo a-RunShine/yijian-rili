@@ -104,4 +104,21 @@ enum CalendarWriteOrchestrator {
         }
         return (updated: updated, missing: missing)
     }
+
+    static func rewriteSeriesTitle(
+        identifiers: [String],
+        title: String,
+        updateEventTitle: (String, String) -> Bool
+    ) -> (updated: Int, missing: Int) {
+        var updated = 0
+        var missing = 0
+        for identifier in identifiers {
+            if updateEventTitle(identifier, title) {
+                updated += 1
+            } else {
+                missing += 1
+            }
+        }
+        return (updated: updated, missing: missing)
+    }
 }

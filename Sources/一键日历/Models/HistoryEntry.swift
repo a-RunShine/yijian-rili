@@ -51,6 +51,19 @@ struct HistoryEntry: Identifiable, Codable {
         )
     }
 
+    func withTitle(_ title: String) -> HistoryEntry {
+        HistoryEntry(
+            id: id,
+            title: title,
+            baseDate: baseDate,
+            reviewDates: reviewDates,
+            creationDate: creationDate,
+            type: type,
+            createdEventIdentifiers: createdEventIdentifiers,
+            sharedDetail: sharedDetail
+        )
+    }
+
     func withCreatedEventIdentifiers(_ identifiers: [String]) -> HistoryEntry {
         HistoryEntry(
             id: id,

@@ -6,7 +6,7 @@ struct SharedDetailEditSheet: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             HStack {
-                Text(NSLocalizedString("shared_detail_sheet_title", comment: ""))
+                Text(NSLocalizedString("series_edit_sheet_title", comment: ""))
                     .font(.headline)
                 Spacer()
                 Button(action: {
@@ -19,9 +19,6 @@ struct SharedDetailEditSheet: View {
             }
 
             if let entry = viewModel.editingSharedDetailEntry {
-                Text(entry.title)
-                    .font(.subheadline)
-                    .foregroundColor(viewModel.currentTheme.secondaryTextColor ?? .secondary)
                 HStack(spacing: 4) {
                     Text(entry.baseDate.formattedChinese())
                         .font(.caption)
@@ -52,8 +49,15 @@ struct SharedDetailEditSheet: View {
                 }
             }
 
-            // macOS TextField(axis: .vertical) + roundedBorder ignores minHeight visually;
-            // TextEditor matches WeeklyReviewView and keeps a real multi-line editing plane.
+            if viewModel.editingSharedDetailEntry != nil {
+                Text(NSLocalizedString("series_title_label", comment: ""))
+                    .font(.subheadline)
+                    .foregroundColor(viewModel.currentTheme.secondaryTextColor ?? .secondary)
+                TextField("", text: $viewModel.seriesTitleDraft)
+                    .textFieldStyle(.roundedBorder)
+                    .disabled(!viewModel.canEditSharedDetailForSelection || viewModel.sharedDetailEditOutcomeVisible)
+            }
+
             ZStack(alignment: .topLeading) {
                 if viewModel.sharedDetailDraft.isEmpty {
                     Text(NSLocalizedString("enter_detail", comment: ""))
@@ -102,12 +106,13 @@ struct SharedDetailEditSheet: View {
                     .buttonStyle(.borderedProminent)
                     .tint(viewModel.currentTheme.accentColor ?? .accentColor)
                 } else {
-                    Button(NSLocalizedString("shared_detail_save", comment: "")) {
+                    Button(NSLocalizedString("series_title_save", comment: "")) {
                         _ = viewModel.commitSharedDetailEdit()
                     }
                     .buttonStyle(.borderedProminent)
                     .tint(viewModel.currentTheme.accentColor ?? .accentColor)
-                    .disabled(!viewModel.canEditSharedDetailForSelection)
+                    .disabled(!viewModel.canEditSharedDetailForSelection
+                              || viewModel.seriesTitleDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                 }
             }
 
