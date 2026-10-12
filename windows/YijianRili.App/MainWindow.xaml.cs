@@ -42,6 +42,8 @@ public sealed partial class MainWindow : Window
                 case nameof(MainViewModel.PreviewText):
                 case nameof(MainViewModel.IntervalSummary):
                 case nameof(MainViewModel.LocalCalendarWarningVisible):
+                case nameof(MainViewModel.EmptyCalendarWarningVisible):
+                case nameof(MainViewModel.EmptyCalendarWarningMessage):
                 case nameof(MainViewModel.IsBusy):
                     BindFromViewModel();
                     break;
@@ -102,7 +104,9 @@ public sealed partial class MainWindow : Window
         UndoButton.IsEnabled = _vm.CanUndo;
         RecreateButton.IsEnabled = _vm.CanRecreate;
         CreateButton.IsEnabled = !_vm.IsBusy;
-        LocalWarningBar.IsOpen = _vm.LocalCalendarWarningVisible;
+        LocalWarningBar.IsOpen = _vm.LocalCalendarWarningVisible && !_vm.EmptyCalendarWarningVisible;
+        EmptyCalendarBar.IsOpen = _vm.EmptyCalendarWarningVisible;
+        EmptyCalendarBar.Message = _vm.EmptyCalendarWarningMessage;
     }
 
     private void BindCalendars()

@@ -84,6 +84,11 @@
                           DisplayMemberPath="DisplayName"
                           SelectionChanged="CalendarCombo_SelectionChanged"
                           HorizontalAlignment="Stretch"/>
+                <InfoBar x:Name="EmptyCalendarBar"
+                         Severity="Error"
+                         Title="没有可写日历"
+                         IsOpen="False"
+                         IsClosable="False"/>
                 <InfoBar x:Name="LocalWarningBar"
                          Severity="Warning"
                          Title="本地日历"

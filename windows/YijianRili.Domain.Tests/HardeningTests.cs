@@ -67,8 +67,20 @@ public class HardeningTests
         session.Title = "标题";
         await session.CreateAsync();
         Assert.Equal(ResultKind.Error, session.ResultKind);
-        Assert.Equal("日历操作失败，请检查权限与账户后重试", session.ResultMessage);
-        Assert.DoesNotContain("secret-leak", session.ResultMessage ?? string.Empty);
+        // 无可写日历时走诊断提示，不再调用 CreateReviewEventsAsync
+        Assert.Contains("未找到可写日历", session.ResultMessage);
+    }
+
+    [Fact]
+    public async Task ReviewSession_Create_SurfacesAdapterMessage_WhenWritableExists()
+    {
+        var settings = new InMemorySettingsStore();
+        var calendar = new ThrowingWritableCalendarService();
+        var session = new ReviewSession(calendar, settings);
+        session.Title = "标题";
+        await session.CreateAsync();
+        Assert.Equal(ResultKind.Error, session.ResultKind);
+        Assert.Equal("所选日历为只读，请更换账户", session.ResultMessage);
     }
 
     private sealed class ThrowingCalendarService : ICalendarService
@@ -81,16 +93,74 @@ public class HardeningTests
         public void RefreshAvailableCalendars() { }
         public CalendarInfo? GetCalendar(string identifier) => null;
         public CalendarInfo? GetDefaultCalendar() => null;
+        public CalendarDiagnostics GetDiagnostics() => new()
+        {
+            Status = AuthorizationStatus,
+            CalendarCount = 0,
+            WritableCount = 0,
+            LooksLikeMissingPackageIdentity = true
+        };
 
         public Task<CreateEventsResult> CreateReviewEventsAsync(
             string title, DateTime baseDate, IReadOnlyList<int> intervals,
             string? calendarId = null, CancellationToken cancellationToken = default)
-            => throw new CalendarServiceException("secret-leak-internal-detail");
+            => throw new CalendarServiceException("不应调用到创建");
 
         public Task<CreateEventsResult> CreateSingleEventAsync(
             string title, DateTime date, string? calendarId = null,
             CancellationToken cancellationToken = default)
-            => throw new CalendarServiceException("secret-leak-internal-detail");
+            => throw new CalendarServiceException("不应调用到创建");
+
+        public Task<UndoResult> UndoLastCreationAsync(CancellationToken cancellationToken = default)
+            => Task.FromResult(new UndoResult());
+
+        public Task<IReadOnlyList<CalendarEventInfo>> FetchEventsAsync(
+            DateTime date, CancellationToken cancellationToken = default)
+            => Task.FromResult<IReadOnlyList<CalendarEventInfo>>(Array.Empty<CalendarEventInfo>());
+
+        public Task<bool> DeleteEventAsync(string eventId, CancellationToken cancellationToken = default)
+            => Task.FromResult(false);
+
+        public Task<IReadOnlyList<CalendarEventInfo>> SearchEventsAsync(
+            string query, int daysAhead = 90, CancellationToken cancellationToken = default)
+            => Task.FromResult<IReadOnlyList<CalendarEventInfo>>(Array.Empty<CalendarEventInfo>());
+    }
+
+    private sealed class ThrowingWritableCalendarService : ICalendarService
+    {
+        private static readonly CalendarInfo Cal = new()
+        {
+            Id = "c1",
+            Title = "日历",
+            SourceTitle = "Google",
+            SourceKind = CalendarSourceKind.Cloud,
+            AllowsContentModifications = true
+        };
+
+        public CalendarAccessStatus AuthorizationStatus => CalendarAccessStatus.FullAccess;
+        public IReadOnlyList<CalendarInfo> AvailableCalendars => new[] { Cal };
+        public bool HasCloudCalendar => true;
+        public IReadOnlyList<string> LastCreatedEventIdentifiers => Array.Empty<string>();
+        public Task<bool> RequestAccessAsync(CancellationToken cancellationToken = default) => Task.FromResult(true);
+        public void RefreshAvailableCalendars() { }
+        public CalendarInfo? GetCalendar(string identifier) => identifier == Cal.Id ? Cal : null;
+        public CalendarInfo? GetDefaultCalendar() => Cal;
+        public CalendarDiagnostics GetDiagnostics() => new()
+        {
+            Status = AuthorizationStatus,
+            CalendarCount = 1,
+            WritableCount = 1
+        };
+
+        public Task<CreateEventsResult> CreateReviewEventsAsync(
+            string title, DateTime baseDate, IReadOnlyList<int> intervals,
+            string? calendarId = null, CancellationToken cancellationToken = default)
+            => throw new CalendarServiceException("所选日历为只读，请更换账户");
+
+        public Task<CreateEventsResult> CreateSingleEventAsync(
+            string title, DateTime date, string? calendarId = null,
+            CancellationToken cancellationToken = default)
+            => throw new CalendarServiceException("所选日历为只读，请更换账户");
 
         public Task<UndoResult> UndoLastCreationAsync(CancellationToken cancellationToken = default)
             => Task.FromResult(new UndoResult());

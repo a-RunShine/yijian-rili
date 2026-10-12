@@ -14,7 +14,7 @@
     <ScrollViewer MaxHeight="420" VerticalScrollBarVisibility="Auto">
         <StackPanel Spacing="12">
             <TextBlock TextWrapping="Wrap" Opacity="0.85"
-                       Text="一键日历会把复习日程写入你选择的系统日历。只有写入 Outlook、Google 等云账户时，手机才能同步看到。"/>
+                       Text="一键日历通过系统日历写入事件。必须用 MSIX 安装本应用；并且要在 Windows「设置 → 账户」添加云账户（仅浏览器登录 Gmail 无效）。"/>
 
             <Pivot>
                 <PivotItem Header="Outlook">
@@ -22,24 +22,24 @@
                         <TextBlock FontWeight="SemiBold" Text="推荐：Outlook.com / Microsoft 365"/>
                         <TextBlock TextWrapping="Wrap" Text="1. 打开「设置 → 账户 → 电子邮件和账户」，添加 Microsoft 账户。"/>
                         <TextBlock TextWrapping="Wrap" Text="2. 打开系统「日历」应用，确认该账户下的日历已显示且可写入。"/>
-                        <TextBlock TextWrapping="Wrap" Text="3. 回到一键日历，在「写入日历」中选择 Outlook 日历（不要选本地）。"/>
-                        <TextBlock TextWrapping="Wrap" Text="4. 手机安装 Outlook 或使用同一 Microsoft 账户登录系统日历，即可看到复习提醒。"/>
+                        <TextBlock TextWrapping="Wrap" Text="3. 回到一键日历，在「写入日历」中选择 Outlook 日历（不要停在「系统默认」）。"/>
+                        <TextBlock TextWrapping="Wrap" Text="4. 手机安装 Outlook 或使用同一 Microsoft 账户，即可看到复习提醒。"/>
                     </StackPanel>
                 </PivotItem>
                 <PivotItem Header="Google">
                     <StackPanel Spacing="10" Margin="0,8,0,0">
                         <TextBlock FontWeight="SemiBold" Text="备选：Google 日历"/>
-                        <TextBlock TextWrapping="Wrap" Text="1. 在 Windows「设置 → 账户」添加 Google 账户，并开启日历同步。"/>
-                        <TextBlock TextWrapping="Wrap" Text="2. 打开系统「日历」应用，确认 Google 日历可见。"/>
-                        <TextBlock TextWrapping="Wrap" Text="3. 在一键日历中选择该 Google 日历后创建日程。"/>
+                        <TextBlock TextWrapping="Wrap" Text="1. 在 Windows「设置 → 账户 → 电子邮件和账户」添加 Google 账户，并开启日历同步。"/>
+                        <TextBlock TextWrapping="Wrap" Text="2. 打开系统「日历」App，确认左侧能看到 Google 日历（浏览器登录不够）。"/>
+                        <TextBlock TextWrapping="Wrap" Text="3. 在一键日历「写入日历」中选择该 Google 日历后创建。"/>
                         <TextBlock TextWrapping="Wrap" Text="4. 手机使用同一 Google 账户打开「日历」App。"/>
                     </StackPanel>
                 </PivotItem>
                 <PivotItem Header="说明">
                     <StackPanel Spacing="10" Margin="0,8,0,0">
-                        <TextBlock TextWrapping="Wrap" Text="与 macOS 版不同：Windows 系统日历对 163 / 139 等第三方 CalDAV 支持较弱，因此本引导优先 Outlook 与 Google。"/>
+                        <TextBlock TextWrapping="Wrap" Text="若「写入日历」只有「系统默认」：请改用 MSIX 安装，并确认系统日历里已有云账户。"/>
                         <TextBlock TextWrapping="Wrap" Text="本地日历可以创建，但不会同步到手机；界面会显示黄色警告。"/>
-                        <TextBlock TextWrapping="Wrap" Text="全天复习事件会写入备注「第N次复习」。Windows 日历对全天事件的定点 09:00 提醒能力有限，可在系统日历中按需补提醒。"/>
+                        <TextBlock TextWrapping="Wrap" Text="全天复习事件会写入备注「第N次复习」。Windows 对全天事件的定点 09:00 提醒能力有限。"/>
                     </StackPanel>
                 </PivotItem>
             </Pivot>

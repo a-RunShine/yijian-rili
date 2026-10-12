@@ -35,6 +35,11 @@ jobs:
       - name: Test Domain
         working-directory: windows
         run: dotnet test YijianRili.Domain.Tests/YijianRili.Domain.Tests.csproj -c Release --verbosity minimal
-      - name: Build App
+      - name: Build App (MSIX)
         working-directory: windows
-        run: dotnet build YijianRili.App/YijianRili.App.csproj -c Release -p:Platform=x64 --verbosity minimal
+        run: >
+          dotnet build YijianRili.App/YijianRili.App.csproj
+          -c Release
+          -p:Platform=x64
+          -p:AppxPackageSigningEnabled=false
+          --verbosity minimal

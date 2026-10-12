@@ -14,9 +14,14 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <LangVersion>latest</LangVersion>
-    <WindowsPackageType>None</WindowsPackageType>
+    <!-- 必须打包：WinRT Appointments 需要 package identity + appointments 能力。
+         若设为 None（未打包），日历列表会为空，创建会失败。 -->
+    <WindowsPackageType>MSIX</WindowsPackageType>
     <WindowsAppSDKSelfContained>false</WindowsAppSDKSelfContained>
     <DefineConstants>$(DefineConstants);DISABLE_XAML_GENERATED_MAIN</DefineConstants>
+    <AppxPackageSigningEnabled>false</AppxPackageSigningEnabled>
+    <GenerateAppInstallerFile>false</GenerateAppInstallerFile>
+    <AppxBundle>Never</AppxBundle>
   </PropertyGroup>
 
   <ItemGroup>
@@ -31,6 +36,13 @@
 
   <ItemGroup>
     <Manifest Include="$(ApplicationManifest)" />
+    <AppxManifest Include="Package.appxmanifest" />
+    <Content Include="Assets\**" />
   </ItemGroup>
+
+  <!-- 开发机旁加载：未签名 MSIX 需开启开发人员模式 / 允许旁加载 -->
+  <PropertyGroup Condition="'$(Configuration)' == 'Debug'">
+    <AppxPackageSigningEnabled>false</AppxPackageSigningEnabled>
+  </PropertyGroup>
 
 </Project>
