@@ -69,6 +69,7 @@ class ReviewViewModel: ObservableObject {
     @Published var selectedSearchHit: SearchHit?
     @Published var seriesPendingDelete: SearchHit?
     @Published var displayedEvents: [CalendarEventInfo] = []
+    @Published var displayedDayHits: [SearchHit] = []
     @Published var historySearchText: String = ""
     @Published var scheduleMode: ScheduleMode = .review {
         didSet { session.scheduleMode = scheduleMode }
@@ -248,6 +249,7 @@ class ReviewViewModel: ObservableObject {
         searchText = browse.searchText
         selectedDayType = browse.selectedDayType
         rebuildSearchHits()
+        rebuildDisplayedDayHits()
     }
 
     private func rebuildSearchHits() {
@@ -263,6 +265,15 @@ class ReviewViewModel: ObservableObject {
             selectedSearchHit = nil
             selectedSearchResult = nil
         }
+    }
+
+    private func rebuildDisplayedDayHits() {
+        _ = historyRevision
+        displayedDayHits = DayEventProjection.project(
+            dayEvents: browse.displayedEvents,
+            history: historyStore.load(),
+            eventById: { [calendar] id in calendar.event(withId: id) }
+        )
     }
 
     private func pushInputsToSession() {
@@ -323,6 +334,7 @@ class ReviewViewModel: ObservableObject {
         reconcileRecordedWithCalendar()
         browse.loadDisplayedDayEvents()
         displayedEvents = browse.displayedEvents
+        rebuildDisplayedDayHits()
     }
 
     func selectDayType(_ dayType: DayType) {
@@ -330,6 +342,7 @@ class ReviewViewModel: ObservableObject {
         browse.selectDayType(dayType)
         selectedDayType = browse.selectedDayType
         displayedEvents = browse.displayedEvents
+        rebuildDisplayedDayHits()
     }
 
     private func scheduleResultDismissal() {
@@ -653,6 +666,7 @@ class ReviewViewModel: ObservableObject {
             session.removeEventsFromRecorded(ids: [event.id])
             refreshHistoryProjection()
             rebuildSearchHits()
+            rebuildDisplayedDayHits()
             if selectedSearchHit?.id == hit.id {
                 selectedSearchHit = nil
             }
@@ -670,6 +684,7 @@ class ReviewViewModel: ObservableObject {
             session.removeEventsFromRecorded(ids: ids)
             refreshHistoryProjection()
             rebuildSearchHits()
+            rebuildDisplayedDayHits()
             if let selected = selectedSearchHit,
                selected.members.contains(where: { ids.contains($0.id) }) {
                 selectedSearchHit = searchHits.first(where: { $0.id == selected.id })

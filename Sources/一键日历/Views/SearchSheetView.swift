@@ -60,9 +60,6 @@ struct SearchSheetView: View {
                 hit.title.isEmpty ? NSLocalizedString("untitled", comment: "") : hit.title
             ))
         }
-        .sheet(item: $viewModel.seriesPendingDelete) { hit in
-            SeriesDeleteSheet(viewModel: viewModel, hit: hit)
-        }
     }
 
     private func performDirectDelete(_ hit: SearchHit) {
