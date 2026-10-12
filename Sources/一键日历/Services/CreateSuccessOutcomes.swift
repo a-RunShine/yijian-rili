@@ -61,6 +61,10 @@ final class CreateSuccessOutcomes {
         history.replace(existing.withSharedDetail(sharedDetail))
     }
 
+    func recordedEntries() -> [HistoryEntry] {
+        history.load()
+    }
+
     func todayCreatedEntries(now: Date = Date(), calendar: Calendar = .current) -> [HistoryEntry] {
         history.created(on: now, calendar: calendar)
     }
