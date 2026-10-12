@@ -211,6 +211,24 @@ final class ReviewSession {
     }
 
     @discardableResult
+    func reconcileRecordedWithCalendar() -> Bool {
+        var didChange = false
+        for entry in outcomes.recordedEntries() {
+            let identifiers = entry.createdEventIdentifiers
+            guard !identifiers.isEmpty else { continue }
+            let missing = identifiers.filter { calendar.event(withId: $0) == nil }
+            guard !missing.isEmpty else { continue }
+            switch removeEventsFromRecorded(ids: missing) {
+            case .updated, .discarded:
+                didChange = true
+            case .noMatch:
+                break
+            }
+        }
+        return didChange
+    }
+
+    @discardableResult
     func updateSharedDetail(for entry: HistoryEntry, detail: String) -> SharedDetailUpdateOutcome {
         resultMessage = nil
         resultType = nil

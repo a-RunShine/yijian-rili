@@ -244,6 +244,7 @@ class ReviewViewModel: ObservableObject {
     }
 
     private func rebuildSearchHits() {
+        reconcileRecordedWithCalendar()
         _ = historyRevision
         searchHits = SearchCollapse.collapse(
             rawHits: browse.searchResults,
@@ -312,11 +313,13 @@ class ReviewViewModel: ObservableObject {
     }
 
     func loadDisplayedDayEvents() {
+        reconcileRecordedWithCalendar()
         browse.loadDisplayedDayEvents()
         displayedEvents = browse.displayedEvents
     }
 
     func selectDayType(_ dayType: DayType) {
+        reconcileRecordedWithCalendar()
         browse.selectDayType(dayType)
         selectedDayType = browse.selectedDayType
         displayedEvents = browse.displayedEvents
@@ -351,6 +354,12 @@ class ReviewViewModel: ObservableObject {
         historyRevision &+= 1
     }
 
+    private func reconcileRecordedWithCalendar() {
+        if session.reconcileRecordedWithCalendar() {
+            refreshHistoryProjection()
+        }
+    }
+
     let weeklyReviewViewModel: WeeklyReviewViewModel
 
     @Published var showWeeklyReview: Bool = false
@@ -368,6 +377,7 @@ class ReviewViewModel: ObservableObject {
     }
 
     var todayCreatedEntries: [HistoryEntry] {
+        reconcileRecordedWithCalendar()
         _ = historyRevision
         return session.todayCreatedEntries()
     }

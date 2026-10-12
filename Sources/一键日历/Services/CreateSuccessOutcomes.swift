@@ -67,6 +67,10 @@ final class CreateSuccessOutcomes {
         weekly.updateWeeklyEntryTitle(id: id, title: title)
     }
 
+    func recordedEntries() -> [HistoryEntry] {
+        history.load()
+    }
+
     func todayCreatedEntries(now: Date = Date(), calendar: Calendar = .current) -> [HistoryEntry] {
         history.created(on: now, calendar: calendar)
     }

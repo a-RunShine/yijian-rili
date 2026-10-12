@@ -292,6 +292,85 @@ final class ReviewViewModelCalendarInjectionTests: XCTestCase {
         XCTAssertTrue(viewModel.searchHits.isEmpty)
     }
 
+    func testSearchRebuildReconcilesGhostSeriesMembers() async throws {
+        let calendar = InMemoryCalendarService(grantAccessByDefault: true)
+        let viewModel = ReviewViewModel(calendar: calendar)
+        let marker = "search-reconcile-\(UUID().uuidString.prefix(8))"
+        viewModel.title = marker
+        viewModel.baseDate = Date()
+        viewModel.scheduleMode = .review
+        viewModel.reviewIntervals = [3, 7, 30]
+        viewModel.updateReviewDates()
+        await viewModel.createReviewSchedule()
+
+        let batch = try XCTUnwrap(viewModel.historyEntries.first(where: { $0.title == marker }))
+        let ids = batch.createdEventIdentifiers
+        XCTAssertEqual(ids.count, 3)
+        for id in ids {
+            XCTAssertTrue(calendar.deleteEvent(id: id))
+        }
+
+        viewModel.searchText = marker
+        viewModel.performSearch()
+
+        XCTAssertTrue(viewModel.searchHits.isEmpty)
+        XCTAssertFalse(viewModel.historyEntries.contains(where: { $0.id == batch.id }))
+        XCTAssertFalse(viewModel.todayCreatedEntries.contains(where: { $0.id == batch.id }))
+        XCTAssertFalse(
+            viewModel.weeklyReviewViewModel.weeklyEntries.contains(where: { $0.id == batch.id })
+        )
+    }
+
+    func testTodayCreatedListingReconcilesPartialMissingMembers() async throws {
+        let calendar = InMemoryCalendarService(grantAccessByDefault: true)
+        let viewModel = ReviewViewModel(calendar: calendar)
+        let marker = "today-reconcile-\(UUID().uuidString.prefix(8))"
+        viewModel.title = marker
+        viewModel.baseDate = Date()
+        viewModel.scheduleMode = .review
+        viewModel.reviewIntervals = [3, 7, 30]
+        viewModel.updateReviewDates()
+        await viewModel.createReviewSchedule()
+
+        let batch = try XCTUnwrap(viewModel.historyEntries.first(where: { $0.title == marker }))
+        let ids = batch.createdEventIdentifiers
+        XCTAssertTrue(calendar.deleteEvent(id: ids[0]))
+
+        let listed = viewModel.todayCreatedEntries
+        let after = try XCTUnwrap(listed.first(where: { $0.title == marker }))
+        XCTAssertEqual(after.id, batch.id)
+        XCTAssertEqual(after.createdEventIdentifiers.count, 2)
+        XCTAssertFalse(after.createdEventIdentifiers.contains(ids[0]))
+        XCTAssertTrue(
+            viewModel.weeklyReviewViewModel.weeklyEntries.contains(where: { $0.id == batch.id })
+        )
+    }
+
+    func testDayLoadReconcilesMissingMembers() async throws {
+        let calendar = InMemoryCalendarService(grantAccessByDefault: true)
+        let viewModel = ReviewViewModel(calendar: calendar)
+        let marker = "day-reconcile-\(UUID().uuidString.prefix(8))"
+        viewModel.title = marker
+        viewModel.baseDate = Date()
+        viewModel.scheduleMode = .review
+        viewModel.reviewIntervals = [3, 7, 30]
+        viewModel.updateReviewDates()
+        await viewModel.createReviewSchedule()
+
+        let batch = try XCTUnwrap(viewModel.historyEntries.first(where: { $0.title == marker }))
+        let ids = batch.createdEventIdentifiers
+        for id in ids {
+            XCTAssertTrue(calendar.deleteEvent(id: id))
+        }
+
+        viewModel.loadDisplayedDayEvents()
+
+        XCTAssertFalse(viewModel.historyEntries.contains(where: { $0.id == batch.id }))
+        XCTAssertFalse(
+            viewModel.weeklyReviewViewModel.weeklyEntries.contains(where: { $0.id == batch.id })
+        )
+    }
+
     func testDetailBindingRoundsTripToSession() async {
         let calendar = InMemoryCalendarService(grantAccessByDefault: true)
         let viewModel = ReviewViewModel(calendar: calendar)
