@@ -242,6 +242,23 @@ final class CalendarWriteOrchestratorTests: XCTestCase {
         XCTAssertEqual(notesById["b"], ReviewNotes.compose(key: "第2次复习", detail: "新"))
     }
 
+    func testRewriteSeriesTitleUpdatesAndCountsMissing() {
+        var titlesById = ["a": "旧", "b": "旧"]
+        let counts = CalendarWriteOrchestrator.rewriteSeriesTitle(
+            identifiers: ["a", "missing", "b"],
+            title: "新标题",
+            updateEventTitle: { id, title in
+                guard titlesById[id] != nil else { return false }
+                titlesById[id] = title
+                return true
+            }
+        )
+        XCTAssertEqual(counts.updated, 2)
+        XCTAssertEqual(counts.missing, 1)
+        XCTAssertEqual(titlesById["a"], "新标题")
+        XCTAssertEqual(titlesById["b"], "新标题")
+    }
+
     private func date(_ y: Int, _ m: Int, _ d: Int) -> Date {
         var c = DateComponents(); c.year = y; c.month = m; c.day = d
         return Calendar.current.date(from: c)!

@@ -76,6 +76,14 @@
 "shared_detail_partial" = "已更新%@个日程，%@个日程已删除或不存在";
 "shared_detail_all_missing" = "%@个日程已被删除或不存在";
 
+"series_title_label" = "系列标题";
+"series_title_unavailable" = "该历史记录无法编辑系列标题（缺少日程标识）";
+"series_title_success" = "已更新%@个日程的标题";
+"series_title_partial" = "已更新%@个日程标题，%@个日程已删除或不存在";
+"series_title_all_missing" = "%@个日程已被删除或不存在";
+"series_title_save" = "保存";
+"series_edit_sheet_title" = "编辑系列";
+
 // History
 "history_title" = "历史记录";
 "no_history" = "暂无历史记录";

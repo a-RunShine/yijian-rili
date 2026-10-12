@@ -278,6 +278,55 @@ final class ReviewSession {
         return .updated(updated: updated, missing: missing)
     }
 
+    @discardableResult
+    func updateSeriesTitle(for entry: HistoryEntry, title: String) -> SharedDetailUpdateOutcome {
+        resultMessage = nil
+        resultType = nil
+
+        let identifiers = entry.createdEventIdentifiers
+        guard !identifiers.isEmpty else {
+            resultMessage = NSLocalizedString("series_title_unavailable", comment: "")
+            resultType = .warning
+            return .unavailable
+        }
+
+        let trimmedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        let counts = CalendarWriteOrchestrator.rewriteSeriesTitle(
+            identifiers: identifiers,
+            title: trimmedTitle,
+            updateEventTitle: { [calendar] id, newTitle in calendar.updateEventTitle(id: id, title: newTitle) }
+        )
+        let updated = counts.updated
+        let missing = counts.missing
+
+        if updated > 0 {
+            outcomes.updateTitle(id: entry.id, title: trimmedTitle)
+        }
+
+        if missing == 0 {
+            resultMessage = String(
+                format: NSLocalizedString("series_title_success", comment: ""),
+                "\(updated)"
+            )
+            resultType = .success
+        } else if updated > 0 {
+            resultMessage = String(
+                format: NSLocalizedString("series_title_partial", comment: ""),
+                "\(updated)",
+                "\(missing)"
+            )
+            resultType = .warning
+        } else {
+            resultMessage = String(
+                format: NSLocalizedString("series_title_all_missing", comment: ""),
+                "\(missing)"
+            )
+            resultType = .warning
+        }
+
+        return .updated(updated: updated, missing: missing)
+    }
+
     func consumeHapticFlag() -> Bool {
         let flag = shouldPlayHaptic
         shouldPlayHaptic = false

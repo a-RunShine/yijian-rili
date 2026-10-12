@@ -21,6 +21,22 @@ final class InMemoryCalendarServiceTests: XCTestCase {
         XCTAssertFalse(calendar.availableCalendars.isEmpty)
     }
 
+    func testUpdateEventTitleRewritesExistingAndReturnsFalseWhenMissing() async throws {
+        let calendar = InMemoryCalendarService()
+        let result = try await calendar.createReviewEvents(
+            title: "旧标题",
+            baseDate: date(2026, 1, 31),
+            intervals: [3],
+            calendarId: nil
+        )
+        XCTAssertEqual(result.created.count, 1)
+        let id = try XCTUnwrap(calendar.lastCreatedEventIdentifiers.first)
+
+        XCTAssertTrue(calendar.updateEventTitle(id: id, title: "新标题"))
+        XCTAssertEqual(calendar.event(withId: id)?.title, "新标题")
+        XCTAssertFalse(calendar.updateEventTitle(id: "missing-id", title: "不应写入"))
+    }
+
     func testCreateReviewScheduleWritesEvents() async throws {
         let calendar = InMemoryCalendarService()
         let base = date(2026, 1, 31)
@@ -397,6 +413,76 @@ final class ReviewViewModelCalendarInjectionTests: XCTestCase {
         XCTAssertEqual(outcome, .updated(updated: 3, missing: 0))
         XCTAssertEqual(viewModel.historyEntries.first?.sharedDetail, "修订")
         XCTAssertEqual(viewModel.resultType, .success)
+    }
+
+    func testUpdateSeriesTitleViaFacadeUpdatesHistoryTodayCreatedAndWeekly() async {
+        let calendar = InMemoryCalendarService(grantAccessByDefault: true)
+        let viewModel = ReviewViewModel(calendar: calendar)
+        viewModel.title = "旧门面标题"
+        viewModel.detail = "保留详情"
+        viewModel.baseDate = date(2026, 1, 31)
+        viewModel.reviewIntervals = [3, 7, 30]
+        viewModel.scheduleMode = .review
+        viewModel.updateReviewDates()
+        await viewModel.createReviewSchedule()
+
+        guard let entry = viewModel.historyEntries.first else {
+            return XCTFail("expected history entry")
+        }
+        let batchID = entry.id
+        XCTAssertTrue(
+            viewModel.weeklyReviewViewModel.weeklyEntries.contains(where: {
+                $0.id == batchID && $0.title == "旧门面标题"
+            })
+        )
+
+        let outcome = viewModel.updateSeriesTitle(for: entry, title: "  新门面标题  ")
+        XCTAssertEqual(outcome, .updated(updated: 3, missing: 0))
+        XCTAssertEqual(viewModel.historyEntries.first?.title, "新门面标题")
+        XCTAssertEqual(viewModel.todayCreatedEntries.first?.title, "新门面标题")
+        XCTAssertEqual(viewModel.historyEntries.first?.sharedDetail, "保留详情")
+        XCTAssertTrue(
+            viewModel.weeklyReviewViewModel.weeklyEntries.contains(where: {
+                $0.id == batchID && $0.title == "新门面标题"
+            })
+        )
+        XCTAssertFalse(
+            viewModel.weeklyReviewViewModel.weeklyEntries.contains(where: {
+                $0.id == batchID && $0.title == "旧门面标题"
+            })
+        )
+        XCTAssertEqual(viewModel.resultType, .success)
+        for id in entry.createdEventIdentifiers {
+            XCTAssertEqual(calendar.event(withId: id)?.title, "新门面标题")
+        }
+    }
+
+    func testCommitSharedDetailEditAlsoSavesSeriesTitle() async {
+        let calendar = InMemoryCalendarService(grantAccessByDefault: true)
+        let viewModel = ReviewViewModel(calendar: calendar)
+        viewModel.title = "提交前"
+        viewModel.detail = "旧详情"
+        viewModel.baseDate = date(2026, 1, 31)
+        viewModel.reviewIntervals = [3, 7, 30]
+        viewModel.scheduleMode = .review
+        viewModel.updateReviewDates()
+        await viewModel.createReviewSchedule()
+
+        guard let entry = viewModel.historyEntries.first else {
+            return XCTFail("expected history entry")
+        }
+        viewModel.beginSharedDetailEdit(for: entry)
+        XCTAssertEqual(viewModel.seriesTitleDraft, "提交前")
+        XCTAssertEqual(viewModel.sharedDetailDraft, "旧详情")
+
+        viewModel.seriesTitleDraft = "提交后标题"
+        viewModel.sharedDetailDraft = "提交后详情"
+        let outcome = viewModel.commitSharedDetailEdit()
+
+        XCTAssertEqual(outcome, .updated(updated: 3, missing: 0))
+        XCTAssertEqual(viewModel.historyEntries.first?.title, "提交后标题")
+        XCTAssertEqual(viewModel.historyEntries.first?.sharedDetail, "提交后详情")
+        XCTAssertTrue(viewModel.sharedDetailEditOutcomeVisible)
     }
 
 

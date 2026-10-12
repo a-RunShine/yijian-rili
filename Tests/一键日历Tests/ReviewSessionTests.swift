@@ -7,6 +7,7 @@ final class FakeWeeklyAppender: WeeklyEntryAppending {
     private(set) var appendCallCount = 0
     private(set) var removedIDs: [UUID] = []
     private(set) var removeCallCount = 0
+    private(set) var titleUpdates: [(UUID, String)] = []
 
     func appendWeeklyEntry(from historyEntry: HistoryEntry) {
         appendCallCount += 1
@@ -17,6 +18,23 @@ final class FakeWeeklyAppender: WeeklyEntryAppending {
         removeCallCount += 1
         removedIDs.append(id)
         appended.removeAll { $0.id == id }
+    }
+
+    func updateWeeklyEntryTitle(id: UUID, title: String) {
+        titleUpdates.append((id, title))
+        appended = appended.map { entry in
+            guard entry.id == id else { return entry }
+            return HistoryEntry(
+                id: entry.id,
+                title: title,
+                baseDate: entry.baseDate,
+                reviewDates: entry.reviewDates,
+                creationDate: entry.creationDate,
+                type: entry.type,
+                createdEventIdentifiers: entry.createdEventIdentifiers,
+                sharedDetail: entry.sharedDetail
+            )
+        }
     }
 }
 
@@ -458,6 +476,102 @@ final class ReviewSessionTests: XCTestCase {
         XCTAssertEqual(history.load().first?.sharedDetail, "残留")
         XCTAssertEqual(weekly.appendCallCount, weeklyBefore)
         XCTAssertTrue(calendar.fetchEvents(on: Date()).isEmpty)
+    }
+
+    func testUpdateSeriesTitleRewritesAllMembersAndHistoryAndWeekly() async throws {
+        let calendar = InMemoryCalendarService(grantAccessByDefault: true)
+        let (session, history, weekly) = CreateSuccessTestSupport.makeSession(calendar: calendar)
+        session.title = "旧系列名"
+        session.baseDate = CreateSuccessTestSupport.date(2026, 1, 31)
+        session.reviewIntervals = [3, 7, 30]
+        session.scheduleMode = .review
+        session.updateReviewDates()
+        await session.create()
+        XCTAssertEqual(session.resultType, .success)
+        let entry = try XCTUnwrap(history.load().first)
+        XCTAssertEqual(entry.createdEventIdentifiers.count, 3)
+        XCTAssertEqual(weekly.appended.first?.title, "旧系列名")
+
+        let outcome = session.updateSeriesTitle(for: entry, title: "  新系列名  ")
+
+        XCTAssertEqual(outcome, .updated(updated: 3, missing: 0))
+        XCTAssertEqual(session.resultType, .success)
+        XCTAssertEqual(history.load().first?.title, "新系列名")
+        XCTAssertEqual(weekly.titleUpdates.count, 1)
+        XCTAssertEqual(weekly.titleUpdates.first?.0, entry.id)
+        XCTAssertEqual(weekly.titleUpdates.first?.1, "新系列名")
+        XCTAssertEqual(weekly.appended.first?.title, "新系列名")
+        let d1 = calendar.fetchEvents(on: CreateSuccessTestSupport.date(2026, 2, 3))
+        let d2 = calendar.fetchEvents(on: CreateSuccessTestSupport.date(2026, 2, 7))
+        let d3 = calendar.fetchEvents(on: CreateSuccessTestSupport.date(2026, 3, 2))
+        XCTAssertEqual(d1[0].title, "新系列名")
+        XCTAssertEqual(d2[0].title, "新系列名")
+        XCTAssertEqual(d3[0].title, "新系列名")
+    }
+
+    func testUpdateSeriesTitlePartialSuccessWhenSomeEventsMissing() async throws {
+        let calendar = InMemoryCalendarService(grantAccessByDefault: true)
+        let (session, history, weekly) = CreateSuccessTestSupport.makeSession(calendar: calendar)
+        session.title = "部分改名"
+        session.baseDate = CreateSuccessTestSupport.date(2026, 1, 31)
+        session.reviewIntervals = [3, 7, 30]
+        session.scheduleMode = .review
+        session.updateReviewDates()
+        await session.create()
+        let entry = try XCTUnwrap(history.load().first)
+        let firstId = entry.createdEventIdentifiers[0]
+        XCTAssertTrue(calendar.deleteEvent(id: firstId))
+
+        let outcome = session.updateSeriesTitle(for: entry, title: "改后名")
+
+        XCTAssertEqual(outcome, .updated(updated: 2, missing: 1))
+        XCTAssertEqual(session.resultType, .warning)
+        XCTAssertEqual(history.load().first?.title, "改后名")
+        XCTAssertEqual(weekly.titleUpdates.first?.1, "改后名")
+        let surviving = calendar.fetchEvents(on: CreateSuccessTestSupport.date(2026, 2, 7))
+        XCTAssertEqual(surviving[0].title, "改后名")
+    }
+
+    func testUpdateSeriesTitleUnavailableForEmptyIdentifiers() {
+        let calendar = InMemoryCalendarService(grantAccessByDefault: true)
+        let (session, history, weekly) = CreateSuccessTestSupport.makeSession(calendar: calendar)
+        let legacy = HistoryEntry(
+            title: "旧批次",
+            baseDate: CreateSuccessTestSupport.date(2026, 1, 1),
+            reviewDates: [],
+            creationDate: Date(),
+            type: .review,
+            createdEventIdentifiers: [],
+            sharedDetail: nil
+        )
+        history.add(legacy)
+
+        let outcome = session.updateSeriesTitle(for: legacy, title: "不应写入")
+
+        XCTAssertEqual(outcome, .unavailable)
+        XCTAssertEqual(session.resultType, .warning)
+        XCTAssertEqual(history.load().first?.title, "旧批次")
+        XCTAssertTrue(weekly.titleUpdates.isEmpty)
+    }
+
+    func testUpdateSeriesTitleAllMissingDoesNotChangeHistoryOrWeekly() async throws {
+        let calendar = InMemoryCalendarService(grantAccessByDefault: true)
+        let (session, history, weekly) = CreateSuccessTestSupport.makeSession(calendar: calendar)
+        session.title = "全缺失"
+        session.baseDate = CreateSuccessTestSupport.date(2026, 1, 31)
+        session.reviewIntervals = [3]
+        session.scheduleMode = .review
+        session.updateReviewDates()
+        await session.create()
+        let entry = try XCTUnwrap(history.load().first)
+        XCTAssertTrue(calendar.deleteEvent(id: entry.createdEventIdentifiers[0]))
+
+        let outcome = session.updateSeriesTitle(for: entry, title: "不会落库")
+
+        XCTAssertEqual(outcome, .updated(updated: 0, missing: 1))
+        XCTAssertEqual(session.resultType, .warning)
+        XCTAssertEqual(history.load().first?.title, "全缺失")
+        XCTAssertTrue(weekly.titleUpdates.isEmpty)
     }
 
     func testReconcilePrunesMissingIdsKeepsRemainingAndWeekly() async throws {
