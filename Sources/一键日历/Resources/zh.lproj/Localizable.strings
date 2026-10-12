@@ -253,4 +253,11 @@
 "weekly_review_jump_to_current" = "回到本周";
 "weekly_review_pre_occupied_tag" = "上周周末创建";
 "weekly_review_pre_occupied_subtitle" = "创建于 %@ · %@ 所在周开始复习";
+"weekly_review_occurrence_section" = "本周复习进度";
+"weekly_review_occurrence_done" = "已完成";
+"weekly_review_occurrence_skipped" = "已跳过";
+"occurrence_mark_done" = "完成";
+"occurrence_mark_skipped" = "跳过";
+"occurrence_status_done" = "已完成";
+"occurrence_status_skipped" = "已跳过";
 "close" = "关闭";

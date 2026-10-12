@@ -17,6 +17,7 @@ struct WeeklyReviewView: View {
                 VStack(spacing: 14) {
                     weekNavigator
                     progressBar
+                    occurrenceMaterialsSection
                     entriesSection
                     noteEditor
                 }
@@ -132,6 +133,65 @@ struct WeeklyReviewView: View {
         .padding()
         .background(theme.cardBackgroundColor)
         .cornerRadius(10)
+    }
+
+    @ViewBuilder
+    private var occurrenceMaterialsSection: some View {
+        let materials = viewModel.occurrenceMaterialsInCurrentWeek
+        if !materials.isEmpty {
+            VStack(alignment: .leading, spacing: 8) {
+                Text(NSLocalizedString("weekly_review_occurrence_section", comment: ""))
+                    .font(.subheadline)
+                    .fontWeight(.medium)
+                VStack(spacing: 0) {
+                    ForEach(Array(materials.enumerated()), id: \.element.id) { idx, material in
+                        occurrenceRow(material)
+                        if idx < materials.count - 1 {
+                            Divider().padding(.leading, 12)
+                        }
+                    }
+                }
+                .background(theme.cardBackgroundColor)
+                .cornerRadius(10)
+            }
+        }
+    }
+
+    private func occurrenceRow(_ material: OccurrenceReviewMaterial) -> some View {
+        HStack(alignment: .top, spacing: 10) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(material.title.isEmpty
+                     ? NSLocalizedString("untitled", comment: "")
+                     : material.title)
+                    .font(.subheadline)
+                    .foregroundColor(theme.primaryTextColor ?? .primary)
+                    .lineLimit(2)
+                Text(material.occurrenceDate.formattedChinese())
+                    .font(.caption)
+                    .foregroundColor(theme.secondaryTextColor ?? .secondary)
+            }
+            Spacer(minLength: 0)
+            Text(occurrenceStatusLabel(material.status))
+                .font(.caption)
+                .padding(.horizontal, 6)
+                .padding(.vertical, 2)
+                .background((theme.accentColor ?? .accentColor).opacity(0.15))
+                .foregroundColor(theme.accentColor ?? .accentColor)
+                .cornerRadius(4)
+        }
+        .padding(.vertical, 8)
+        .padding(.horizontal, 10)
+    }
+
+    private func occurrenceStatusLabel(_ status: OccurrenceStatus) -> String {
+        switch status {
+        case .done:
+            return NSLocalizedString("weekly_review_occurrence_done", comment: "")
+        case .skipped:
+            return NSLocalizedString("weekly_review_occurrence_skipped", comment: "")
+        case .unmarked:
+            return ""
+        }
     }
 
     @ViewBuilder
