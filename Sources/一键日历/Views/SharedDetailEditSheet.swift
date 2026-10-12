@@ -111,8 +111,7 @@ struct SharedDetailEditSheet: View {
                     }
                     .buttonStyle(.borderedProminent)
                     .tint(viewModel.currentTheme.accentColor ?? .accentColor)
-                    .disabled(!viewModel.canEditSharedDetailForSelection
-                              || viewModel.seriesTitleDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    .disabled(!viewModel.canEditSharedDetailForSelection)
                 }
             }
 

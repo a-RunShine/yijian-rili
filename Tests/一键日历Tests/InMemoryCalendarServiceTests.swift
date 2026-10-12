@@ -483,6 +483,36 @@ final class ReviewViewModelCalendarInjectionTests: XCTestCase {
         XCTAssertEqual(viewModel.historyEntries.first?.title, "提交后标题")
         XCTAssertEqual(viewModel.historyEntries.first?.sharedDetail, "提交后详情")
         XCTAssertTrue(viewModel.sharedDetailEditOutcomeVisible)
+        XCTAssertEqual(viewModel.resultType, .success)
+        let titleMessage = String(format: NSLocalizedString("series_title_success", comment: ""), "3")
+        XCTAssertEqual(viewModel.resultMessage, titleMessage)
+    }
+
+    func testCommitSharedDetailEditWithEmptyTitleStillSavesDetail() async {
+        let calendar = InMemoryCalendarService(grantAccessByDefault: true)
+        let viewModel = ReviewViewModel(calendar: calendar)
+        viewModel.title = "仅改详情"
+        viewModel.detail = "旧详情"
+        viewModel.baseDate = date(2026, 1, 31)
+        viewModel.reviewIntervals = [3, 7, 30]
+        viewModel.scheduleMode = .review
+        viewModel.updateReviewDates()
+        await viewModel.createReviewSchedule()
+
+        guard let entry = viewModel.historyEntries.first else {
+            return XCTFail("expected history entry")
+        }
+        viewModel.beginSharedDetailEdit(for: entry)
+        viewModel.seriesTitleDraft = "   "
+        viewModel.sharedDetailDraft = "只更新详情"
+        let outcome = viewModel.commitSharedDetailEdit()
+
+        XCTAssertEqual(outcome, .updated(updated: 3, missing: 0))
+        XCTAssertEqual(viewModel.historyEntries.first?.title, "仅改详情")
+        XCTAssertEqual(viewModel.historyEntries.first?.sharedDetail, "只更新详情")
+        XCTAssertEqual(viewModel.resultType, .success)
+        let detailMessage = String(format: NSLocalizedString("shared_detail_success", comment: ""), "3")
+        XCTAssertEqual(viewModel.resultMessage, detailMessage)
     }
 
 

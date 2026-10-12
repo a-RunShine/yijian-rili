@@ -493,19 +493,17 @@ class ReviewViewModel: ObservableObject {
     func commitSharedDetailEdit() -> SharedDetailUpdateOutcome {
         guard let entry = editingSharedDetailEntry else { return .unavailable }
         let trimmedTitle = seriesTitleDraft.trimmingCharacters(in: .whitespacesAndNewlines)
-        var titleOutcome: SharedDetailUpdateOutcome = .unavailable
-        if !trimmedTitle.isEmpty, trimmedTitle != entry.title {
-            titleOutcome = updateSeriesTitle(for: entry, title: seriesTitleDraft)
+        let titleChanged = !trimmedTitle.isEmpty && trimmedTitle != entry.title
+        let detailOutcome = updateSharedDetail(for: entry, detail: sharedDetailDraft)
+        var outcome = detailOutcome
+        if titleChanged {
+            let refreshed = editingSharedDetailEntry ?? entry
+            outcome = updateSeriesTitle(for: refreshed, title: seriesTitleDraft)
         }
-        let detailEntry = editingSharedDetailEntry ?? entry
-        let detailOutcome = updateSharedDetail(for: detailEntry, detail: sharedDetailDraft)
         sharedDetailEditOutcomeVisible = true
         sharedDetailResultOnToday = false
         scheduleResultDismissal()
-        if case .updated(_, let missing) = titleOutcome, missing > 0 {
-            return titleOutcome
-        }
-        return detailOutcome
+        return outcome
     }
 
     @discardableResult

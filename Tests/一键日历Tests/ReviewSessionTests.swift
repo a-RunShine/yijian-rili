@@ -793,7 +793,8 @@ final class OccurrenceStatusTests: XCTestCase {
         let today = Calendar.current.startOfDay(for: Date())
         session.title = "跳过素材"
         session.baseDate = today
-        session.scheduleMode = .single
+        session.scheduleMode = .review
+        session.reviewIntervals = [3, 7, 30]
         session.updateReviewDates()
         await session.create()
 
@@ -822,6 +823,39 @@ final class OccurrenceStatusTests: XCTestCase {
         XCTAssertEqual(display[0].status, .skipped)
         XCTAssertEqual(display[0].eventId, eventId)
         XCTAssertEqual(weekly.reviewedIds, reviewedBefore)
+
+        defaults.removePersistentDomain(forName: suiteName)
+    }
+
+    func testOccurrenceStatusIgnoresNonReviewEventsAndMaterials() async throws {
+        let suiteName = "occurrence-scope-\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defaults.removePersistentDomain(forName: suiteName)
+
+        let calendar = InMemoryCalendarService(grantAccessByDefault: true)
+        let history = HistoryStore(defaults: defaults)
+        let weekly = WeeklyReviewViewModel(defaults: defaults)
+        let statuses = OccurrenceStatusStore(defaults: defaults)
+        let outcomes = CreateSuccessOutcomes(history: history, weekly: weekly)
+        let session = ReviewSession(calendar: calendar, outcomes: outcomes, occurrenceStatuses: statuses)
+
+        let today = Calendar.current.startOfDay(for: Date())
+        session.title = "单次不进进度"
+        session.baseDate = today
+        session.scheduleMode = .single
+        session.updateReviewDates()
+        await session.create()
+
+        let eventId = try XCTUnwrap(history.load().first?.createdEventIdentifiers.first)
+        session.setOccurrenceStatus(eventId: eventId, status: .done)
+        XCTAssertEqual(session.occurrenceStatus(for: eventId), .unmarked)
+
+        session.setOccurrenceStatus(eventId: "holiday-orphan", status: .skipped)
+        XCTAssertEqual(session.occurrenceStatus(for: "holiday-orphan"), .unmarked)
+
+        let weekStart = WeekCalculator.weekStart(for: today)
+        let weekEnd = WeekCalculator.weekEnd(for: weekStart)
+        XCTAssertTrue(session.occurrenceMaterials(weekStart: weekStart, weekEnd: weekEnd).isEmpty)
 
         defaults.removePersistentDomain(forName: suiteName)
     }

@@ -201,26 +201,28 @@ struct TodayEventsSection: View {
                 .help(NSLocalizedString("search_delete_button", comment: ""))
             }
 
-            HStack(spacing: 8) {
-                occurrenceActionButton(
-                    title: NSLocalizedString("occurrence_mark_done", comment: ""),
-                    selected: status == .done
-                ) {
-                    viewModel.setOccurrenceStatus(
-                        eventId: event.id,
-                        status: status == .done ? .unmarked : .done
-                    )
+            if hit.isSeries {
+                HStack(spacing: 8) {
+                    occurrenceActionButton(
+                        title: NSLocalizedString("occurrence_mark_done", comment: ""),
+                        selected: status == .done
+                    ) {
+                        viewModel.setOccurrenceStatus(
+                            eventId: event.id,
+                            status: status == .done ? .unmarked : .done
+                        )
+                    }
+                    occurrenceActionButton(
+                        title: NSLocalizedString("occurrence_mark_skipped", comment: ""),
+                        selected: status == .skipped
+                    ) {
+                        viewModel.setOccurrenceStatus(
+                            eventId: event.id,
+                            status: status == .skipped ? .unmarked : .skipped
+                        )
+                    }
+                    Spacer(minLength: 0)
                 }
-                occurrenceActionButton(
-                    title: NSLocalizedString("occurrence_mark_skipped", comment: ""),
-                    selected: status == .skipped
-                ) {
-                    viewModel.setOccurrenceStatus(
-                        eventId: event.id,
-                        status: status == .skipped ? .unmarked : .skipped
-                    )
-                }
-                Spacer(minLength: 0)
             }
         }
         .padding(12)

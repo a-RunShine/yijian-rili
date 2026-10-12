@@ -91,14 +91,17 @@ final class ReviewSession {
     }
 
     func setOccurrenceStatus(eventId: String, status: OccurrenceStatus) {
+        guard isReviewSeriesEvent(eventId) else { return }
         occurrenceStatuses.setStatus(status, for: eventId)
     }
 
     func occurrenceMaterials(weekStart: Date, weekEnd: Date) -> [OccurrenceReviewMaterial] {
         let marked = occurrenceStatuses.markedEntries()
         guard !marked.isEmpty else { return [] }
+        let reviewEventIds = reviewSeriesEventIds()
         var materials: [OccurrenceReviewMaterial] = []
         for (eventId, status) in marked {
+            guard reviewEventIds.contains(eventId) else { continue }
             guard let event = calendar.event(withId: eventId) else { continue }
             let day = Calendar.current.startOfDay(for: event.start)
             let start = Calendar.current.startOfDay(for: weekStart)
@@ -114,6 +117,24 @@ final class ReviewSession {
             )
         }
         return materials.sorted { $0.occurrenceDate > $1.occurrenceDate }
+    }
+
+    private func isReviewSeriesEvent(_ eventId: String) -> Bool {
+        guard let entry = HistorySeriesLookup.entry(
+            containingEventId: eventId,
+            in: outcomes.recordedEntries()
+        ) else {
+            return false
+        }
+        return entry.type == .review
+    }
+
+    private func reviewSeriesEventIds() -> Set<String> {
+        Set(
+            outcomes.recordedEntries()
+                .filter { $0.type == .review }
+                .flatMap(\.createdEventIdentifiers)
+        )
     }
 
     func syncCalendarStateFromSeam() {
