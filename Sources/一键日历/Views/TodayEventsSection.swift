@@ -2,6 +2,7 @@ import SwiftUI
 
 struct TodayEventsSection: View {
     @ObservedObject var viewModel: ReviewViewModel
+    @State private var hitPendingDelete: SearchHit?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -39,7 +40,7 @@ struct TodayEventsSection: View {
                     .stroke((viewModel.currentTheme.secondaryTextColor ?? .secondary).opacity(0.25), lineWidth: 1)
             )
 
-            if viewModel.displayedEvents.isEmpty {
+            if viewModel.displayedDayHits.isEmpty {
                 Text(viewModel.selectedDayType.emptyHint)
                     .font(.caption)
                     .foregroundColor(viewModel.currentTheme.secondaryTextColor ?? .secondary)
@@ -48,15 +49,31 @@ struct TodayEventsSection: View {
                     .background(viewModel.currentTheme.cardBackgroundColor)
                     .cornerRadius(10)
             } else {
-                ForEach(viewModel.displayedEvents) { event in
-                    Button {
-                        viewModel.beginSharedDetailEditFromBrowse(event)
-                    } label: {
-                        eventCard(event)
-                    }
-                    .buttonStyle(.plain)
+                ForEach(viewModel.displayedDayHits) { hit in
+                    dayRowCard(hit)
                 }
             }
+        }
+        .alert(
+            NSLocalizedString("search_delete_confirm_title", comment: ""),
+            isPresented: Binding(
+                get: { hitPendingDelete != nil },
+                set: { if !$0 { hitPendingDelete = nil } }
+            ),
+            presenting: hitPendingDelete
+        ) { hit in
+            Button(NSLocalizedString("search_delete_cancel", comment: ""), role: .cancel) {
+                hitPendingDelete = nil
+            }
+            Button(NSLocalizedString("search_delete_confirm_action", comment: ""), role: .destructive) {
+                hitPendingDelete = nil
+                _ = viewModel.deleteSearchHit(hit)
+            }
+        } message: { hit in
+            Text(String(
+                format: NSLocalizedString("search_delete_confirm_message", comment: ""),
+                hit.title.isEmpty ? NSLocalizedString("untitled", comment: "") : hit.title
+            ))
         }
     }
 
@@ -99,36 +116,114 @@ struct TodayEventsSection: View {
         }
     }
 
-    private func eventCard(_ event: CalendarEventInfo) -> some View {
+    private func dayRowCard(_ hit: SearchHit) -> some View {
+        let event = hit.focusedEvent
         let detail = NotesDetail.extract(event.notes)
-        return HStack(alignment: .top, spacing: 10) {
-            RoundedRectangle(cornerRadius: 2)
-                .fill(Color(hex: event.colorHex) ?? Color(red: 0.051, green: 0.580, blue: 0.533))
-                .frame(width: 4)
+        let status = viewModel.occurrenceStatus(for: event.id)
+        return VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .top, spacing: 8) {
+                Button {
+                    viewModel.beginSharedDetailEditFromBrowse(event)
+                } label: {
+                    HStack(alignment: .top, spacing: 10) {
+                        RoundedRectangle(cornerRadius: 2)
+                            .fill(Color(hex: event.colorHex) ?? Color(red: 0.051, green: 0.580, blue: 0.533))
+                            .frame(width: 4)
 
-            VStack(alignment: .leading, spacing: 4) {
-                Text(event.title.isEmpty ? NSLocalizedString("untitled", comment: "") : event.title)
-                    .font(.subheadline)
-                    .fontWeight(.medium)
-                    .foregroundColor(viewModel.currentTheme.primaryTextColor)
-                    .lineLimit(2)
-                if !detail.isEmpty {
-                    Text(detail)
+                        VStack(alignment: .leading, spacing: 4) {
+                            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                                Text(event.title.isEmpty ? NSLocalizedString("untitled", comment: "") : event.title)
+                                    .font(.subheadline)
+                                    .fontWeight(.medium)
+                                    .foregroundColor(viewModel.currentTheme.primaryTextColor)
+                                    .lineLimit(2)
+                                if hit.isSeries {
+                                    Text(NSLocalizedString("series_day_row_badge", comment: ""))
+                                        .font(.caption2)
+                                        .foregroundColor(viewModel.currentTheme.accentColor ?? .accentColor)
+                                        .padding(.horizontal, 5)
+                                        .padding(.vertical, 1)
+                                        .background((viewModel.currentTheme.accentColor ?? .accentColor).opacity(0.12))
+                                        .cornerRadius(4)
+                                }
+                                if status != .unmarked {
+                                    Text(status == .done
+                                          ? NSLocalizedString("occurrence_status_done", comment: "")
+                                          : NSLocalizedString("occurrence_status_skipped", comment: ""))
+                                        .font(.caption2)
+                                        .foregroundColor(viewModel.currentTheme.accentColor ?? .accentColor)
+                                        .padding(.horizontal, 5)
+                                        .padding(.vertical, 1)
+                                        .background((viewModel.currentTheme.accentColor ?? .accentColor).opacity(0.12))
+                                        .cornerRadius(4)
+                                }
+                                Spacer(minLength: 0)
+                            }
+                            if hit.isSeries {
+                                Text(
+                                    String(
+                                        format: NSLocalizedString("series_day_row_member_hint", comment: ""),
+                                        "\(hit.members.count)"
+                                    )
+                                )
+                                .font(.caption2)
+                                .foregroundColor(viewModel.currentTheme.secondaryTextColor ?? .secondary)
+                            }
+                            if !detail.isEmpty {
+                                Text(detail)
+                                    .font(.caption)
+                                    .foregroundColor(viewModel.currentTheme.secondaryTextColor ?? .secondary)
+                                    .lineLimit(2)
+                            }
+                            HStack(spacing: 4) {
+                                Text(event.isAllDay ? NSLocalizedString("all_day", comment: "") : event.start.formattedTime())
+                                Text("·")
+                                Text((event.calendarTitle?.isEmpty == false)
+                                     ? (event.calendarTitle ?? "")
+                                     : NSLocalizedString("calendar_default_label", comment: ""))
+                            }
+                            .font(.caption)
+                            .foregroundColor(viewModel.currentTheme.secondaryTextColor ?? .secondary)
+                        }
+                        Spacer(minLength: 0)
+                    }
+                }
+                .buttonStyle(.plain)
+
+                Button {
+                    requestDelete(hit)
+                } label: {
+                    Image(systemName: "trash")
                         .font(.caption)
-                        .foregroundColor(viewModel.currentTheme.secondaryTextColor ?? .secondary)
-                        .lineLimit(2)
+                        .foregroundColor(.red)
                 }
-                HStack(spacing: 4) {
-                    Text(event.isAllDay ? NSLocalizedString("all_day", comment: "") : event.start.formattedTime())
-                    Text("·")
-                    Text((event.calendarTitle?.isEmpty == false)
-                         ? (event.calendarTitle ?? "")
-                         : NSLocalizedString("calendar_default_label", comment: ""))
-                }
-                .font(.caption)
-                .foregroundColor(viewModel.currentTheme.secondaryTextColor ?? .secondary)
+                .buttonStyle(.plain)
+                .help(NSLocalizedString("search_delete_button", comment: ""))
             }
-            Spacer(minLength: 0)
+
+            if hit.isSeries {
+                HStack(spacing: 8) {
+                    occurrenceActionButton(
+                        title: NSLocalizedString("occurrence_mark_done", comment: ""),
+                        selected: status == .done
+                    ) {
+                        viewModel.setOccurrenceStatus(
+                            eventId: event.id,
+                            status: status == .done ? .unmarked : .done
+                        )
+                    }
+                    occurrenceActionButton(
+                        title: NSLocalizedString("occurrence_mark_skipped", comment: ""),
+                        selected: status == .skipped
+                    ) {
+                        viewModel.setOccurrenceStatus(
+                            eventId: event.id,
+                            status: status == .skipped ? .unmarked : .skipped
+                        )
+                    }
+                    Spacer(minLength: 0)
+                }
+            }
         }
         .padding(12)
         .background(viewModel.currentTheme.cardBackgroundColor)
@@ -137,5 +232,38 @@ struct TodayEventsSection: View {
             RoundedRectangle(cornerRadius: 10)
                 .stroke((viewModel.currentTheme.secondaryTextColor ?? .secondary).opacity(0.2), lineWidth: 1)
         )
+    }
+
+    private func requestDelete(_ hit: SearchHit) {
+        if hit.needsSelectiveDelete {
+            viewModel.beginSeriesDelete(hit)
+        } else {
+            hitPendingDelete = hit
+        }
+    }
+
+    private func occurrenceActionButton(
+        title: String,
+        selected: Bool,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            Text(title)
+                .font(.caption)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(
+                    selected
+                        ? (viewModel.currentTheme.accentColor ?? .accentColor).opacity(0.2)
+                        : (viewModel.currentTheme.secondaryTextColor ?? .secondary).opacity(0.08)
+                )
+                .foregroundColor(
+                    selected
+                        ? (viewModel.currentTheme.accentColor ?? .accentColor)
+                        : (viewModel.currentTheme.secondaryTextColor ?? .secondary)
+                )
+                .cornerRadius(6)
+        }
+        .buttonStyle(.plain)
     }
 }

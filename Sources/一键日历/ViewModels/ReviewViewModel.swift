@@ -42,6 +42,7 @@ class ReviewViewModel: ObservableObject {
         didSet { session.baseDate = baseDate }
     }
     @Published var sharedDetailDraft: String = ""
+    @Published var seriesTitleDraft: String = ""
     @Published var editingSharedDetailEntryID: UUID?
     @Published var browseSharedDetailUnavailableEvent: CalendarEventInfo?
     @Published var sharedDetailEditOutcomeVisible: Bool = false
@@ -68,6 +69,7 @@ class ReviewViewModel: ObservableObject {
     @Published var selectedSearchHit: SearchHit?
     @Published var seriesPendingDelete: SearchHit?
     @Published var displayedEvents: [CalendarEventInfo] = []
+    @Published var displayedDayHits: [SearchHit] = []
     @Published var historySearchText: String = ""
     @Published var scheduleMode: ScheduleMode = .review {
         didSet { session.scheduleMode = scheduleMode }
@@ -81,6 +83,7 @@ class ReviewViewModel: ObservableObject {
     @Published var hasCloudCalendar: Bool = false
 
     @Published private(set) var historyRevision: Int = 0
+    @Published private(set) var occurrenceRevision: Int = 0
 
     @AppStorage("selectedCalendarIdentifier") var selectedCalendarIdentifier: String = "" {
         didSet {
@@ -125,16 +128,22 @@ class ReviewViewModel: ObservableObject {
         let history = HistoryStore()
         let weekly = WeeklyReviewViewModel()
         let outcomes = CreateSuccessOutcomes(history: history, weekly: weekly)
+        let occurrenceStatuses = OccurrenceStatusStore()
         self.historyStore = history
         self.weeklyReviewViewModel = weekly
         self.outcomes = outcomes
 
         let storedCalendarId = UserDefaults.standard.string(forKey: "selectedCalendarIdentifier") ?? ""
-        self.session = ReviewSession(
+        let session = ReviewSession(
             calendar: calendar,
             outcomes: outcomes,
+            occurrenceStatuses: occurrenceStatuses,
             selectedCalendarIdentifier: storedCalendarId
         )
+        self.session = session
+        weekly.occurrenceMaterialProvider = { start, end in
+            session.occurrenceMaterials(weekStart: start, weekEnd: end)
+        }
         self.browse = DayBrowseModel(calendar: calendar)
 
         title = session.title
@@ -240,9 +249,11 @@ class ReviewViewModel: ObservableObject {
         searchText = browse.searchText
         selectedDayType = browse.selectedDayType
         rebuildSearchHits()
+        rebuildDisplayedDayHits()
     }
 
     private func rebuildSearchHits() {
+        reconcileRecordedWithCalendar()
         _ = historyRevision
         searchHits = SearchCollapse.collapse(
             rawHits: browse.searchResults,
@@ -254,6 +265,15 @@ class ReviewViewModel: ObservableObject {
             selectedSearchHit = nil
             selectedSearchResult = nil
         }
+    }
+
+    private func rebuildDisplayedDayHits() {
+        _ = historyRevision
+        displayedDayHits = DayEventProjection.project(
+            dayEvents: browse.displayedEvents,
+            history: historyStore.load(),
+            eventById: { [calendar] id in calendar.event(withId: id) }
+        )
     }
 
     private func pushInputsToSession() {
@@ -311,14 +331,18 @@ class ReviewViewModel: ObservableObject {
     }
 
     func loadDisplayedDayEvents() {
+        reconcileRecordedWithCalendar()
         browse.loadDisplayedDayEvents()
         displayedEvents = browse.displayedEvents
+        rebuildDisplayedDayHits()
     }
 
     func selectDayType(_ dayType: DayType) {
+        reconcileRecordedWithCalendar()
         browse.selectDayType(dayType)
         selectedDayType = browse.selectedDayType
         displayedEvents = browse.displayedEvents
+        rebuildDisplayedDayHits()
     }
 
     private func scheduleResultDismissal() {
@@ -350,13 +374,31 @@ class ReviewViewModel: ObservableObject {
         historyRevision &+= 1
     }
 
+    private func reconcileRecordedWithCalendar() {
+        if session.reconcileRecordedWithCalendar() {
+            refreshHistoryProjection()
+        }
+    }
+
     let weeklyReviewViewModel: WeeklyReviewViewModel
 
     @Published var showWeeklyReview: Bool = false
 
     func openWeeklyReview() {
         weeklyReviewViewModel.jumpToCurrentWeek()
+        weeklyReviewViewModel.refreshOccurrenceMaterials()
         showWeeklyReview = true
+    }
+
+    func occurrenceStatus(for eventId: String) -> OccurrenceStatus {
+        _ = occurrenceRevision
+        return session.occurrenceStatus(for: eventId)
+    }
+
+    func setOccurrenceStatus(eventId: String, status: OccurrenceStatus) {
+        session.setOccurrenceStatus(eventId: eventId, status: status)
+        occurrenceRevision &+= 1
+        weeklyReviewViewModel.refreshOccurrenceMaterials()
     }
 
     func selectHistoryEntry(_ entry: HistoryEntry) {
@@ -367,6 +409,7 @@ class ReviewViewModel: ObservableObject {
     }
 
     var todayCreatedEntries: [HistoryEntry] {
+        reconcileRecordedWithCalendar()
         _ = historyRevision
         return session.todayCreatedEntries()
     }
@@ -394,6 +437,7 @@ class ReviewViewModel: ObservableObject {
             showHistory = false
         }
         editingSharedDetailEntryID = entry.id
+        seriesTitleDraft = entry.title
         sharedDetailDraft = entry.sharedDetail ?? ""
     }
 
@@ -406,6 +450,7 @@ class ReviewViewModel: ObservableObject {
         if let entry = HistorySeriesLookup.entry(containingEventId: event.id, in: historyEntries) {
             browseSharedDetailUnavailableEvent = nil
             editingSharedDetailEntryID = entry.id
+            seriesTitleDraft = entry.title
             let fromHistory = (entry.sharedDetail ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
             if fromHistory.isEmpty {
                 sharedDetailDraft = NotesDetail.extract(event.notes)
@@ -415,6 +460,7 @@ class ReviewViewModel: ObservableObject {
         } else {
             editingSharedDetailEntryID = nil
             browseSharedDetailUnavailableEvent = event
+            seriesTitleDraft = event.title
             sharedDetailDraft = NotesDetail.extract(event.notes)
         }
     }
@@ -439,13 +485,21 @@ class ReviewViewModel: ObservableObject {
         editingSharedDetailEntryID = nil
         browseSharedDetailUnavailableEvent = nil
         sharedDetailDraft = ""
+        seriesTitleDraft = ""
         sharedDetailEditOutcomeVisible = false
     }
 
     @discardableResult
     func commitSharedDetailEdit() -> SharedDetailUpdateOutcome {
         guard let entry = editingSharedDetailEntry else { return .unavailable }
-        let outcome = updateSharedDetail(for: entry, detail: sharedDetailDraft)
+        let trimmedTitle = seriesTitleDraft.trimmingCharacters(in: .whitespacesAndNewlines)
+        let titleChanged = !trimmedTitle.isEmpty && trimmedTitle != entry.title
+        let detailOutcome = updateSharedDetail(for: entry, detail: sharedDetailDraft)
+        var outcome = detailOutcome
+        if titleChanged {
+            let refreshed = editingSharedDetailEntry ?? entry
+            outcome = updateSeriesTitle(for: refreshed, title: seriesTitleDraft)
+        }
         sharedDetailEditOutcomeVisible = true
         sharedDetailResultOnToday = false
         scheduleResultDismissal()
@@ -459,6 +513,18 @@ class ReviewViewModel: ObservableObject {
         if case .updated = outcome {
             refreshHistoryProjection()
             loadDisplayedDayEvents()
+        }
+        return outcome
+    }
+
+    @discardableResult
+    func updateSeriesTitle(for entry: HistoryEntry, title: String) -> SharedDetailUpdateOutcome {
+        let outcome = session.updateSeriesTitle(for: entry, title: title)
+        pullSessionChrome()
+        if case .updated(let updated, _) = outcome, updated > 0 {
+            refreshHistoryProjection()
+            loadDisplayedDayEvents()
+            rebuildSearchHits()
         }
         return outcome
     }
@@ -598,6 +664,7 @@ class ReviewViewModel: ObservableObject {
             session.removeEventsFromRecorded(ids: [event.id])
             refreshHistoryProjection()
             rebuildSearchHits()
+            rebuildDisplayedDayHits()
             if selectedSearchHit?.id == hit.id {
                 selectedSearchHit = nil
             }
@@ -615,6 +682,7 @@ class ReviewViewModel: ObservableObject {
             session.removeEventsFromRecorded(ids: ids)
             refreshHistoryProjection()
             rebuildSearchHits()
+            rebuildDisplayedDayHits()
             if let selected = selectedSearchHit,
                selected.members.contains(where: { ids.contains($0.id) }) {
                 selectedSearchHit = searchHits.first(where: { $0.id == selected.id })

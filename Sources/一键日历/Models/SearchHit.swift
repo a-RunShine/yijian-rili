@@ -13,6 +13,10 @@ struct SearchHit: Identifiable, Equatable {
 
     var representative: CalendarEventInfo { members[0] }
 
+    var focusedEvent: CalendarEventInfo {
+        members.first(where: { $0.id == id }) ?? representative
+    }
+
     var isSeries: Bool {
         if case .series = kind { return true }
         return false

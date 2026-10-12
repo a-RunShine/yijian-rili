@@ -21,6 +21,22 @@ final class InMemoryCalendarServiceTests: XCTestCase {
         XCTAssertFalse(calendar.availableCalendars.isEmpty)
     }
 
+    func testUpdateEventTitleRewritesExistingAndReturnsFalseWhenMissing() async throws {
+        let calendar = InMemoryCalendarService()
+        let result = try await calendar.createReviewEvents(
+            title: "旧标题",
+            baseDate: date(2026, 1, 31),
+            intervals: [3],
+            calendarId: nil
+        )
+        XCTAssertEqual(result.created.count, 1)
+        let id = try XCTUnwrap(calendar.lastCreatedEventIdentifiers.first)
+
+        XCTAssertTrue(calendar.updateEventTitle(id: id, title: "新标题"))
+        XCTAssertEqual(calendar.event(withId: id)?.title, "新标题")
+        XCTAssertFalse(calendar.updateEventTitle(id: "missing-id", title: "不应写入"))
+    }
+
     func testCreateReviewScheduleWritesEvents() async throws {
         let calendar = InMemoryCalendarService()
         let base = date(2026, 1, 31)
@@ -276,6 +292,85 @@ final class ReviewViewModelCalendarInjectionTests: XCTestCase {
         XCTAssertTrue(viewModel.searchHits.isEmpty)
     }
 
+    func testSearchRebuildReconcilesGhostSeriesMembers() async throws {
+        let calendar = InMemoryCalendarService(grantAccessByDefault: true)
+        let viewModel = ReviewViewModel(calendar: calendar)
+        let marker = "search-reconcile-\(UUID().uuidString.prefix(8))"
+        viewModel.title = marker
+        viewModel.baseDate = Date()
+        viewModel.scheduleMode = .review
+        viewModel.reviewIntervals = [3, 7, 30]
+        viewModel.updateReviewDates()
+        await viewModel.createReviewSchedule()
+
+        let batch = try XCTUnwrap(viewModel.historyEntries.first(where: { $0.title == marker }))
+        let ids = batch.createdEventIdentifiers
+        XCTAssertEqual(ids.count, 3)
+        for id in ids {
+            XCTAssertTrue(calendar.deleteEvent(id: id))
+        }
+
+        viewModel.searchText = marker
+        viewModel.performSearch()
+
+        XCTAssertTrue(viewModel.searchHits.isEmpty)
+        XCTAssertFalse(viewModel.historyEntries.contains(where: { $0.id == batch.id }))
+        XCTAssertFalse(viewModel.todayCreatedEntries.contains(where: { $0.id == batch.id }))
+        XCTAssertFalse(
+            viewModel.weeklyReviewViewModel.weeklyEntries.contains(where: { $0.id == batch.id })
+        )
+    }
+
+    func testTodayCreatedListingReconcilesPartialMissingMembers() async throws {
+        let calendar = InMemoryCalendarService(grantAccessByDefault: true)
+        let viewModel = ReviewViewModel(calendar: calendar)
+        let marker = "today-reconcile-\(UUID().uuidString.prefix(8))"
+        viewModel.title = marker
+        viewModel.baseDate = Date()
+        viewModel.scheduleMode = .review
+        viewModel.reviewIntervals = [3, 7, 30]
+        viewModel.updateReviewDates()
+        await viewModel.createReviewSchedule()
+
+        let batch = try XCTUnwrap(viewModel.historyEntries.first(where: { $0.title == marker }))
+        let ids = batch.createdEventIdentifiers
+        XCTAssertTrue(calendar.deleteEvent(id: ids[0]))
+
+        let listed = viewModel.todayCreatedEntries
+        let after = try XCTUnwrap(listed.first(where: { $0.title == marker }))
+        XCTAssertEqual(after.id, batch.id)
+        XCTAssertEqual(after.createdEventIdentifiers.count, 2)
+        XCTAssertFalse(after.createdEventIdentifiers.contains(ids[0]))
+        XCTAssertTrue(
+            viewModel.weeklyReviewViewModel.weeklyEntries.contains(where: { $0.id == batch.id })
+        )
+    }
+
+    func testDayLoadReconcilesMissingMembers() async throws {
+        let calendar = InMemoryCalendarService(grantAccessByDefault: true)
+        let viewModel = ReviewViewModel(calendar: calendar)
+        let marker = "day-reconcile-\(UUID().uuidString.prefix(8))"
+        viewModel.title = marker
+        viewModel.baseDate = Date()
+        viewModel.scheduleMode = .review
+        viewModel.reviewIntervals = [3, 7, 30]
+        viewModel.updateReviewDates()
+        await viewModel.createReviewSchedule()
+
+        let batch = try XCTUnwrap(viewModel.historyEntries.first(where: { $0.title == marker }))
+        let ids = batch.createdEventIdentifiers
+        for id in ids {
+            XCTAssertTrue(calendar.deleteEvent(id: id))
+        }
+
+        viewModel.loadDisplayedDayEvents()
+
+        XCTAssertFalse(viewModel.historyEntries.contains(where: { $0.id == batch.id }))
+        XCTAssertFalse(
+            viewModel.weeklyReviewViewModel.weeklyEntries.contains(where: { $0.id == batch.id })
+        )
+    }
+
     func testDetailBindingRoundsTripToSession() async {
         let calendar = InMemoryCalendarService(grantAccessByDefault: true)
         let viewModel = ReviewViewModel(calendar: calendar)
@@ -318,6 +413,106 @@ final class ReviewViewModelCalendarInjectionTests: XCTestCase {
         XCTAssertEqual(outcome, .updated(updated: 3, missing: 0))
         XCTAssertEqual(viewModel.historyEntries.first?.sharedDetail, "修订")
         XCTAssertEqual(viewModel.resultType, .success)
+    }
+
+    func testUpdateSeriesTitleViaFacadeUpdatesHistoryTodayCreatedAndWeekly() async {
+        let calendar = InMemoryCalendarService(grantAccessByDefault: true)
+        let viewModel = ReviewViewModel(calendar: calendar)
+        viewModel.title = "旧门面标题"
+        viewModel.detail = "保留详情"
+        viewModel.baseDate = date(2026, 1, 31)
+        viewModel.reviewIntervals = [3, 7, 30]
+        viewModel.scheduleMode = .review
+        viewModel.updateReviewDates()
+        await viewModel.createReviewSchedule()
+
+        guard let entry = viewModel.historyEntries.first else {
+            return XCTFail("expected history entry")
+        }
+        let batchID = entry.id
+        XCTAssertTrue(
+            viewModel.weeklyReviewViewModel.weeklyEntries.contains(where: {
+                $0.id == batchID && $0.title == "旧门面标题"
+            })
+        )
+
+        let outcome = viewModel.updateSeriesTitle(for: entry, title: "  新门面标题  ")
+        XCTAssertEqual(outcome, .updated(updated: 3, missing: 0))
+        XCTAssertEqual(viewModel.historyEntries.first?.title, "新门面标题")
+        XCTAssertEqual(viewModel.todayCreatedEntries.first?.title, "新门面标题")
+        XCTAssertEqual(viewModel.historyEntries.first?.sharedDetail, "保留详情")
+        XCTAssertTrue(
+            viewModel.weeklyReviewViewModel.weeklyEntries.contains(where: {
+                $0.id == batchID && $0.title == "新门面标题"
+            })
+        )
+        XCTAssertFalse(
+            viewModel.weeklyReviewViewModel.weeklyEntries.contains(where: {
+                $0.id == batchID && $0.title == "旧门面标题"
+            })
+        )
+        XCTAssertEqual(viewModel.resultType, .success)
+        for id in entry.createdEventIdentifiers {
+            XCTAssertEqual(calendar.event(withId: id)?.title, "新门面标题")
+        }
+    }
+
+    func testCommitSharedDetailEditAlsoSavesSeriesTitle() async {
+        let calendar = InMemoryCalendarService(grantAccessByDefault: true)
+        let viewModel = ReviewViewModel(calendar: calendar)
+        viewModel.title = "提交前"
+        viewModel.detail = "旧详情"
+        viewModel.baseDate = date(2026, 1, 31)
+        viewModel.reviewIntervals = [3, 7, 30]
+        viewModel.scheduleMode = .review
+        viewModel.updateReviewDates()
+        await viewModel.createReviewSchedule()
+
+        guard let entry = viewModel.historyEntries.first else {
+            return XCTFail("expected history entry")
+        }
+        viewModel.beginSharedDetailEdit(for: entry)
+        XCTAssertEqual(viewModel.seriesTitleDraft, "提交前")
+        XCTAssertEqual(viewModel.sharedDetailDraft, "旧详情")
+
+        viewModel.seriesTitleDraft = "提交后标题"
+        viewModel.sharedDetailDraft = "提交后详情"
+        let outcome = viewModel.commitSharedDetailEdit()
+
+        XCTAssertEqual(outcome, .updated(updated: 3, missing: 0))
+        XCTAssertEqual(viewModel.historyEntries.first?.title, "提交后标题")
+        XCTAssertEqual(viewModel.historyEntries.first?.sharedDetail, "提交后详情")
+        XCTAssertTrue(viewModel.sharedDetailEditOutcomeVisible)
+        XCTAssertEqual(viewModel.resultType, .success)
+        let titleMessage = String(format: NSLocalizedString("series_title_success", comment: ""), "3")
+        XCTAssertEqual(viewModel.resultMessage, titleMessage)
+    }
+
+    func testCommitSharedDetailEditWithEmptyTitleStillSavesDetail() async {
+        let calendar = InMemoryCalendarService(grantAccessByDefault: true)
+        let viewModel = ReviewViewModel(calendar: calendar)
+        viewModel.title = "仅改详情"
+        viewModel.detail = "旧详情"
+        viewModel.baseDate = date(2026, 1, 31)
+        viewModel.reviewIntervals = [3, 7, 30]
+        viewModel.scheduleMode = .review
+        viewModel.updateReviewDates()
+        await viewModel.createReviewSchedule()
+
+        guard let entry = viewModel.historyEntries.first else {
+            return XCTFail("expected history entry")
+        }
+        viewModel.beginSharedDetailEdit(for: entry)
+        viewModel.seriesTitleDraft = "   "
+        viewModel.sharedDetailDraft = "只更新详情"
+        let outcome = viewModel.commitSharedDetailEdit()
+
+        XCTAssertEqual(outcome, .updated(updated: 3, missing: 0))
+        XCTAssertEqual(viewModel.historyEntries.first?.title, "仅改详情")
+        XCTAssertEqual(viewModel.historyEntries.first?.sharedDetail, "只更新详情")
+        XCTAssertEqual(viewModel.resultType, .success)
+        let detailMessage = String(format: NSLocalizedString("shared_detail_success", comment: ""), "3")
+        XCTAssertEqual(viewModel.resultMessage, detailMessage)
     }
 
 
@@ -405,6 +600,121 @@ final class ReviewViewModelCalendarInjectionTests: XCTestCase {
         let outcome = viewModel.updateSharedDetail(for: legacy, detail: "不应写入")
         XCTAssertEqual(outcome, .unavailable)
         XCTAssertEqual(viewModel.resultType, .warning)
+    }
+
+    func testDayLoadProjectsReviewMemberAsSeriesAwareRow() async throws {
+        let calendar = InMemoryCalendarService(grantAccessByDefault: true)
+        let viewModel = ReviewViewModel(calendar: calendar)
+        let marker = "day-series-\(UUID().uuidString.prefix(8))"
+        let base = Calendar.current.date(byAdding: .day, value: -3, to: Date())!
+        viewModel.title = marker
+        viewModel.detail = "系列详情"
+        viewModel.baseDate = base
+        viewModel.scheduleMode = .review
+        viewModel.reviewIntervals = [3, 7, 30]
+        viewModel.updateReviewDates()
+        await viewModel.createReviewSchedule()
+
+        let batch = try XCTUnwrap(viewModel.historyEntries.first(where: { $0.title == marker }))
+        XCTAssertEqual(batch.createdEventIdentifiers.count, 3)
+
+        viewModel.selectDayType(.today)
+        let rows = viewModel.displayedDayHits
+        XCTAssertEqual(rows.count, 1)
+        let row = try XCTUnwrap(rows.first)
+        XCTAssertTrue(row.isSeries)
+        XCTAssertEqual(row.kind, .series(historyEntryID: batch.id))
+        XCTAssertEqual(row.title, marker)
+        XCTAssertEqual(row.members.count, 3)
+        XCTAssertTrue(row.needsSelectiveDelete)
+        XCTAssertEqual(row.focusedEvent.id, row.id)
+        XCTAssertTrue(batch.createdEventIdentifiers.contains(row.id))
+    }
+
+    func testDayLoadProjectsSingleAndUnmatchedAsSingleRows() async throws {
+        let calendar = InMemoryCalendarService(grantAccessByDefault: true)
+        let viewModel = ReviewViewModel(calendar: calendar)
+        let marker = "day-single-\(UUID().uuidString.prefix(8))"
+        viewModel.title = marker
+        viewModel.baseDate = Date()
+        viewModel.scheduleMode = .single
+        viewModel.updateReviewDates()
+        await viewModel.createReviewSchedule()
+
+        viewModel.selectDayType(.today)
+        let rows = viewModel.displayedDayHits
+        XCTAssertEqual(rows.count, 1)
+        XCTAssertFalse(rows[0].isSeries)
+        XCTAssertEqual(rows[0].kind, .single)
+        XCTAssertEqual(rows[0].title, marker)
+        XCTAssertFalse(rows[0].needsSelectiveDelete)
+    }
+
+    func testDaySeriesRowEditAndSelectiveDeleteReuseSearchPaths() async throws {
+        let calendar = InMemoryCalendarService(grantAccessByDefault: true)
+        let viewModel = ReviewViewModel(calendar: calendar)
+        let marker = "day-ops-\(UUID().uuidString.prefix(8))"
+        let base = Calendar.current.date(byAdding: .day, value: -3, to: Date())!
+        viewModel.title = marker
+        viewModel.detail = "可编辑"
+        viewModel.baseDate = base
+        viewModel.scheduleMode = .review
+        viewModel.reviewIntervals = [3, 7, 30]
+        viewModel.updateReviewDates()
+        await viewModel.createReviewSchedule()
+
+        let batch = try XCTUnwrap(viewModel.historyEntries.first(where: { $0.title == marker }))
+        viewModel.selectDayType(.today)
+        let row = try XCTUnwrap(viewModel.displayedDayHits.first)
+        XCTAssertTrue(row.isSeries)
+
+        viewModel.beginSharedDetailEditFromBrowse(row.focusedEvent)
+        XCTAssertEqual(viewModel.editingSharedDetailEntryID, batch.id)
+        XCTAssertEqual(viewModel.sharedDetailDraft, "可编辑")
+        viewModel.cancelSharedDetailEdit()
+
+        viewModel.beginSeriesDelete(row)
+        XCTAssertEqual(viewModel.seriesPendingDelete?.id, row.id)
+        XCTAssertEqual(viewModel.seriesPendingDelete?.members.count, 3)
+
+        let removeID = row.members.first(where: { $0.id != row.id })?.id
+            ?? row.members[0].id
+        let outcome = viewModel.deleteSearchHitMembers(ids: [removeID])
+        XCTAssertEqual(outcome.deletedCount, 1)
+        XCTAssertNil(viewModel.seriesPendingDelete)
+
+        viewModel.selectDayType(.today)
+        let after = try XCTUnwrap(viewModel.displayedDayHits.first)
+        XCTAssertTrue(after.isSeries)
+        XCTAssertEqual(after.members.count, 2)
+        XCTAssertFalse(after.members.contains(where: { $0.id == removeID }))
+    }
+
+    func testDayLoadKeepsOneRowPerDayEventAndStillReconciles() async throws {
+        let calendar = InMemoryCalendarService(grantAccessByDefault: true)
+        let viewModel = ReviewViewModel(calendar: calendar)
+        let marker = "day-reconcile-rows-\(UUID().uuidString.prefix(8))"
+        let base = Calendar.current.date(byAdding: .day, value: -3, to: Date())!
+        viewModel.title = marker
+        viewModel.baseDate = base
+        viewModel.scheduleMode = .review
+        viewModel.reviewIntervals = [3, 7, 30]
+        viewModel.updateReviewDates()
+        await viewModel.createReviewSchedule()
+
+        let batch = try XCTUnwrap(viewModel.historyEntries.first(where: { $0.title == marker }))
+        let ids = batch.createdEventIdentifiers
+        XCTAssertTrue(calendar.deleteEvent(id: ids[1]))
+        XCTAssertTrue(calendar.deleteEvent(id: ids[2]))
+
+        viewModel.loadDisplayedDayEvents()
+
+        let remaining = try XCTUnwrap(viewModel.historyEntries.first(where: { $0.id == batch.id }))
+        XCTAssertEqual(remaining.createdEventIdentifiers, [ids[0]])
+        XCTAssertEqual(viewModel.displayedDayHits.count, 1)
+        XCTAssertTrue(viewModel.displayedDayHits[0].isSeries)
+        XCTAssertEqual(viewModel.displayedDayHits[0].members.count, 1)
+        XCTAssertFalse(viewModel.displayedDayHits[0].needsSelectiveDelete)
     }
 
     private func date(_ y: Int, _ m: Int, _ d: Int) -> Date {

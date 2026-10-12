@@ -76,6 +76,14 @@
 "shared_detail_partial" = "已更新%@个日程，%@个日程已删除或不存在";
 "shared_detail_all_missing" = "%@个日程已被删除或不存在";
 
+"series_title_label" = "系列标题";
+"series_title_unavailable" = "该历史记录无法编辑系列标题（缺少日程标识）";
+"series_title_success" = "已更新%@个日程的标题";
+"series_title_partial" = "已更新%@个日程标题，%@个日程已删除或不存在";
+"series_title_all_missing" = "%@个日程已被删除或不存在";
+"series_title_save" = "保存";
+"series_edit_sheet_title" = "编辑系列";
+
 // History
 "history_title" = "历史记录";
 "no_history" = "暂无历史记录";
@@ -231,6 +239,8 @@
 "search_delete_success" = "已删除日程";
 "series_search_row_subtitle" = "复习计划 · %@次";
 "series_search_member_count" = "系列共 %@ 次复习";
+"series_day_row_badge" = "复习系列";
+"series_day_row_member_hint" = "系列共 %@ 次复习";
 "series_delete_title" = "选择要删除的复习";
 "series_delete_subtitle" = "「%@」";
 "series_delete_confirm" = "删除所选";
@@ -253,4 +263,11 @@
 "weekly_review_jump_to_current" = "回到本周";
 "weekly_review_pre_occupied_tag" = "上周周末创建";
 "weekly_review_pre_occupied_subtitle" = "创建于 %@ · %@ 所在周开始复习";
+"weekly_review_occurrence_section" = "本周复习进度";
+"weekly_review_occurrence_done" = "已完成";
+"weekly_review_occurrence_skipped" = "已跳过";
+"occurrence_mark_done" = "完成";
+"occurrence_mark_skipped" = "跳过";
+"occurrence_status_done" = "已完成";
+"occurrence_status_skipped" = "已跳过";
 "close" = "关闭";

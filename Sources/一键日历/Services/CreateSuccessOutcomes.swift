@@ -61,6 +61,16 @@ final class CreateSuccessOutcomes {
         history.replace(existing.withSharedDetail(sharedDetail))
     }
 
+    func updateTitle(id: UUID, title: String) {
+        guard let existing = history.load().first(where: { $0.id == id }) else { return }
+        history.replace(existing.withTitle(title))
+        weekly.updateWeeklyEntryTitle(id: id, title: title)
+    }
+
+    func recordedEntries() -> [HistoryEntry] {
+        history.load()
+    }
+
     func todayCreatedEntries(now: Date = Date(), calendar: Calendar = .current) -> [HistoryEntry] {
         history.created(on: now, calendar: calendar)
     }

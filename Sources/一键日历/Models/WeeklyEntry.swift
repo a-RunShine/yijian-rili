@@ -22,6 +22,17 @@ struct WeeklyEntry: Identifiable, Codable, Equatable {
         self.isPreOccupiedNextWeek = isPreOccupiedNextWeek
     }
 
+    func withTitle(_ title: String) -> WeeklyEntry {
+        WeeklyEntry(
+            id: id,
+            title: title,
+            baseDate: baseDate,
+            scheduleType: scheduleType,
+            creationDate: creationDate,
+            isPreOccupiedNextWeek: isPreOccupiedNextWeek
+        )
+    }
+
     private enum CodingKeys: String, CodingKey {
         case id, title, baseDate, scheduleType, creationDate, isPreOccupiedNextWeek
     }

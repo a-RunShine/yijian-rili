@@ -24,6 +24,7 @@ final class ReviewSession {
 
     private let calendar: CalendarService
     private let outcomes: CreateSuccessOutcomes
+    private let occurrenceStatuses: OccurrenceStatusStore
 
     var title: String = ""
     var detail: String = ""
@@ -65,12 +66,14 @@ final class ReviewSession {
     init(
         calendar: CalendarService,
         outcomes: CreateSuccessOutcomes,
+        occurrenceStatuses: OccurrenceStatusStore = OccurrenceStatusStore(),
         reviewIntervals: [Int]? = nil,
         customPresets: [CustomPreset]? = nil,
         selectedCalendarIdentifier: String = ""
     ) {
         self.calendar = calendar
         self.outcomes = outcomes
+        self.occurrenceStatuses = occurrenceStatuses
         self.reviewIntervals = reviewIntervals ?? Self.loadIntervals()
         self.customPresets = customPresets ?? Self.loadCustomPresets()
         self.selectedCalendarIdentifier = selectedCalendarIdentifier
@@ -81,6 +84,57 @@ final class ReviewSession {
             self.selectedCalendarIdentifier = ""
         }
         updateReviewDates()
+    }
+
+    func occurrenceStatus(for eventId: String) -> OccurrenceStatus {
+        occurrenceStatuses.status(for: eventId)
+    }
+
+    func setOccurrenceStatus(eventId: String, status: OccurrenceStatus) {
+        guard isReviewSeriesEvent(eventId) else { return }
+        occurrenceStatuses.setStatus(status, for: eventId)
+    }
+
+    func occurrenceMaterials(weekStart: Date, weekEnd: Date) -> [OccurrenceReviewMaterial] {
+        let marked = occurrenceStatuses.markedEntries()
+        guard !marked.isEmpty else { return [] }
+        let reviewEventIds = reviewSeriesEventIds()
+        var materials: [OccurrenceReviewMaterial] = []
+        for (eventId, status) in marked {
+            guard reviewEventIds.contains(eventId) else { continue }
+            guard let event = calendar.event(withId: eventId) else { continue }
+            let day = Calendar.current.startOfDay(for: event.start)
+            let start = Calendar.current.startOfDay(for: weekStart)
+            let end = Calendar.current.startOfDay(for: weekEnd)
+            guard day >= start && day <= end else { continue }
+            materials.append(
+                OccurrenceReviewMaterial(
+                    eventId: eventId,
+                    title: event.title,
+                    occurrenceDate: event.start,
+                    status: status
+                )
+            )
+        }
+        return materials.sorted { $0.occurrenceDate > $1.occurrenceDate }
+    }
+
+    private func isReviewSeriesEvent(_ eventId: String) -> Bool {
+        guard let entry = HistorySeriesLookup.entry(
+            containingEventId: eventId,
+            in: outcomes.recordedEntries()
+        ) else {
+            return false
+        }
+        return entry.type == .review
+    }
+
+    private func reviewSeriesEventIds() -> Set<String> {
+        Set(
+            outcomes.recordedEntries()
+                .filter { $0.type == .review }
+                .flatMap(\.createdEventIdentifiers)
+        )
     }
 
     func syncCalendarStateFromSeam() {
@@ -202,12 +256,46 @@ final class ReviewSession {
 
     @discardableResult
     func discardRecordedContainingEvent(id: String) -> UUID? {
-        outcomes.discardRecordedContainingEvent(id: id)
+        let entry = outcomes.recordedEntries().first(where: {
+            $0.createdEventIdentifiers.contains(id)
+        })
+        let result = outcomes.discardRecordedContainingEvent(id: id)
+        if let entry, result != nil {
+            occurrenceStatuses.clear(ids: entry.createdEventIdentifiers)
+        } else {
+            occurrenceStatuses.clear(ids: [id])
+        }
+        return result
     }
 
     @discardableResult
     func removeEventsFromRecorded(ids: [String]) -> RemoveEventsFromRecordedOutcome {
-        outcomes.removeEventsFromRecorded(ids: ids)
+        let outcome = outcomes.removeEventsFromRecorded(ids: ids)
+        switch outcome {
+        case .updated, .discarded:
+            occurrenceStatuses.clear(ids: ids)
+        case .noMatch:
+            break
+        }
+        return outcome
+    }
+
+    @discardableResult
+    func reconcileRecordedWithCalendar() -> Bool {
+        var didChange = false
+        for entry in outcomes.recordedEntries() {
+            let identifiers = entry.createdEventIdentifiers
+            guard !identifiers.isEmpty else { continue }
+            let missing = identifiers.filter { calendar.event(withId: $0) == nil }
+            guard !missing.isEmpty else { continue }
+            switch removeEventsFromRecorded(ids: missing) {
+            case .updated, .discarded:
+                didChange = true
+            case .noMatch:
+                break
+            }
+        }
+        return didChange
     }
 
     @discardableResult
@@ -252,6 +340,55 @@ final class ReviewSession {
         } else {
             resultMessage = String(
                 format: NSLocalizedString("shared_detail_all_missing", comment: ""),
+                "\(missing)"
+            )
+            resultType = .warning
+        }
+
+        return .updated(updated: updated, missing: missing)
+    }
+
+    @discardableResult
+    func updateSeriesTitle(for entry: HistoryEntry, title: String) -> SharedDetailUpdateOutcome {
+        resultMessage = nil
+        resultType = nil
+
+        let identifiers = entry.createdEventIdentifiers
+        guard !identifiers.isEmpty else {
+            resultMessage = NSLocalizedString("series_title_unavailable", comment: "")
+            resultType = .warning
+            return .unavailable
+        }
+
+        let trimmedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        let counts = CalendarWriteOrchestrator.rewriteSeriesTitle(
+            identifiers: identifiers,
+            title: trimmedTitle,
+            updateEventTitle: { [calendar] id, newTitle in calendar.updateEventTitle(id: id, title: newTitle) }
+        )
+        let updated = counts.updated
+        let missing = counts.missing
+
+        if updated > 0 {
+            outcomes.updateTitle(id: entry.id, title: trimmedTitle)
+        }
+
+        if missing == 0 {
+            resultMessage = String(
+                format: NSLocalizedString("series_title_success", comment: ""),
+                "\(updated)"
+            )
+            resultType = .success
+        } else if updated > 0 {
+            resultMessage = String(
+                format: NSLocalizedString("series_title_partial", comment: ""),
+                "\(updated)",
+                "\(missing)"
+            )
+            resultType = .warning
+        } else {
+            resultMessage = String(
+                format: NSLocalizedString("series_title_all_missing", comment: ""),
                 "\(missing)"
             )
             resultType = .warning
@@ -385,6 +522,9 @@ final class ReviewSession {
         }
 
         if let recordedID {
+            if let entry = outcomes.recordedEntries().first(where: { $0.id == recordedID }) {
+                occurrenceStatuses.clear(ids: entry.createdEventIdentifiers)
+            }
             outcomes.discardRecorded(id: recordedID)
         }
         lastRecordedHistoryEntryID = nil
