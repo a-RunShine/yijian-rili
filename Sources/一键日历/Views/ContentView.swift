@@ -53,6 +53,9 @@ struct ContentView: View {
             SharedDetailEditSheet(viewModel: viewModel)
                 .frame(width: 380, height: 480)
         }
+        .sheet(item: $viewModel.seriesPendingDelete) { hit in
+            SeriesDeleteSheet(viewModel: viewModel, hit: hit)
+        }
         .onAppear {
             viewModel.scheduleFirstRunGuideIfNeeded()
             viewModel.applyWindowLevel()

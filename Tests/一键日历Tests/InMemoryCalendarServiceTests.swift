@@ -572,6 +572,121 @@ final class ReviewViewModelCalendarInjectionTests: XCTestCase {
         XCTAssertEqual(viewModel.resultType, .warning)
     }
 
+    func testDayLoadProjectsReviewMemberAsSeriesAwareRow() async throws {
+        let calendar = InMemoryCalendarService(grantAccessByDefault: true)
+        let viewModel = ReviewViewModel(calendar: calendar)
+        let marker = "day-series-\(UUID().uuidString.prefix(8))"
+        let base = Calendar.current.date(byAdding: .day, value: -3, to: Date())!
+        viewModel.title = marker
+        viewModel.detail = "系列详情"
+        viewModel.baseDate = base
+        viewModel.scheduleMode = .review
+        viewModel.reviewIntervals = [3, 7, 30]
+        viewModel.updateReviewDates()
+        await viewModel.createReviewSchedule()
+
+        let batch = try XCTUnwrap(viewModel.historyEntries.first(where: { $0.title == marker }))
+        XCTAssertEqual(batch.createdEventIdentifiers.count, 3)
+
+        viewModel.selectDayType(.today)
+        let rows = viewModel.displayedDayHits
+        XCTAssertEqual(rows.count, 1)
+        let row = try XCTUnwrap(rows.first)
+        XCTAssertTrue(row.isSeries)
+        XCTAssertEqual(row.kind, .series(historyEntryID: batch.id))
+        XCTAssertEqual(row.title, marker)
+        XCTAssertEqual(row.members.count, 3)
+        XCTAssertTrue(row.needsSelectiveDelete)
+        XCTAssertEqual(row.focusedEvent.id, row.id)
+        XCTAssertTrue(batch.createdEventIdentifiers.contains(row.id))
+    }
+
+    func testDayLoadProjectsSingleAndUnmatchedAsSingleRows() async throws {
+        let calendar = InMemoryCalendarService(grantAccessByDefault: true)
+        let viewModel = ReviewViewModel(calendar: calendar)
+        let marker = "day-single-\(UUID().uuidString.prefix(8))"
+        viewModel.title = marker
+        viewModel.baseDate = Date()
+        viewModel.scheduleMode = .single
+        viewModel.updateReviewDates()
+        await viewModel.createReviewSchedule()
+
+        viewModel.selectDayType(.today)
+        let rows = viewModel.displayedDayHits
+        XCTAssertEqual(rows.count, 1)
+        XCTAssertFalse(rows[0].isSeries)
+        XCTAssertEqual(rows[0].kind, .single)
+        XCTAssertEqual(rows[0].title, marker)
+        XCTAssertFalse(rows[0].needsSelectiveDelete)
+    }
+
+    func testDaySeriesRowEditAndSelectiveDeleteReuseSearchPaths() async throws {
+        let calendar = InMemoryCalendarService(grantAccessByDefault: true)
+        let viewModel = ReviewViewModel(calendar: calendar)
+        let marker = "day-ops-\(UUID().uuidString.prefix(8))"
+        let base = Calendar.current.date(byAdding: .day, value: -3, to: Date())!
+        viewModel.title = marker
+        viewModel.detail = "可编辑"
+        viewModel.baseDate = base
+        viewModel.scheduleMode = .review
+        viewModel.reviewIntervals = [3, 7, 30]
+        viewModel.updateReviewDates()
+        await viewModel.createReviewSchedule()
+
+        let batch = try XCTUnwrap(viewModel.historyEntries.first(where: { $0.title == marker }))
+        viewModel.selectDayType(.today)
+        let row = try XCTUnwrap(viewModel.displayedDayHits.first)
+        XCTAssertTrue(row.isSeries)
+
+        viewModel.beginSharedDetailEditFromBrowse(row.focusedEvent)
+        XCTAssertEqual(viewModel.editingSharedDetailEntryID, batch.id)
+        XCTAssertEqual(viewModel.sharedDetailDraft, "可编辑")
+        viewModel.cancelSharedDetailEdit()
+
+        viewModel.beginSeriesDelete(row)
+        XCTAssertEqual(viewModel.seriesPendingDelete?.id, row.id)
+        XCTAssertEqual(viewModel.seriesPendingDelete?.members.count, 3)
+
+        let removeID = row.members.first(where: { $0.id != row.id })?.id
+            ?? row.members[0].id
+        let outcome = viewModel.deleteSearchHitMembers(ids: [removeID])
+        XCTAssertEqual(outcome.deletedCount, 1)
+        XCTAssertNil(viewModel.seriesPendingDelete)
+
+        viewModel.selectDayType(.today)
+        let after = try XCTUnwrap(viewModel.displayedDayHits.first)
+        XCTAssertTrue(after.isSeries)
+        XCTAssertEqual(after.members.count, 2)
+        XCTAssertFalse(after.members.contains(where: { $0.id == removeID }))
+    }
+
+    func testDayLoadKeepsOneRowPerDayEventAndStillReconciles() async throws {
+        let calendar = InMemoryCalendarService(grantAccessByDefault: true)
+        let viewModel = ReviewViewModel(calendar: calendar)
+        let marker = "day-reconcile-rows-\(UUID().uuidString.prefix(8))"
+        let base = Calendar.current.date(byAdding: .day, value: -3, to: Date())!
+        viewModel.title = marker
+        viewModel.baseDate = base
+        viewModel.scheduleMode = .review
+        viewModel.reviewIntervals = [3, 7, 30]
+        viewModel.updateReviewDates()
+        await viewModel.createReviewSchedule()
+
+        let batch = try XCTUnwrap(viewModel.historyEntries.first(where: { $0.title == marker }))
+        let ids = batch.createdEventIdentifiers
+        XCTAssertTrue(calendar.deleteEvent(id: ids[1]))
+        XCTAssertTrue(calendar.deleteEvent(id: ids[2]))
+
+        viewModel.loadDisplayedDayEvents()
+
+        let remaining = try XCTUnwrap(viewModel.historyEntries.first(where: { $0.id == batch.id }))
+        XCTAssertEqual(remaining.createdEventIdentifiers, [ids[0]])
+        XCTAssertEqual(viewModel.displayedDayHits.count, 1)
+        XCTAssertTrue(viewModel.displayedDayHits[0].isSeries)
+        XCTAssertEqual(viewModel.displayedDayHits[0].members.count, 1)
+        XCTAssertFalse(viewModel.displayedDayHits[0].needsSelectiveDelete)
+    }
+
     private func date(_ y: Int, _ m: Int, _ d: Int) -> Date {
         var components = DateComponents()
         components.year = y

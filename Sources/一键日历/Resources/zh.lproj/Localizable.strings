@@ -239,6 +239,8 @@
 "search_delete_success" = "已删除日程";
 "series_search_row_subtitle" = "复习计划 · %@次";
 "series_search_member_count" = "系列共 %@ 次复习";
+"series_day_row_badge" = "复习系列";
+"series_day_row_member_hint" = "系列共 %@ 次复习";
 "series_delete_title" = "选择要删除的复习";
 "series_delete_subtitle" = "「%@」";
 "series_delete_confirm" = "删除所选";
