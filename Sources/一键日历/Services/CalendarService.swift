@@ -41,4 +41,6 @@ protocol CalendarService: AnyObject {
     func eventNotes(id: String) -> String?
     @discardableResult
     func updateEventNotes(id: String, notes: String) -> Bool
+    @discardableResult
+    func updateEventTitle(id: String, title: String) -> Bool
 }

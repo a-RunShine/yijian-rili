@@ -237,6 +237,23 @@ final class CalendarManager: ObservableObject, CalendarService, CalendarEventSto
         }
     }
 
+    @discardableResult
+    func updateEventTitle(id: String, title: String) -> Bool {
+        guard let event = eventStore.event(withIdentifier: id) else {
+            logger.warning("updateEventTitle: event \(id) not found")
+            return false
+        }
+        event.title = title
+        do {
+            try eventStore.save(event, span: .thisEvent)
+            logger.info("Updated title for event \(id)")
+            return true
+        } catch {
+            logger.error("Failed to update event title: \(error.localizedDescription)")
+            return false
+        }
+    }
+
     func searchEvents(query: String, daysAhead: Int) -> [CalendarEventInfo] {
         let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return [] }

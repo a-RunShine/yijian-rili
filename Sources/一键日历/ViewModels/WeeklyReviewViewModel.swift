@@ -223,6 +223,18 @@ final class WeeklyReviewViewModel: ObservableObject, WeeklyEntryAppending {
         revision &+= 1
     }
 
+    func updateWeeklyEntryTitle(id: UUID, title: String) {
+        var entries = weeklyEntries
+        var changed = false
+        for index in entries.indices where entries[index].id == id {
+            entries[index] = entries[index].withTitle(title)
+            changed = true
+        }
+        guard changed else { return }
+        persistWeeklyEntries(entries)
+        revision &+= 1
+    }
+
     func persistWeeklyEntries(_ entries: [WeeklyEntry]) {
         if let data = try? JSONEncoder().encode(entries),
            let string = String(data: data, encoding: .utf8) {
