@@ -551,7 +551,6 @@ final class ReviewSession {
         lastRecordedHistoryEntryID = entry.id
         title = ""
         detail = ""
-        baseDate = Date()
         updateReviewDates()
     }
 

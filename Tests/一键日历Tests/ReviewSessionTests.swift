@@ -145,11 +145,13 @@ final class ReviewSessionTests: XCTestCase {
     func testCreateSuccessWithInMemoryCalendar() async {
         let calendar = InMemoryCalendarService(grantAccessByDefault: true)
         let (session, history, weekly) = CreateSuccessTestSupport.makeSession(calendar: calendar)
+        let writeDay = CreateSuccessTestSupport.date(2026, 1, 31)
         session.title = "会话创建"
-        session.baseDate = CreateSuccessTestSupport.date(2026, 1, 31)
+        session.detail = "写入后应清空"
+        session.baseDate = writeDay
         session.reviewIntervals = [3, 7, 30]
         session.scheduleMode = .review
-        session.updateReviewDates()
+        session.reviewDates = [CreateSuccessTestSupport.date(2026, 1, 1)]
 
         await session.create()
 
@@ -160,6 +162,13 @@ final class ReviewSessionTests: XCTestCase {
         XCTAssertEqual(history.load().first?.title, "会话创建")
         XCTAssertEqual(weekly.appendCallCount, 1)
         XCTAssertTrue(session.title.isEmpty)
+        XCTAssertTrue(session.detail.isEmpty)
+        XCTAssertEqual(session.baseDate, writeDay)
+        XCTAssertEqual(session.reviewDates, [
+            CreateSuccessTestSupport.date(2026, 2, 3),
+            CreateSuccessTestSupport.date(2026, 2, 7),
+            CreateSuccessTestSupport.date(2026, 3, 2),
+        ])
     }
 
     func testCreateRejectsEmptyAndLongTitle() async {
