@@ -6,6 +6,7 @@ struct CalendarShellView: View {
     @EnvironmentObject private var viewModel: ReviewViewModel
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var showsScreenTooNarrowHint = false
+    @State private var showsSettings = false
     @State private var switchHovered = false
     @State private var composerOpen = false
     @State private var menuSubmitPending = false
@@ -20,7 +21,6 @@ struct CalendarShellView: View {
         "weekday_sat",
         "weekday_sun",
     ]
-    private let railSymbols = ["calendar", "sun.max", "clock.arrow.circlepath", "gearshape"]
     private let iconRailWidth: CGFloat = 64
     private let editorColumnWidth: CGFloat = 320
     private let controlCornerRadius: CGFloat = 6
@@ -36,6 +36,9 @@ struct CalendarShellView: View {
                         composerDrawer(height: proxy.size.height * 0.82)
                             .transition(reduceMotion ? .identity : .move(edge: .bottom))
                     }
+                }
+                .overlay {
+                    secondaryOverlay(mode: mode, size: proxy.size)
                 }
                 .onAppear {
                     contentWidth = proxy.size.width
@@ -96,30 +99,53 @@ struct CalendarShellView: View {
                 .fill(palette.accent)
                 .frame(width: 24, height: 24)
                 .overlay {
-                    Image(systemName: railSymbols[0])
+                    Image(systemName: "calendar")
                         .font(.system(size: 12, weight: .semibold))
                         .foregroundStyle(palette.onAccent)
                 }
-            ForEach(railSymbols.dropFirst(), id: \.self) { symbol in
-                Image(systemName: symbol)
-                    .font(.system(size: 16))
-                    .foregroundStyle(palette.secondary)
-                    .frame(width: 34, height: 34)
-            }
+                .accessibilityHidden(true)
+            RailIconButton(
+                systemName: "sun.max",
+                label: NSLocalizedString("today_button", comment: ""),
+                palette: palette,
+                action: { viewModel.goToToday() }
+            )
+            RailIconButton(
+                systemName: "clock.arrow.circlepath",
+                label: NSLocalizedString("history_title", comment: ""),
+                palette: palette,
+                action: openHistory
+            )
+            RailIconButton(
+                systemName: "gearshape",
+                label: NSLocalizedString("segment_settings", comment: ""),
+                palette: palette,
+                action: openSettings
+            )
             Spacer(minLength: 0)
         }
         .padding(.vertical, 12)
         .frame(width: iconRailWidth)
         .frame(maxHeight: .infinity)
         .background(palette.chrome)
-        .accessibilityHidden(true)
     }
 
     private var editorColumn: some View {
-        ComposerForm(density: .wide, onWillSubmit: noteComposerSubmit)
-            .frame(width: editorColumnWidth)
-            .frame(maxHeight: .infinity)
-            .background(palette.card)
+        VStack(spacing: 0) {
+            ComposerForm(density: .wide, onWillSubmit: noteComposerSubmit)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            Rectangle()
+                .fill(palette.separator)
+                .frame(height: 1)
+            WeeklyProgressCard(
+                weekly: viewModel.weeklyReviewViewModel,
+                palette: palette,
+                open: { viewModel.openWeeklyReview() }
+            )
+        }
+        .frame(width: editorColumnWidth)
+        .frame(maxHeight: .infinity)
+        .background(palette.card)
     }
 
     private func composerDrawer(height: CGFloat) -> some View {
@@ -291,6 +317,17 @@ struct CalendarShellView: View {
             }
             .buttonStyle(.plain)
             .accessibilityLabel(NSLocalizedString("today_button", comment: ""))
+            monthStepButton(systemName: "magnifyingglass", helpKey: "search_button_tooltip") {
+                viewModel.showSearch = true
+            }
+            if mode == .compact {
+                monthStepButton(systemName: "clock.arrow.circlepath", helpKey: "history_title") {
+                    openHistory()
+                }
+                monthStepButton(systemName: "gearshape", helpKey: "segment_settings") {
+                    openSettings()
+                }
+            }
             Text(NSLocalizedString("canvas_shortcut", comment: ""))
                 .font(.caption.monospacedDigit())
                 .foregroundStyle(palette.secondary)
@@ -446,8 +483,40 @@ struct CalendarShellView: View {
             to: target
         )
         showsScreenTooNarrowHint = result.showsScreenTooNarrowHint
-        guard !result.showsScreenTooNarrowHint else { return }
+        guard !result.showsScreenTooNarrowHint else {
+            showsSettings = false
+            return
+        }
         window.setFrame(result.windowFrame, display: true, animate: !reduceMotion)
+    }
+
+    @ViewBuilder
+    private func secondaryOverlay(mode: CanvasMode, size: CGSize) -> some View {
+        if viewModel.showHistory {
+            HistoryOverlay(viewModel: viewModel, palette: palette, availableSize: size)
+        } else if showsSettings {
+            SettingsOverlay(
+                viewModel: viewModel,
+                palette: palette,
+                canvasMode: mode,
+                availableSize: size,
+                toggleCanvas: toggleCanvas,
+                openHistory: openHistory,
+                dismiss: { showsSettings = false }
+            )
+        }
+    }
+
+    private func openHistory() {
+        showsSettings = false
+        setComposerOpen(false)
+        viewModel.showHistory = true
+    }
+
+    private func openSettings() {
+        viewModel.showHistory = false
+        setComposerOpen(false)
+        showsSettings = true
     }
 }
 
@@ -457,10 +526,6 @@ private struct CalendarShellPresentations: ViewModifier {
 
     func body(content: Content) -> some View {
         content
-            .sheet(isPresented: $viewModel.showHistory) {
-                HistorySection(viewModel: viewModel)
-                    .frame(width: 340, height: 420)
-            }
             .sheet(isPresented: $viewModel.showFirstRunGuide) {
                 FirstRunGuideView(viewModel: viewModel) {
                     viewModel.dismissFirstRunGuide()
@@ -500,5 +565,79 @@ private struct CalendarShellPresentations: ViewModifier {
             .onChange(of: viewModel.scheduleMode) { _, _ in
                 viewModel.updateReviewDates()
             }
+    }
+}
+
+@MainActor
+private struct RailIconButton: View {
+    let systemName: String
+    let label: String
+    let palette: ThemePalette
+    let action: @MainActor () -> Void
+    @State private var hovered = false
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: systemName)
+                .font(.system(size: 16))
+                .foregroundStyle(palette.secondary)
+                .frame(width: 34, height: 34)
+                .background(
+                    RoundedRectangle(cornerRadius: 6)
+                        .fill(hovered ? palette.hover : .clear)
+                )
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .onHover { hovered = $0 }
+        .help(label)
+        .accessibilityLabel(label)
+    }
+}
+
+@MainActor
+private struct WeeklyProgressCard: View {
+    @ObservedObject var weekly: WeeklyReviewViewModel
+    let palette: ThemePalette
+    let open: @MainActor () -> Void
+
+    var body: some View {
+        let reviewed = weekly.reviewedCount
+        let total = weekly.totalCount
+        let progress = String(
+            format: NSLocalizedString("weekly_review_progress", comment: ""),
+            "\(reviewed)",
+            "\(total)"
+        )
+        let title = NSLocalizedString("weekly_review_this_week", comment: "")
+        Button(action: open) {
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(spacing: 8) {
+                    Text(title)
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(palette.primary)
+                    Spacer(minLength: 8)
+                    Image(systemName: "chevron.right")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(palette.secondary)
+                }
+                Text(progress)
+                    .font(.caption.monospacedDigit())
+                    .foregroundStyle(palette.secondary)
+                ProgressView(value: total > 0 ? Double(reviewed) / Double(total) : 0)
+                    .tint(palette.accent)
+            }
+            .padding(12)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(palette.background, in: RoundedRectangle(cornerRadius: 8))
+            .overlay {
+                RoundedRectangle(cornerRadius: 8)
+                    .strokeBorder(palette.separator, lineWidth: 1)
+            }
+        }
+        .buttonStyle(.plain)
+        .padding(12)
+        .help(NSLocalizedString("weekly_review_button", comment: ""))
+        .accessibilityLabel("\(title) \(progress)")
     }
 }

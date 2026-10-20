@@ -312,3 +312,6 @@
 "composer_shortcut" = "⌘↵";
 "composer_previous_day" = "前一天";
 "composer_next_day" = "后一天";
+
+"settings_theme_title" = "主题";
+"settings_help" = "帮助";
