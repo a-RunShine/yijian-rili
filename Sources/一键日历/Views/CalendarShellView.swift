@@ -304,9 +304,10 @@ struct CalendarShellView: View {
                 weekdayHeader
                 monthGrid(mode: mode)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
-                if overflow != .none {
-                    MonthPreviewOverflowLine(overflow: overflow, palette: palette)
-                }
+                MonthPreviewOverflowLine(
+                    overflow: viewModel.scheduleMode == .review ? overflow : .none,
+                    palette: palette
+                )
                 if mode == .compact {
                     horizontalSeparator
                     MonthDayAgenda(date: viewModel.baseDate, events: selectedEvents, palette: palette)
