@@ -116,6 +116,7 @@ struct HistorySection: View {
                                     }
                                     .buttonStyle(.borderless)
                                     .help(NSLocalizedString("delete_history", comment: ""))
+                                    .accessibilityLabel(NSLocalizedString("delete_history", comment: ""))
                                 }
                             }
                             .padding(.vertical, 6)

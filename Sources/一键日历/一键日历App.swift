@@ -32,6 +32,10 @@ struct 一键日历App: App {
         .windowResizability(.contentMinSize)
         .commands {
             CommandMenu(NSLocalizedString("command_menu", comment: "")) {
+                Button(NSLocalizedString("month_new_review", comment: "")) {
+                    NotificationCenter.default.post(name: .newComposer, object: nil)
+                }
+                .keyboardShortcut("n", modifiers: .command)
                 Button(NSLocalizedString("create_review_schedule", comment: "")) {
                     NotificationCenter.default.post(name: .createReviewSchedule, object: nil)
                 }
@@ -40,7 +44,20 @@ struct 一键日历App: App {
                     NotificationCenter.default.post(name: .toggleCanvas, object: nil)
                 }
                 .keyboardShortcut("l", modifiers: [.command, .option])
+                closePanelCommand
             }
+        }
+    }
+
+    @ViewBuilder
+    private var closePanelCommand: some View {
+        let button = Button(NSLocalizedString("command_close_panel", comment: "")) {
+            NotificationCenter.default.post(name: .dismissTopPanel, object: nil)
+        }
+        if viewModel.modalSheetPresented {
+            button
+        } else {
+            button.keyboardShortcut(.escape, modifiers: [])
         }
     }
 }

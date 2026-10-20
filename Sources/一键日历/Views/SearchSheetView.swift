@@ -115,6 +115,7 @@ struct SearchSheetView: View {
             }
             .buttonStyle(.borderless)
             .help(NSLocalizedString("search_delete_button", comment: ""))
+            .accessibilityLabel(NSLocalizedString("search_delete_button", comment: ""))
             Button {
                 viewModel.showSearch = false
             } label: {
@@ -122,6 +123,8 @@ struct SearchSheetView: View {
                     .foregroundColor(viewModel.currentTheme.secondaryTextColor ?? .secondary)
             }
             .buttonStyle(.borderless)
+            .help(NSLocalizedString("close", comment: ""))
+            .accessibilityLabel(NSLocalizedString("close", comment: ""))
         }
     }
 
@@ -266,6 +269,7 @@ struct SearchSheetView: View {
             }
             .buttonStyle(.plain)
             .help(NSLocalizedString("search_delete_button", comment: ""))
+            .accessibilityLabel(NSLocalizedString("search_delete_button", comment: ""))
         }
         .padding(.vertical, 6)
     }

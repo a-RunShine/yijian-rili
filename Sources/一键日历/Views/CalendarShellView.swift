@@ -11,6 +11,7 @@ struct CalendarShellView: View {
     @State private var composerOpen = false
     @State private var menuSubmitPending = false
     @State private var contentWidth: CGFloat = CanvasWindowSizing.compactContentSize.width
+    @FocusState private var monthGridFocused: Bool
 
     private let weekdayKeys = [
         "weekday_mon",
@@ -65,6 +66,9 @@ struct CalendarShellView: View {
         .onReceive(NotificationCenter.default.publisher(for: .toggleCanvas)) { _ in
             toggleCanvas()
         }
+        .onReceive(NotificationCenter.default.publisher(for: .newComposer)) { _ in
+            beginNewComposer()
+        }
         .onReceive(NotificationCenter.default.publisher(for: .openComposer)) { _ in
             guard CanvasBreakpoint.mode(forWidth: contentWidth) == .compact else { return }
             setComposerOpen(true)
@@ -72,6 +76,10 @@ struct CalendarShellView: View {
         .onReceive(NotificationCenter.default.publisher(for: .createReviewSchedule)) { _ in
             menuSubmitPending = true
         }
+        .onReceive(NotificationCenter.default.publisher(for: .dismissTopPanel)) { _ in
+            dismissTopPanel()
+        }
+        .onExitCommand(perform: canDismissWithEscape ? { dismissTopPanel() } : nil)
         .onChange(of: viewModel.resultMessage) { _, _ in
             finishMenuSubmitIfNeeded()
         }
@@ -449,7 +457,8 @@ struct CalendarShellView: View {
                         events: events(on: cell.date),
                         previewOrdinal: ordinals[cell.date],
                         rowHeight: rowHeight,
-                        palette: palette
+                        palette: palette,
+                        onMonthGridFocus: { monthGridFocused = $0 }
                     )
                 }
             }
@@ -457,6 +466,12 @@ struct CalendarShellView: View {
             .padding(.horizontal, 12)
             .padding(.bottom, 12)
             .frame(width: proxy.size.width, height: proxy.size.height, alignment: .top)
+        }
+        .focusable()
+        .focused($monthGridFocused)
+        .focusEffectDisabled()
+        .onMoveCommand { direction in
+            moveSelectedDay(direction)
         }
     }
 
@@ -473,6 +488,57 @@ struct CalendarShellView: View {
             }
         }
         return ids.count
+    }
+
+    private var canDismissWithEscape: Bool {
+        guard !viewModel.modalSheetPresented else { return false }
+        return viewModel.showHistory || showsSettings || composerOpen
+    }
+
+    private func beginNewComposer() {
+        if CanvasBreakpoint.mode(forWidth: contentWidth) == .compact {
+            NotificationCenter.default.post(name: .openComposer, object: nil)
+        } else {
+            NotificationCenter.default.post(name: .focusComposerTitle, object: nil)
+        }
+    }
+
+    private func dismissTopPanel() {
+        guard !viewModel.modalSheetPresented else { return }
+        if viewModel.showHistory {
+            viewModel.showHistory = false
+            return
+        }
+        if showsSettings {
+            showsSettings = false
+            return
+        }
+        if composerOpen {
+            dismissComposer()
+        }
+    }
+
+    private func moveSelectedDay(_ direction: MoveCommandDirection) {
+        guard monthGridFocused, !textInsertionIsFocused else { return }
+        let step: DayNavigationStep
+        switch direction {
+        case .left:
+            step = .previousDay
+        case .right:
+            step = .nextDay
+        case .up:
+            step = .previousWeek
+        case .down:
+            step = .nextWeek
+        default:
+            return
+        }
+        viewModel.selectDay(DayNavigation.day(from: viewModel.baseDate, step: step))
+    }
+
+    private var textInsertionIsFocused: Bool {
+        guard let responder = NSApp.keyWindow?.firstResponder else { return false }
+        return responder is NSTextView || responder is NSTextField
     }
 
     private func toggleCanvas() {

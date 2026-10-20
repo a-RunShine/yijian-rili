@@ -553,6 +553,15 @@ class ReviewViewModel: ObservableObject {
         editingSharedDetailEntryID != nil || browseSharedDetailUnavailableEvent != nil
     }
 
+    var modalSheetPresented: Bool {
+        showFirstRunGuide
+            || showHelpGuide
+            || showSearch
+            || showWeeklyReview
+            || isSharedDetailSheetPresented
+            || seriesPendingDelete != nil
+    }
+
     func beginSharedDetailEdit(for entry: HistoryEntry) {
         sharedDetailEditOutcomeVisible = false
         sharedDetailResultOnToday = false
@@ -882,4 +891,6 @@ extension Notification.Name {
     static let toggleCanvas = Notification.Name("toggleCanvas")
     static let focusComposerTitle = Notification.Name("focusComposerTitle")
     static let openComposer = Notification.Name("openComposer")
+    static let newComposer = Notification.Name("newComposer")
+    static let dismissTopPanel = Notification.Name("dismissTopPanel")
 }

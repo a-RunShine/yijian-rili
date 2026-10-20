@@ -9,6 +9,7 @@ struct MonthDayCell: View {
     let previewOrdinal: Int?
     let rowHeight: CGFloat
     let palette: ThemePalette
+    var onMonthGridFocus: (Bool) -> Void = { _ in }
 
     @State private var isHovered = false
 
@@ -118,12 +119,7 @@ struct MonthDayCell: View {
     }
 
     private var accessibilityLabel: String {
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "zh_CN")
-        formatter.calendar = WeekCalculator.calendar
-        formatter.timeZone = WeekCalculator.calendar.timeZone
-        formatter.setLocalizedDateFormatFromTemplate("yMMMdEEEE")
-        let when = formatter.string(from: cell.date)
+        let when = "\(formatted("yMMMd")) \(formatted("EEEE"))"
         let count = String(format: NSLocalizedString("month_cell_events", comment: ""), events.count)
         if let previewOrdinal {
             let ordinal = String(format: NSLocalizedString("review_count", comment: ""), "\(previewOrdinal)")
@@ -132,12 +128,23 @@ struct MonthDayCell: View {
         return String(format: NSLocalizedString("month_cell_accessibility", comment: ""), when, count)
     }
 
+    private func formatted(_ template: String) -> String {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "zh_CN")
+        formatter.calendar = WeekCalculator.calendar
+        formatter.timeZone = WeekCalculator.calendar.timeZone
+        formatter.setLocalizedDateFormatFromTemplate(template)
+        return formatter.string(from: cell.date)
+    }
+
     private func selectDay() {
         viewModel.selectDay(cell.date)
+        onMonthGridFocus(true)
     }
 
     private func focusTitle() {
         viewModel.selectDay(cell.date)
+        onMonthGridFocus(false)
         NotificationCenter.default.post(name: .focusComposerTitle, object: nil)
     }
 }

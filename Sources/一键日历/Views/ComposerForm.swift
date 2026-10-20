@@ -194,6 +194,7 @@ struct ComposerForm: View {
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            .help(NSLocalizedString("composer_detail", comment: ""))
             .accessibilityLabel(NSLocalizedString("composer_detail", comment: ""))
             if detailExpanded {
                 ZStack(alignment: .topLeading) {
