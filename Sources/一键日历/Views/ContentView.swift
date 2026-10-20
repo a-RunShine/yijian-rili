@@ -22,7 +22,6 @@ struct ContentView: View {
             }
         }
         .background(viewModel.currentTheme.windowBackgroundColor)
-        .frame(width: 400, height: 600)
         .sheet(isPresented: $viewModel.showHistory) {
             HistorySection(viewModel: viewModel)
                 .frame(width: 340, height: 420)
