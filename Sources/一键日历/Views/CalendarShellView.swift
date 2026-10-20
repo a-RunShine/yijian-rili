@@ -37,6 +37,12 @@ struct CalendarShellView: View {
                             .transition(reduceMotion ? .identity : .move(edge: .bottom))
                     }
                 }
+                .overlay(alignment: .bottom) {
+                    if !composerOpen {
+                        ScheduleResultToast()
+                            .transition(reduceMotion ? .identity : .move(edge: .bottom).combined(with: .opacity))
+                    }
+                }
                 .onAppear {
                     contentWidth = proxy.size.width
                 }

@@ -432,6 +432,8 @@ class ReviewViewModel: ObservableObject {
         pullSessionChrome()
         refreshHistoryProjection()
         loadDisplayedDayEvents()
+        loadVisibleWindow()
+        weeklyReviewViewModel.refreshOccurrenceMaterials()
         scheduleResultDismissal()
     }
 

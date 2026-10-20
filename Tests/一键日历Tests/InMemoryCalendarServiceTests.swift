@@ -319,19 +319,30 @@ final class ReviewViewModelCalendarInjectionTests: XCTestCase {
         viewModel.scheduleMode = .single
         viewModel.updateReviewDates()
 
+        let weekly = viewModel.weeklyReviewViewModel
+        let totalBefore = weekly.totalCount
+        let reviewedBefore = weekly.reviewedCount
+        let eventDay = date(2026, 2, 1)
+
         await viewModel.createReviewSchedule()
         XCTAssertEqual(viewModel.resultType, .success)
         XCTAssertTrue(viewModel.todayCreatedEntries.contains(where: { $0.title == marker }))
         XCTAssertTrue(
-            viewModel.weeklyReviewViewModel.weeklyEntries.contains(where: { $0.title == marker })
+            weekly.weeklyEntries.contains(where: { $0.title == marker })
         )
+        XCTAssertEqual(weekly.totalCount, totalBefore + 1)
+        XCTAssertEqual(weekly.reviewedCount, reviewedBefore)
+        XCTAssertEqual(viewModel.eventsByDay[eventDay]?.map(\.title) ?? [], [marker])
 
         await viewModel.undoReviewSchedule()
         XCTAssertFalse(viewModel.canUndo)
         XCTAssertFalse(viewModel.todayCreatedEntries.contains(where: { $0.title == marker }))
         XCTAssertFalse(
-            viewModel.weeklyReviewViewModel.weeklyEntries.contains(where: { $0.title == marker })
+            weekly.weeklyEntries.contains(where: { $0.title == marker })
         )
+        XCTAssertEqual(weekly.totalCount, totalBefore)
+        XCTAssertEqual(weekly.reviewedCount, reviewedBefore)
+        XCTAssertEqual(viewModel.eventsByDay[eventDay]?.map(\.title) ?? [], [])
     }
 
     func testDeleteSearchResultClearsTodayCreatedAndWeeklyViaFacade() async {
