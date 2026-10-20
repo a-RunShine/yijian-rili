@@ -170,20 +170,15 @@ final class CalendarManager: ObservableObject, CalendarService, CalendarEventSto
         )
     }
 
-    func fetchEvents(on date: Date) -> [CalendarEventInfo] {
+    func fetchEvents(from start: Date, to end: Date) -> [CalendarEventInfo] {
         let status = EKEventStore.authorizationStatus(for: .event)
         guard status == .fullAccess else {
             logger.info("fetchEvents skipped: status = \(String(describing: status))")
             return []
         }
-        let calendar = Calendar.current
-        let startOfDay = calendar.startOfDay(for: date)
-        guard let endOfDay = calendar.date(byAdding: .day, value: 1, to: startOfDay) else {
-            return []
-        }
-        let predicate = eventStore.predicateForEvents(withStart: startOfDay, end: endOfDay, calendars: nil)
+        let predicate = eventStore.predicateForEvents(withStart: start, end: end, calendars: nil)
         let events = eventStore.events(matching: predicate)
-        logger.info("fetchEvents on \(startOfDay.formattedChinese()): found \(events.count) events")
+        logger.info("fetchEvents on \(start.formattedChinese()): found \(events.count) events")
         return events
             .sorted { (a, b) -> Bool in
                 if a.isAllDay != b.isAllDay {
@@ -192,6 +187,15 @@ final class CalendarManager: ObservableObject, CalendarService, CalendarEventSto
                 return a.startDate < b.startDate
             }
             .map { Self.mapEvent($0) }
+    }
+
+    func fetchEvents(on date: Date) -> [CalendarEventInfo] {
+        let calendar = Calendar.current
+        let startOfDay = calendar.startOfDay(for: date)
+        guard let endOfDay = calendar.date(byAdding: .day, value: 1, to: startOfDay) else {
+            return []
+        }
+        return fetchEvents(from: startOfDay, to: endOfDay)
     }
 
     func event(withId id: String) -> CalendarEventInfo? {

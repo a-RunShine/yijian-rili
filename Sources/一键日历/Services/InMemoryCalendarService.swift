@@ -18,8 +18,9 @@ final class InMemoryCalendarService: CalendarService, CalendarEventStore {
         availableCalendars.contains { $0.sourceKind == .cloud }
     }
 
-    init(grantAccessByDefault: Bool = true) {
+    init(grantAccessByDefault: Bool = true, events: [CalendarEventInfo] = []) {
         authorizationStatus = grantAccessByDefault ? .fullAccess : .notDetermined
+        self.events = events
         calendars = [
             CalendarInfo(
                 identifier: "local-default",
@@ -168,9 +169,13 @@ final class InMemoryCalendarService: CalendarService, CalendarEventStore {
     }
 
     func fetchEvents(on date: Date) -> [CalendarEventInfo] {
-        guard authorizationStatus == .fullAccess else { return [] }
         let start = Calendar.current.startOfDay(for: date)
         guard let end = Calendar.current.date(byAdding: .day, value: 1, to: start) else { return [] }
+        return fetchEvents(from: start, to: end)
+    }
+
+    func fetchEvents(from start: Date, to end: Date) -> [CalendarEventInfo] {
+        guard authorizationStatus == .fullAccess else { return [] }
         return events
             .filter { $0.start < end && $0.end > start }
             .sorted {
