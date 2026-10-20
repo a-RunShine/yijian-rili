@@ -2,27 +2,30 @@ import SwiftUI
 
 struct HistorySection: View {
     @ObservedObject var viewModel: ReviewViewModel
+    var showsHeader: Bool = true
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Label(NSLocalizedString("history_title", comment: ""), systemImage: "clock.arrow.circlepath")
-                    .font(.headline)
-                Spacer()
-                if !viewModel.historyEntries.isEmpty {
-                    Button(NSLocalizedString("clear_history", comment: "")) {
-                        viewModel.clearHistory()
+            if showsHeader {
+                HStack {
+                    Label(NSLocalizedString("history_title", comment: ""), systemImage: "clock.arrow.circlepath")
+                        .font(.headline)
+                    Spacer()
+                    if !viewModel.historyEntries.isEmpty {
+                        Button(NSLocalizedString("clear_history", comment: "")) {
+                            viewModel.clearHistory()
+                        }
+                        .buttonStyle(.borderless)
+                        .controlSize(.small)
+                    }
+                    Button(action: {
+                        viewModel.showHistory = false
+                    }) {
+                        Image(systemName: "xmark.circle.fill")
+                            .foregroundColor(viewModel.currentTheme.secondaryTextColor ?? .secondary)
                     }
                     .buttonStyle(.borderless)
-                    .controlSize(.small)
                 }
-                Button(action: {
-                    viewModel.showHistory = false
-                }) {
-                    Image(systemName: "xmark.circle.fill")
-                        .foregroundColor(viewModel.currentTheme.secondaryTextColor ?? .secondary)
-                }
-                .buttonStyle(.borderless)
             }
 
             if viewModel.historyEntries.isEmpty {
@@ -113,6 +116,7 @@ struct HistorySection: View {
                                     }
                                     .buttonStyle(.borderless)
                                     .help(NSLocalizedString("delete_history", comment: ""))
+                                    .accessibilityLabel(NSLocalizedString("delete_history", comment: ""))
                                 }
                             }
                             .padding(.vertical, 6)

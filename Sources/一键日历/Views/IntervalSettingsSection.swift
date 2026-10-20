@@ -155,6 +155,7 @@ struct IntervalSettingsSection: View {
                         .buttonStyle(.bordered)
                         .controlSize(.small)
                         .help(NSLocalizedString("save_as_preset", comment: ""))
+                        .accessibilityLabel(NSLocalizedString("save_as_preset", comment: ""))
                     }
 
                     Divider()
@@ -193,6 +194,7 @@ struct IntervalSettingsSection: View {
                                 .buttonStyle(.plain)
                                 .disabled(tempIntervals.count <= 1)
                                 .opacity(tempIntervals.count <= 1 ? 0.3 : 1.0)
+                                .help(String(format: NSLocalizedString("remove_interval_at", comment: ""), "\(index + 1)"))
                                 .accessibilityLabel(String(format: NSLocalizedString("remove_interval_at", comment: ""), "\(index + 1)"))
                             }
                         }

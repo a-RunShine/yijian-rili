@@ -95,6 +95,143 @@ final class InMemoryCalendarServiceTests: XCTestCase {
         }
     }
 
+    func testRangeReadIncludesStartAndExcludesEnd() async throws {
+        let calendar = InMemoryCalendarService()
+        let start = date(2026, 10, 2)
+        let end = date(2026, 10, 4)
+        _ = try await calendar.createSingleEvent(title: "范围内", date: date(2026, 10, 3), calendarId: nil)
+        _ = try await calendar.createSingleEvent(title: "起点", date: start, calendarId: nil)
+        _ = try await calendar.createSingleEvent(title: "终点", date: end, calendarId: nil)
+        _ = try await calendar.createSingleEvent(title: "前一天", date: date(2026, 10, 1), calendarId: nil)
+
+        XCTAssertEqual(calendar.fetchEvents(from: start, to: end).map(\.title), ["起点", "范围内"])
+    }
+
+    func testRangeReadIncludesOverlapAndExcludesDisjointEvents() {
+        let start = date(2026, 10, 2)
+        let end = date(2026, 10, 4)
+        let crossing = event(
+            id: "cross",
+            title: "跨入",
+            start: dateTime(2026, 10, 1, 22, 0),
+            end: dateTime(2026, 10, 2, 9, 0),
+            isAllDay: false
+        )
+        let inside = event(
+            id: "inside",
+            title: "范围内",
+            start: dateTime(2026, 10, 3, 10, 0),
+            end: dateTime(2026, 10, 3, 11, 0),
+            isAllDay: false
+        )
+        let endsAtStart = event(
+            id: "cut",
+            title: "止于起点",
+            start: dateTime(2026, 10, 1, 20, 0),
+            end: start,
+            isAllDay: false
+        )
+        let startsAtEnd = event(
+            id: "end",
+            title: "终点",
+            start: end,
+            end: dateTime(2026, 10, 4, 2, 0),
+            isAllDay: false
+        )
+        let before = event(
+            id: "before",
+            title: "更早",
+            start: dateTime(2026, 10, 1, 8, 0),
+            end: dateTime(2026, 10, 1, 9, 0),
+            isAllDay: false
+        )
+        let calendar = InMemoryCalendarService(events: [before, endsAtStart, crossing, inside, startsAtEnd])
+
+        XCTAssertEqual(calendar.fetchEvents(from: start, to: end).map(\.title), ["跨入", "范围内"])
+    }
+
+    func testRangeReadSortsAllDayBeforeStartTime() {
+        let allDay = event(
+            id: "all",
+            title: "全天",
+            start: date(2026, 10, 2),
+            end: date(2026, 10, 3),
+            isAllDay: true
+        )
+        let morning = event(
+            id: "am",
+            title: "上午",
+            start: dateTime(2026, 10, 1, 9, 0),
+            end: dateTime(2026, 10, 1, 10, 0),
+            isAllDay: false
+        )
+        let evening = event(
+            id: "pm",
+            title: "傍晚",
+            start: dateTime(2026, 10, 1, 18, 0),
+            end: dateTime(2026, 10, 1, 19, 0),
+            isAllDay: false
+        )
+        let calendar = InMemoryCalendarService(events: [evening, allDay, morning])
+
+        XCTAssertEqual(
+            calendar.fetchEvents(from: date(2026, 10, 1), to: date(2026, 10, 3)).map(\.title),
+            ["全天", "上午", "傍晚"]
+        )
+    }
+
+    func testRangeReadWithoutAccessReturnsEmpty() {
+        let day = date(2026, 10, 2)
+        let stored = event(
+            id: "hidden",
+            title: "未授权",
+            start: day,
+            end: date(2026, 10, 3),
+            isAllDay: true
+        )
+        let calendar = InMemoryCalendarService(grantAccessByDefault: false, events: [stored])
+
+        XCTAssertTrue(calendar.fetchEvents(from: day, to: date(2026, 10, 3)).isEmpty)
+        XCTAssertTrue(calendar.fetchEvents(on: day).isEmpty)
+    }
+
+    func testSingleDayReadKeepsTheSameVisibleEvents() {
+        let day = date(2026, 10, 2)
+        let next = date(2026, 10, 3)
+        let allDay = event(
+            id: "all",
+            title: "全天",
+            start: day,
+            end: next,
+            isAllDay: true
+        )
+        let spanning = event(
+            id: "span",
+            title: "跨天",
+            start: dateTime(2026, 10, 1, 22, 0),
+            end: dateTime(2026, 10, 2, 9, 0),
+            isAllDay: false
+        )
+        let endsAtMidnight = event(
+            id: "cut",
+            title: "止于零点",
+            start: dateTime(2026, 10, 1, 20, 0),
+            end: day,
+            isAllDay: false
+        )
+        let nextDay = event(
+            id: "next",
+            title: "次日",
+            start: next,
+            end: date(2026, 10, 4),
+            isAllDay: true
+        )
+        let calendar = InMemoryCalendarService(events: [spanning, allDay, endsAtMidnight, nextDay])
+
+        XCTAssertEqual(calendar.fetchEvents(on: day).map(\.title), ["全天", "跨天"])
+        XCTAssertEqual(calendar.fetchEvents(from: day, to: next).map(\.title), ["全天", "跨天"])
+    }
+
     func testCreateReviewRejectsInvalidIntervals() async {
         let calendar = InMemoryCalendarService()
         do {
@@ -113,11 +250,38 @@ final class InMemoryCalendarServiceTests: XCTestCase {
     }
 
     private func date(_ y: Int, _ m: Int, _ d: Int) -> Date {
+        dateTime(y, m, d, 0, 0)
+    }
+
+    private func dateTime(_ y: Int, _ m: Int, _ d: Int, _ hour: Int, _ minute: Int) -> Date {
         var components = DateComponents()
         components.year = y
         components.month = m
         components.day = d
+        components.hour = hour
+        components.minute = minute
         return Calendar.current.date(from: components)!
+    }
+
+    private func event(
+        id: String,
+        title: String,
+        start: Date,
+        end: Date,
+        isAllDay: Bool
+    ) -> CalendarEventInfo {
+        CalendarEventInfo(
+            id: id,
+            title: title,
+            start: start,
+            end: end,
+            isAllDay: isAllDay,
+            notes: nil,
+            calendarId: "outlook-default",
+            calendarTitle: "日历",
+            calendarSourceTitle: "Outlook",
+            colorHex: "#0078D4"
+        )
     }
 }
 
@@ -139,6 +303,46 @@ final class ReviewViewModelCalendarInjectionTests: XCTestCase {
         XCTAssertEqual(calendar.lastCreatedEventIdentifiers.count, 3)
         XCTAssertFalse(viewModel.historyEntries.isEmpty)
         XCTAssertEqual(viewModel.historyEntries.first?.title, "注入日历 seam")
+        XCTAssertEqual(
+            viewModel.resultMessage,
+            String(format: NSLocalizedString("write_success_count", comment: ""), 3)
+        )
+    }
+
+    func testWarningWithPartialCreateReloadsVisibleWindowAndKeepsUndo() async {
+        let calendar = InMemoryCalendarService(grantAccessByDefault: true)
+        let viewModel = ReviewViewModel(calendar: calendar)
+        let base = date(2026, 10, 20)
+        let duplicateDay = date(2026, 10, 23)
+        let freshDay = date(2026, 10, 27)
+        viewModel.selectDay(base)
+        viewModel.title = "部分写入"
+        viewModel.scheduleMode = .review
+        viewModel.reviewIntervals = [3]
+        viewModel.updateReviewDates()
+
+        await viewModel.createReviewSchedule()
+        XCTAssertEqual(viewModel.resultType, .success)
+
+        viewModel.title = "部分写入"
+        viewModel.reviewIntervals = [3, 7]
+        viewModel.updateReviewDates()
+        await viewModel.createReviewSchedule()
+
+        XCTAssertEqual(viewModel.resultType, .warning)
+        XCTAssertEqual(
+            viewModel.resultMessage,
+            String(format: NSLocalizedString("warning_message", comment: ""), duplicateDay.formattedChinese())
+        )
+        XCTAssertTrue(viewModel.canUndo)
+        XCTAssertEqual(viewModel.eventsByDay[freshDay]?.map(\.title) ?? [], ["部分写入"])
+        XCTAssertEqual(viewModel.historyEntries.count, 2)
+        XCTAssertEqual(
+            viewModel.weeklyReviewViewModel.weeklyEntries.filter {
+                $0.title == "部分写入" && !$0.isPreOccupiedNextWeek
+            }.count,
+            2
+        )
     }
 
     func testDefaultSegmentIsCreate() {
@@ -155,19 +359,30 @@ final class ReviewViewModelCalendarInjectionTests: XCTestCase {
         viewModel.scheduleMode = .single
         viewModel.updateReviewDates()
 
+        let weekly = viewModel.weeklyReviewViewModel
+        let totalBefore = weekly.totalCount
+        let reviewedBefore = weekly.reviewedCount
+        let eventDay = date(2026, 2, 1)
+
         await viewModel.createReviewSchedule()
         XCTAssertEqual(viewModel.resultType, .success)
         XCTAssertTrue(viewModel.todayCreatedEntries.contains(where: { $0.title == marker }))
         XCTAssertTrue(
-            viewModel.weeklyReviewViewModel.weeklyEntries.contains(where: { $0.title == marker })
+            weekly.weeklyEntries.contains(where: { $0.title == marker })
         )
+        XCTAssertEqual(weekly.totalCount, totalBefore + 1)
+        XCTAssertEqual(weekly.reviewedCount, reviewedBefore)
+        XCTAssertEqual(viewModel.eventsByDay[eventDay]?.map(\.title) ?? [], [marker])
 
         await viewModel.undoReviewSchedule()
         XCTAssertFalse(viewModel.canUndo)
         XCTAssertFalse(viewModel.todayCreatedEntries.contains(where: { $0.title == marker }))
         XCTAssertFalse(
-            viewModel.weeklyReviewViewModel.weeklyEntries.contains(where: { $0.title == marker })
+            weekly.weeklyEntries.contains(where: { $0.title == marker })
         )
+        XCTAssertEqual(weekly.totalCount, totalBefore)
+        XCTAssertEqual(weekly.reviewedCount, reviewedBefore)
+        XCTAssertEqual(viewModel.eventsByDay[eventDay]?.map(\.title) ?? [], [])
     }
 
     func testDeleteSearchResultClearsTodayCreatedAndWeeklyViaFacade() async {

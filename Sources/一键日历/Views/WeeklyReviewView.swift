@@ -49,6 +49,7 @@ struct WeeklyReviewView: View {
             }
             .buttonStyle(.borderless)
             .help(NSLocalizedString("close", comment: ""))
+            .accessibilityLabel(NSLocalizedString("close", comment: ""))
         }
         .padding()
     }
