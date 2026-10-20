@@ -7,6 +7,9 @@ struct CalendarShellView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var showsScreenTooNarrowHint = false
     @State private var switchHovered = false
+    @State private var composerOpen = false
+    @State private var menuSubmitPending = false
+    @State private var contentWidth: CGFloat = CanvasWindowSizing.compactContentSize.width
 
     private let weekdayKeys = [
         "weekday_mon",
@@ -29,9 +32,20 @@ struct CalendarShellView: View {
             canvas(mode: mode)
                 .frame(width: proxy.size.width, height: proxy.size.height)
                 .background(palette.background)
+                .overlay {
+                    if mode == .compact && composerOpen {
+                        composerDrawer(height: proxy.size.height * 0.82)
+                            .transition(reduceMotion ? .identity : .move(edge: .bottom))
+                    }
+                }
+                .onAppear {
+                    contentWidth = proxy.size.width
+                }
                 .onChange(of: proxy.size.width) { _, width in
+                    contentWidth = width
                     if CanvasBreakpoint.mode(forWidth: width) == .wide {
                         showsScreenTooNarrowHint = false
+                        composerOpen = false
                     }
                 }
         }
@@ -42,6 +56,19 @@ struct CalendarShellView: View {
         .modifier(CalendarShellPresentations())
         .onReceive(NotificationCenter.default.publisher(for: .toggleCanvas)) { _ in
             toggleCanvas()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .openComposer)) { _ in
+            guard CanvasBreakpoint.mode(forWidth: contentWidth) == .compact else { return }
+            setComposerOpen(true)
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .createReviewSchedule)) { _ in
+            menuSubmitPending = true
+        }
+        .onChange(of: viewModel.resultMessage) { _, _ in
+            finishMenuSubmitIfNeeded()
+        }
+        .onChange(of: viewModel.title) { oldTitle, newTitle in
+            finishMenuSubmitIfTitleCleared(from: oldTitle, to: newTitle)
         }
     }
 
@@ -90,12 +117,97 @@ struct CalendarShellView: View {
     }
 
     private var editorColumn: some View {
-        Text(NSLocalizedString("canvas_editor_placeholder", comment: ""))
-            .font(.body)
-            .foregroundStyle(palette.secondary)
+        ComposerForm(density: .wide, onWillSubmit: noteComposerSubmit)
             .frame(width: editorColumnWidth)
             .frame(maxHeight: .infinity)
             .background(palette.card)
+    }
+
+    private func composerDrawer(height: CGFloat) -> some View {
+        ZStack(alignment: .bottom) {
+            palette.primary.opacity(0.2)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .ignoresSafeArea()
+                .contentShape(Rectangle())
+                .onTapGesture(perform: dismissComposer)
+            VStack(spacing: 0) {
+                ZStack {
+                    Capsule()
+                        .fill(palette.separator)
+                        .frame(width: 36, height: 4)
+                    HStack {
+                        Spacer(minLength: 0)
+                        Button(action: dismissComposer) {
+                            Image(systemName: "xmark")
+                                .font(.system(size: 12, weight: .semibold))
+                                .foregroundStyle(palette.secondary)
+                                .frame(width: 28, height: 28)
+                        }
+                        .buttonStyle(.plain)
+                        .help(NSLocalizedString("close", comment: ""))
+                        .accessibilityLabel(NSLocalizedString("close", comment: ""))
+                    }
+                }
+                .padding(.horizontal, 8)
+                .padding(.top, 8)
+                .padding(.bottom, 4)
+                Rectangle()
+                    .fill(palette.separator)
+                    .frame(height: 1)
+                ComposerForm(density: .compact, onWillSubmit: noteComposerSubmit)
+            }
+            .frame(maxWidth: .infinity)
+            .frame(height: max(height, 0))
+            .background(palette.card)
+            .clipShape(
+                UnevenRoundedRectangle(
+                    topLeadingRadius: 12,
+                    bottomLeadingRadius: 0,
+                    bottomTrailingRadius: 0,
+                    topTrailingRadius: 12,
+                    style: .continuous
+                )
+            )
+        }
+    }
+
+    private func noteComposerSubmit() {
+        menuSubmitPending = true
+    }
+
+    private func setComposerOpen(_ open: Bool) {
+        guard open != composerOpen else { return }
+        if reduceMotion {
+            composerOpen = open
+        } else {
+            withAnimation(.easeInOut(duration: 0.22)) {
+                composerOpen = open
+            }
+        }
+    }
+
+    private func dismissComposer() {
+        menuSubmitPending = false
+        setComposerOpen(false)
+    }
+
+    private func finishMenuSubmitIfNeeded() {
+        guard menuSubmitPending else { return }
+        guard viewModel.resultType != nil else { return }
+        let succeeded = viewModel.resultType == .success
+        menuSubmitPending = false
+        guard succeeded, CanvasBreakpoint.mode(forWidth: contentWidth) == .compact else { return }
+        setComposerOpen(false)
+    }
+
+    private func finishMenuSubmitIfTitleCleared(from oldTitle: String, to newTitle: String) {
+        guard menuSubmitPending else { return }
+        let wasFilled = !oldTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        let nowEmpty = newTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        guard wasFilled, nowEmpty, viewModel.resultType == .success else { return }
+        menuSubmitPending = false
+        guard CanvasBreakpoint.mode(forWidth: contentWidth) == .compact else { return }
+        setComposerOpen(false)
     }
 
     private var verticalSeparator: some View {

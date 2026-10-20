@@ -286,3 +286,17 @@
 "weekday_fri" = "五";
 "weekday_sat" = "六";
 "weekday_sun" = "日";
+
+"composer_detail" = "备注";
+"composer_preset_custom" = "自定义";
+"composer_apply" = "应用";
+"composer_interval_placeholder" = "例如 1, 2, 4";
+"composer_interval_invalid" = "间隔需为 1–365 的递增整数，最多 10 个";
+"composer_preview_summary" = "%@ 个日程";
+"composer_preview_outside" = "另有 %@ 天不在视窗";
+"composer_account" = "写入账户";
+"composer_local_hint" = "本地日历不会同步到手机";
+"composer_submit" = "写入 %@ 个日程";
+"composer_shortcut" = "⌘↵";
+"composer_previous_day" = "前一天";
+"composer_next_day" = "后一天";

@@ -3,6 +3,8 @@ import SwiftUI
 struct CalendarPickerSection: View {
     @ObservedObject var viewModel: ReviewViewModel
     var forceExpanded: Bool = false
+    var showsTitle: Bool = true
+    var showsStatusHint: Bool = true
     @AppStorage("calendarPickerExpanded") private var isExpanded: Bool = false
 
     private var expanded: Bool { forceExpanded || isExpanded }
@@ -10,11 +12,13 @@ struct CalendarPickerSection: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             if forceExpanded {
-                Text(NSLocalizedString("calendar_picker_title", comment: ""))
-                    .font(.caption)
-                    .fontWeight(.semibold)
-                    .foregroundColor(viewModel.currentTheme.secondaryTextColor ?? .secondary)
-                    .padding(.bottom, 8)
+                if showsTitle {
+                    Text(NSLocalizedString("calendar_picker_title", comment: ""))
+                        .font(.caption)
+                        .fontWeight(.semibold)
+                        .foregroundColor(viewModel.currentTheme.secondaryTextColor ?? .secondary)
+                        .padding(.bottom, 8)
+                }
             } else {
                 Button(action: {
                     withAnimation(.easeInOut(duration: 0.25)) {
@@ -54,24 +58,26 @@ struct CalendarPickerSection: View {
                     .labelsHidden()
                     .pickerStyle(.menu)
 
-                    if viewModel.isSelectedCalendarLocal {
-                        HStack(spacing: 4) {
-                            Image(systemName: "exclamationmark.triangle.fill")
-                            Text(NSLocalizedString("calendar_local_warning", comment: ""))
-                        }
-                        .font(.caption)
-                        .foregroundColor(.orange)
-                    } else if !viewModel.hasCloudCalendar {
-                        HStack(spacing: 4) {
-                            Image(systemName: "info.circle")
-                            Text(NSLocalizedString("calendar_no_cloud_hint", comment: ""))
-                        }
-                        .font(.caption)
-                        .foregroundColor(viewModel.currentTheme.secondaryTextColor ?? .secondary)
-                    } else {
-                        Text(NSLocalizedString("calendar_picker_hint", comment: ""))
+                    if showsStatusHint {
+                        if viewModel.isSelectedCalendarLocal {
+                            HStack(spacing: 4) {
+                                Image(systemName: "exclamationmark.triangle.fill")
+                                Text(NSLocalizedString("calendar_local_warning", comment: ""))
+                            }
+                            .font(.caption)
+                            .foregroundColor(.orange)
+                        } else if !viewModel.hasCloudCalendar {
+                            HStack(spacing: 4) {
+                                Image(systemName: "info.circle")
+                                Text(NSLocalizedString("calendar_no_cloud_hint", comment: ""))
+                            }
                             .font(.caption)
                             .foregroundColor(viewModel.currentTheme.secondaryTextColor ?? .secondary)
+                        } else {
+                            Text(NSLocalizedString("calendar_picker_hint", comment: ""))
+                                .font(.caption)
+                                .foregroundColor(viewModel.currentTheme.secondaryTextColor ?? .secondary)
+                        }
                     }
                 }
                 .padding(forceExpanded ? 12 : 0)
