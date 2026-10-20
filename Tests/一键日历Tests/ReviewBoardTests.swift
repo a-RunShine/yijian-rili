@@ -45,15 +45,16 @@ final class ReviewBoardTests: XCTestCase {
             event(id: "after", title: "窗外后", start: date(2026, 11, 9), end: dateTime(2026, 11, 9, 1, 0), isAllDay: false),
         ])
         let viewModel = ReviewViewModel(calendar: calendar)
-        let rangesBefore = calendar.rangeFetches.count
         let daysBefore = calendar.dayFetches
 
         viewModel.selectDay(date(2026, 10, 20))
 
-        XCTAssertEqual(calendar.rangeFetches.count, rangesBefore + 1)
         XCTAssertEqual(calendar.dayFetches, daysBefore)
         XCTAssertEqual(calendar.rangeFetches.last?.start, date(2026, 9, 28))
         XCTAssertEqual(calendar.rangeFetches.last?.end, date(2026, 11, 9))
+        let fetchesAfterSelect = calendar.rangeFetches.count
+        viewModel.selectDay(date(2026, 10, 21))
+        XCTAssertEqual(calendar.rangeFetches.count, fetchesAfterSelect)
         XCTAssertEqual(ids(on: date(2026, 9, 28), in: viewModel), ["first"])
         XCTAssertEqual(ids(on: date(2026, 10, 1), in: viewModel), ["span"])
         XCTAssertEqual(ids(on: date(2026, 10, 2), in: viewModel), ["span"])
@@ -64,10 +65,10 @@ final class ReviewBoardTests: XCTestCase {
         XCTAssertFalse(loaded.contains("after"))
     }
 
-    func testShiftingMonthKeepsTheDayAndRefreshesPreviewAndEvents() {
+    func testShiftingMonthKeepsTheBaseDateAndPreview() {
         let calendar = RangeQueryCalendar(events: [
             event(id: "oct", title: "十月", start: date(2026, 10, 20), end: date(2026, 10, 21), isAllDay: true),
-            event(id: "nov", title: "十一月", start: date(2026, 11, 20), end: date(2026, 11, 21), isAllDay: true),
+            event(id: "nov", title: "十一月", start: date(2026, 11, 19), end: date(2026, 11, 20), isAllDay: true),
         ])
         let viewModel = ReviewViewModel(calendar: calendar)
         viewModel.applyPreset(.daily)
@@ -76,37 +77,56 @@ final class ReviewBoardTests: XCTestCase {
 
         viewModel.shiftVisibleMonth(by: 1)
 
-        XCTAssertEqual(viewModel.baseDate, date(2026, 11, 20))
+        XCTAssertEqual(viewModel.baseDate, date(2026, 10, 20))
         XCTAssertEqual(viewModel.visibleMonth, date(2026, 11, 1))
         XCTAssertEqual(viewModel.reviewDates, [
-            date(2026, 11, 23),
-            date(2026, 11, 27),
-            date(2026, 12, 20),
+            date(2026, 10, 23),
+            date(2026, 10, 27),
+            date(2026, 11, 19),
         ])
         XCTAssertEqual(calendar.rangeFetches.count, rangesBefore + 1)
         XCTAssertEqual(calendar.rangeFetches.last?.start, date(2026, 10, 26))
         XCTAssertEqual(calendar.rangeFetches.last?.end, date(2026, 12, 7))
-        XCTAssertEqual(ids(on: date(2026, 11, 20), in: viewModel), ["nov"])
+        XCTAssertEqual(ids(on: date(2026, 11, 19), in: viewModel), ["nov"])
         XCTAssertFalse(Set(viewModel.eventsByDay.values.flatMap { $0.map(\.id) }).contains("oct"))
     }
 
-    func testShiftingMonthUsesTheLastDayWhenThatDayDoesNotExist() {
+    func testShiftingMonthDoesNotRewriteTheBaseDateWhenTheDayNumberIsMissing() {
         let viewModel = ReviewViewModel(calendar: InMemoryCalendarService(grantAccessByDefault: true))
 
         viewModel.selectDay(date(2026, 1, 31))
         viewModel.shiftVisibleMonth(by: 1)
-        XCTAssertEqual(viewModel.baseDate, date(2026, 2, 28))
+        XCTAssertEqual(viewModel.baseDate, date(2026, 1, 31))
         XCTAssertEqual(viewModel.visibleMonth, date(2026, 2, 1))
 
         viewModel.selectDay(date(2024, 1, 31))
         viewModel.shiftVisibleMonth(by: 1)
-        XCTAssertEqual(viewModel.baseDate, date(2024, 2, 29))
+        XCTAssertEqual(viewModel.baseDate, date(2024, 1, 31))
         XCTAssertEqual(viewModel.visibleMonth, date(2024, 2, 1))
 
         viewModel.selectDay(date(2026, 3, 31))
         viewModel.shiftVisibleMonth(by: -1)
-        XCTAssertEqual(viewModel.baseDate, date(2026, 2, 28))
+        XCTAssertEqual(viewModel.baseDate, date(2026, 3, 31))
         XCTAssertEqual(viewModel.visibleMonth, date(2026, 2, 1))
+    }
+
+    func testMovingSelectionInsideTheVisibleWindowDoesNotFetchAgain() {
+        let calendar = RangeQueryCalendar(events: [])
+        let viewModel = ReviewViewModel(calendar: calendar)
+        viewModel.applyPreset(.daily)
+        viewModel.selectDay(date(2026, 10, 20))
+        let rangesBefore = calendar.rangeFetches.count
+
+        viewModel.moveSelection(to: date(2026, 10, 21))
+
+        XCTAssertEqual(viewModel.baseDate, date(2026, 10, 21))
+        XCTAssertEqual(viewModel.visibleMonth, date(2026, 10, 1))
+        XCTAssertEqual(calendar.rangeFetches.count, rangesBefore)
+        XCTAssertEqual(viewModel.reviewDates, [
+            date(2026, 10, 24),
+            date(2026, 10, 28),
+            date(2026, 11, 20),
+        ])
     }
 
     func testGoToTodayRefreshesBaseDateVisibleMonthAndEvents() {
