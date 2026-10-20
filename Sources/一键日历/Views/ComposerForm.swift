@@ -1,11 +1,6 @@
 import AppKit
 import SwiftUI
 
-extension Notification.Name {
-    static let openComposer = Notification.Name("openComposer")
-    static let focusComposerTitle = Notification.Name("focusComposerTitle")
-}
-
 @MainActor
 struct ComposerForm: View {
     enum Density: Equatable {
@@ -300,19 +295,30 @@ struct ComposerForm: View {
     }
 
     private var widePreview: some View {
-        let outside = ComposerSchedule.daysOutsideMonthGrid(
-            month: viewModel.visibleMonth,
-            dates: viewModel.reviewDates
+        let overflow = MonthPreviewWindow.overflow(
+            reviewDates: viewModel.reviewDates,
+            visibleMonth: viewModel.visibleMonth
         )
         return VStack(alignment: .leading, spacing: 4) {
             Text(countLine("composer_preview_summary", viewModel.reviewDates.count))
                 .font(.callout.monospacedDigit())
                 .foregroundStyle(palette.primary)
-            if outside > 0 {
-                Text(countLine("composer_preview_outside", outside))
+            if let line = overflowLine(overflow) {
+                Text(line)
                     .font(.caption.monospacedDigit())
                     .foregroundStyle(palette.secondary)
             }
+        }
+    }
+
+    private func overflowLine(_ overflow: MonthPreviewOverflow) -> String? {
+        switch overflow {
+        case .none:
+            return nil
+        case .nextMonth(let count):
+            return String(format: NSLocalizedString("month_overflow_next", comment: ""), count)
+        case .outsideWindow(let count):
+            return String(format: NSLocalizedString("month_overflow_outside", comment: ""), count)
         }
     }
 

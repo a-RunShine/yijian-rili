@@ -32,44 +32,4 @@ final class ComposerScheduleTests: XCTestCase {
             .custom(name: nil)
         )
     }
-
-    func testOctober2026CountsOnlyPreviewDaysOutsideTheFortyTwoCells() {
-        let october = day(2026, 10, 1)
-
-        XCTAssertEqual(
-            ComposerSchedule.daysOutsideMonthGrid(
-                month: october,
-                dates: [day(2026, 10, 23), day(2026, 10, 27), day(2026, 11, 19)]
-            ),
-            1
-        )
-        XCTAssertEqual(
-            ComposerSchedule.daysOutsideMonthGrid(month: october, dates: [day(2026, 11, 1)]),
-            0
-        )
-        XCTAssertEqual(
-            ComposerSchedule.daysOutsideMonthGrid(month: october, dates: [day(2026, 11, 8)]),
-            0
-        )
-        XCTAssertEqual(
-            ComposerSchedule.daysOutsideMonthGrid(month: october, dates: [day(2026, 11, 9)]),
-            1
-        )
-        XCTAssertEqual(
-            ComposerSchedule.daysOutsideMonthGrid(month: october, dates: [day(2026, 9, 27)]),
-            1
-        )
-        XCTAssertEqual(
-            ComposerSchedule.daysOutsideMonthGrid(month: october, dates: [day(2026, 11, 19, hour: 15)]),
-            1
-        )
-        XCTAssertEqual(
-            ComposerSchedule.daysOutsideMonthGrid(month: october, dates: [day(2026, 10, 20)]),
-            0
-        )
-    }
-
-    private func day(_ year: Int, _ month: Int, _ day: Int, hour: Int = 0) -> Date {
-        WeekCalculator.calendar.date(from: DateComponents(year: year, month: month, day: day, hour: hour))!
-    }
 }

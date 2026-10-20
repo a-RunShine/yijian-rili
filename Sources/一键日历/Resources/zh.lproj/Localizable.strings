@@ -286,6 +286,19 @@
 "weekday_fri" = "五";
 "weekday_sat" = "六";
 "weekday_sun" = "日";
+"month_previous" = "上个月";
+"month_next" = "下个月";
+"month_agenda_empty" = "这天没有日程";
+"month_agenda_count" = "%d 个日程";
+"month_footer_month_count" = "本月 %d 个日程";
+"month_footer_day_count" = "当天 %d 个";
+"month_new_review" = "新建复习";
+"month_more_events" = "+%d 条";
+"month_overflow_outside" = "另有 %d 天不在视窗";
+"month_overflow_next" = "下月 %d 天";
+"month_cell_events" = "%d 个日程";
+"month_cell_accessibility" = "%@，%@";
+"month_cell_accessibility_preview" = "%@，%@，%@";
 
 "composer_detail" = "备注";
 "composer_preset_custom" = "自定义";
@@ -293,7 +306,6 @@
 "composer_interval_placeholder" = "例如 1, 2, 4";
 "composer_interval_invalid" = "间隔需为 1–365 的递增整数，最多 10 个";
 "composer_preview_summary" = "%@ 个日程";
-"composer_preview_outside" = "另有 %@ 天不在视窗";
 "composer_account" = "写入账户";
 "composer_local_hint" = "本地日历不会同步到手机";
 "composer_submit" = "写入 %@ 个日程";

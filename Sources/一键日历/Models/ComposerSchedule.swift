@@ -21,14 +21,4 @@ enum ComposerSchedule {
         }
         return .custom(name: savedPresets.first { $0.intervals == intervals }?.name)
     }
-
-    static func daysOutsideMonthGrid(month: Date, dates: [Date]) -> Int {
-        let calendar = WeekCalculator.calendar
-        let visible = Set(MonthGrid.cells(in: month, today: month).map(\.date))
-        return dates.reduce(into: 0) { count, date in
-            if !visible.contains(calendar.startOfDay(for: date)) {
-                count += 1
-            }
-        }
-    }
 }
