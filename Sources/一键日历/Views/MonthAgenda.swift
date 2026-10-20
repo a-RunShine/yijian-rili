@@ -87,9 +87,11 @@ struct MonthPreviewOverflowLine: View {
         Text(copy)
             .font(.caption.monospacedDigit())
             .foregroundStyle(palette.secondary)
-            .frame(maxWidth: .infinity, alignment: .leading)
+            .lineLimit(1)
+            .frame(maxWidth: .infinity, minHeight: 16, alignment: .leading)
             .padding(.horizontal, 12)
             .padding(.bottom, 8)
+            .accessibilityHidden(copy.isEmpty)
     }
 
     private var copy: String {
