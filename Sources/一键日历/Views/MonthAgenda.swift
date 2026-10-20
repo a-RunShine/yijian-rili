@@ -123,16 +123,18 @@ struct BaseDayEventList: View {
                     .foregroundStyle(palette.secondary)
                     .frame(maxWidth: .infinity, alignment: .leading)
             } else {
-                VStack(alignment: .leading, spacing: 8) {
-                    ForEach(events) { event in
-                        row(event)
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 8) {
+                        ForEach(events) { event in
+                            row(event)
+                        }
                     }
                 }
+                .frame(maxHeight: 220)
             }
         }
         .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .layoutPriority(1)
     }
 
     private func row(_ event: CalendarEventInfo) -> some View {

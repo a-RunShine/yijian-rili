@@ -150,7 +150,6 @@ struct CalendarShellView: View {
         VStack(spacing: 0) {
             ComposerForm(density: .wide, onWillSubmit: noteComposerSubmit)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .layoutPriority(0)
             Rectangle()
                 .fill(palette.separator)
                 .frame(height: 1)
@@ -167,7 +166,6 @@ struct CalendarShellView: View {
                 palette: palette,
                 open: { viewModel.openWeeklyReview() }
             )
-            .layoutPriority(1)
         }
         .frame(width: editorColumnWidth)
         .frame(maxHeight: .infinity)
