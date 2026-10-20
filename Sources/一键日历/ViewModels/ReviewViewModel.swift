@@ -878,4 +878,6 @@ extension Notification.Name {
     static let createReviewSchedule = Notification.Name("createReviewSchedule")
     static let appDidBecomeActive = Notification.Name("appDidBecomeActive")
     static let toggleCanvas = Notification.Name("toggleCanvas")
+    static let focusComposerTitle = Notification.Name("focusComposerTitle")
+    static let openComposer = Notification.Name("openComposer")
 }

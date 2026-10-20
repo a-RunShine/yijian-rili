@@ -20,7 +20,6 @@ struct CalendarShellView: View {
     private let railSymbols = ["calendar", "sun.max", "clock.arrow.circlepath", "gearshape"]
     private let iconRailWidth: CGFloat = 64
     private let editorColumnWidth: CGFloat = 320
-    private let cellCornerRadius: CGFloat = 8
     private let controlCornerRadius: CGFloat = 6
 
     var body: some View {
@@ -112,27 +111,74 @@ struct CalendarShellView: View {
     }
 
     private func monthWorkspace(mode: CanvasMode) -> some View {
-        VStack(spacing: 0) {
+        let overflow = MonthPreviewWindow.overflow(
+            reviewDates: viewModel.reviewDates,
+            visibleMonth: viewModel.visibleMonth
+        )
+        let selectedEvents = events(on: viewModel.baseDate)
+        return VStack(spacing: 0) {
             topBar(mode: mode)
             horizontalSeparator
             if showsScreenTooNarrowHint {
                 narrowHint
                 horizontalSeparator
             }
-            weekdayHeader
-            monthGrid
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            if viewModel.authorizationStatus == .denied {
+                MonthAccessDenied(palette: palette) {
+                    viewModel.openSystemSettings()
+                }
+            } else {
+                weekdayHeader
+                monthGrid(mode: mode)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                if overflow != .none {
+                    MonthPreviewOverflowLine(overflow: overflow, palette: palette)
+                }
+                if mode == .compact {
+                    horizontalSeparator
+                    MonthDayAgenda(date: viewModel.baseDate, events: selectedEvents, palette: palette)
+                    horizontalSeparator
+                    MonthCompactFooter(
+                        monthCount: displayedMonthEventCount(),
+                        selectedDate: viewModel.baseDate,
+                        dayCount: selectedEvents.count,
+                        palette: palette
+                    ) {
+                        NotificationCenter.default.post(name: .openComposer, object: nil)
+                    }
+                }
+            }
         }
         .background(palette.background)
     }
 
     private func topBar(mode: CanvasMode) -> some View {
         HStack(spacing: 8) {
+            monthStepButton(systemName: "chevron.left", helpKey: "month_previous") {
+                viewModel.shiftVisibleMonth(by: -1)
+            }
+            monthStepButton(systemName: "chevron.right", helpKey: "month_next") {
+                viewModel.shiftVisibleMonth(by: 1)
+            }
             Text(monthTitle)
                 .font(monthFont(mode).weight(.bold).monospacedDigit())
                 .foregroundStyle(palette.primary)
                 .lineLimit(1)
             Spacer(minLength: 8)
+            Button(action: { viewModel.goToToday() }) {
+                Text(NSLocalizedString("today_button", comment: ""))
+                    .font(.callout.monospacedDigit())
+                    .foregroundStyle(palette.primary)
+                    .padding(.horizontal, 8)
+                    .frame(height: 28)
+                    .background(palette.card, in: RoundedRectangle(cornerRadius: controlCornerRadius))
+                    .overlay {
+                        RoundedRectangle(cornerRadius: controlCornerRadius)
+                            .strokeBorder(palette.separator, lineWidth: 1)
+                    }
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(NSLocalizedString("today_button", comment: ""))
             Text(NSLocalizedString("canvas_shortcut", comment: ""))
                 .font(.caption.monospacedDigit())
                 .foregroundStyle(palette.secondary)
@@ -143,6 +189,24 @@ struct CalendarShellView: View {
         .background(palette.chrome)
     }
 
+    private func monthStepButton(systemName: String, helpKey: String, action: @escaping () -> Void) -> some View {
+        let help = NSLocalizedString(helpKey, comment: "")
+        return Button(action: action) {
+            Image(systemName: systemName)
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(palette.primary)
+                .frame(width: 28, height: 28)
+                .background(palette.card, in: RoundedRectangle(cornerRadius: controlCornerRadius))
+                .overlay {
+                    RoundedRectangle(cornerRadius: controlCornerRadius)
+                        .strokeBorder(palette.separator, lineWidth: 1)
+                }
+        }
+        .buttonStyle(.plain)
+        .help(help)
+        .accessibilityLabel(help)
+    }
+
     private func monthFont(_ mode: CanvasMode) -> Font {
         mode == .wide ? .title : .title2
     }
@@ -151,8 +215,9 @@ struct CalendarShellView: View {
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "zh_CN")
         formatter.calendar = WeekCalculator.calendar
-        formatter.dateFormat = "yyyy年M月"
-        return formatter.string(from: viewModel.baseDate)
+        formatter.timeZone = WeekCalculator.calendar.timeZone
+        formatter.setLocalizedDateFormatFromTemplate("yMMM")
+        return formatter.string(from: viewModel.visibleMonth)
     }
 
     private func canvasSwitch(mode: CanvasMode) -> some View {
@@ -212,25 +277,25 @@ struct CalendarShellView: View {
         .padding(.bottom, 4)
     }
 
-    private var monthGrid: some View {
-        GeometryReader { proxy in
+    private func monthGrid(mode: CanvasMode) -> some View {
+        let cells = MonthGrid.cells(in: viewModel.visibleMonth, today: Date())
+        let ordinals = MonthPreviewWindow.ordinals(for: viewModel.reviewDates)
+        return GeometryReader { proxy in
             let spacing: CGFloat = 6
             let gridWidth = max(0, proxy.size.width - 24)
             let gridHeight = max(0, proxy.size.height - 12)
             let rowHeight = max(0, (gridHeight - spacing * 5) / 6)
             let columns = Array(repeating: GridItem(.flexible(), spacing: spacing), count: 7)
             LazyVGrid(columns: columns, spacing: spacing) {
-                ForEach(MonthGrid.cells(in: viewModel.baseDate, today: Date()), id: \.date) { cell in
-                    Text(dayNumber(cell.date))
-                        .font(.body.monospacedDigit())
-                        .foregroundStyle(cell.isInDisplayedMonth ? palette.primary : palette.secondary)
-                        .frame(maxWidth: .infinity)
-                        .frame(height: rowHeight)
-                        .background(palette.card, in: RoundedRectangle(cornerRadius: cellCornerRadius))
-                        .overlay {
-                            RoundedRectangle(cornerRadius: cellCornerRadius)
-                                .strokeBorder(palette.separator, lineWidth: 1)
-                        }
+                ForEach(cells, id: \.date) { cell in
+                    MonthDayCell(
+                        cell: cell,
+                        mode: mode,
+                        events: events(on: cell.date),
+                        previewOrdinal: ordinals[cell.date],
+                        rowHeight: rowHeight,
+                        palette: palette
+                    )
                 }
             }
             .frame(width: gridWidth, height: gridHeight, alignment: .top)
@@ -240,8 +305,19 @@ struct CalendarShellView: View {
         }
     }
 
-    private func dayNumber(_ date: Date) -> String {
-        String(WeekCalculator.calendar.component(.day, from: date))
+    private func events(on day: Date) -> [CalendarEventInfo] {
+        viewModel.eventsByDay[Calendar.current.startOfDay(for: day)] ?? []
+    }
+
+    private func displayedMonthEventCount() -> Int {
+        let cells = MonthGrid.cells(in: viewModel.visibleMonth, today: Date())
+        var ids = Set<String>()
+        for cell in cells where cell.isInDisplayedMonth {
+            for event in events(on: cell.date) {
+                ids.insert(event.id)
+            }
+        }
+        return ids.count
     }
 
     private func toggleCanvas() {
