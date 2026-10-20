@@ -121,18 +121,16 @@ struct BaseDayEventList: View {
                     .foregroundStyle(palette.secondary)
                     .frame(maxWidth: .infinity, alignment: .leading)
             } else {
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 8) {
-                        ForEach(events) { event in
-                            row(event)
-                        }
+                VStack(alignment: .leading, spacing: 8) {
+                    ForEach(events) { event in
+                        row(event)
                     }
                 }
-                .frame(maxHeight: 220)
             }
         }
         .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)
+        .layoutPriority(1)
     }
 
     private func row(_ event: CalendarEventInfo) -> some View {
@@ -195,8 +193,9 @@ struct BaseDayEventList: View {
                 .padding(.horizontal, 8)
                 .padding(.vertical, 4)
                 .background(selected ? palette.accent : palette.chip, in: RoundedRectangle(cornerRadius: 6))
+                .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.borderless)
     }
 }
 
