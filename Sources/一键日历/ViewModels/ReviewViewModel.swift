@@ -39,8 +39,19 @@ class ReviewViewModel: ObservableObject {
         didSet { session.detail = detail }
     }
     @Published var baseDate: Date = Date() {
-        didSet { session.baseDate = baseDate }
+        didSet {
+            let start = Calendar.current.startOfDay(for: baseDate)
+            if baseDate != start {
+                baseDate = start
+                return
+            }
+            session.baseDate = start
+            visibleMonth = Self.monthStart(for: start)
+        }
     }
+    @Published private(set) var visibleMonth: Date = ReviewViewModel.monthStart(for: Date())
+    @Published private(set) var eventsByDay: [Date: [CalendarEventInfo]] = [:]
+    @Published var customIntervalDraft: String = ""
     @Published var sharedDetailDraft: String = ""
     @Published var seriesTitleDraft: String = ""
     @Published var editingSharedDetailEntryID: UUID?
@@ -72,7 +83,12 @@ class ReviewViewModel: ObservableObject {
     @Published var displayedDayHits: [SearchHit] = []
     @Published var historySearchText: String = ""
     @Published var scheduleMode: ScheduleMode = .review {
-        didSet { session.scheduleMode = scheduleMode }
+        didSet {
+            session.scheduleMode = scheduleMode
+            if scheduleMode != oldValue {
+                updateReviewDates()
+            }
+        }
     }
     @Published var currentTheme: Theme = {
         let rawValue = UserDefaults.standard.string(forKey: "themeName") ?? Theme.light.rawValue
@@ -148,7 +164,10 @@ class ReviewViewModel: ObservableObject {
 
         title = session.title
         detail = session.detail
-        baseDate = session.baseDate
+        let start = Calendar.current.startOfDay(for: session.baseDate)
+        baseDate = start
+        session.baseDate = start
+        visibleMonth = Self.monthStart(for: start)
         reviewDates = session.reviewDates
         scheduleMode = session.scheduleMode
         reviewIntervals = session.reviewIntervals
@@ -156,6 +175,10 @@ class ReviewViewModel: ObservableObject {
         selectedCalendarIdentifier = session.selectedCalendarIdentifier
         pullSessionChrome()
         pullBrowseState()
+        updateReviewDates()
+        if authorizationStatus == .fullAccess {
+            loadVisibleWindow()
+        }
 
         if let manager = calendar as? CalendarManager {
             manager.$availableCalendars
@@ -200,6 +223,7 @@ class ReviewViewModel: ObservableObject {
                 self.pullSessionChrome()
                 if self.authorizationStatus == .fullAccess {
                     self.loadDisplayedDayEvents()
+                    self.loadVisibleWindow()
                 }
             }
         }
@@ -209,9 +233,13 @@ class ReviewViewModel: ObservableObject {
             if self.authorizationStatus == .notDetermined {
                 let granted = await self.session.requestAccessIfNeeded()
                 self.pullSessionChrome()
-                if granted { self.loadDisplayedDayEvents() }
+                if granted {
+                    self.loadDisplayedDayEvents()
+                    self.loadVisibleWindow()
+                }
             } else if self.authorizationStatus == .fullAccess {
                 self.loadDisplayedDayEvents()
+                self.loadVisibleWindow()
             }
         }
     }
@@ -292,7 +320,57 @@ class ReviewViewModel: ObservableObject {
         reviewDates = session.reviewDates
     }
 
+    func selectDay(_ day: Date) {
+        baseDate = day
+        updateReviewDates()
+        loadVisibleWindow()
+    }
+
+    func goToToday(now: Date = Date()) {
+        selectDay(now)
+    }
+
+    func shiftVisibleMonth(by months: Int) {
+        let calendar = Calendar.current
+        let day = calendar.component(.day, from: baseDate)
+        guard let shifted = calendar.date(byAdding: .month, value: months, to: visibleMonth) else { return }
+        let first = Self.monthStart(for: shifted)
+        guard let range = calendar.range(of: .day, in: .month, for: first) else { return }
+        let clamped = min(day, range.count)
+        guard let newDay = calendar.date(byAdding: .day, value: clamped - 1, to: first) else { return }
+        baseDate = newDay
+        updateReviewDates()
+        loadVisibleWindow()
+    }
+
+    private func loadVisibleWindow() {
+        let cells = MonthGrid.cells(in: visibleMonth, today: Date())
+        guard let first = cells.first?.date, let last = cells.last?.date else {
+            eventsByDay = [:]
+            return
+        }
+        guard let end = Calendar.current.date(byAdding: .day, value: 1, to: last) else {
+            eventsByDay = [:]
+            return
+        }
+        eventsByDay = CalendarEventGrouping.byDay(calendar.fetchEvents(from: first, to: end))
+    }
+
+    private static func monthStart(for day: Date) -> Date {
+        let calendar = Calendar.current
+        let parts = calendar.dateComponents([.year, .month], from: day)
+        return calendar.date(from: parts) ?? calendar.startOfDay(for: day)
+    }
+
     func createReviewSchedule() async {
+        if let failure = commitPendingIntervalDraft() {
+            presentSubmitError(Self.intervalDraftMessage(failure))
+            return
+        }
+        if title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            presentSubmitError(NSLocalizedString("empty_title_error", comment: ""))
+            return
+        }
         pushInputsToSession()
         await session.create()
         pullSessionChrome()
@@ -302,8 +380,51 @@ class ReviewViewModel: ObservableObject {
         if session.resultType == .success {
             refreshHistoryProjection()
             loadDisplayedDayEvents()
+            loadVisibleWindow()
         }
         scheduleResultDismissal()
+    }
+
+    private func commitPendingIntervalDraft() -> IntervalDraftFailure? {
+        guard let tokens = pendingIntervalTokens() else { return nil }
+        switch commitIntervalDraft(tokens) {
+        case .success:
+            return nil
+        case .failure(let failure):
+            return failure
+        }
+    }
+
+    private func pendingIntervalTokens() -> [String]? {
+        let trimmed = customIntervalDraft.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+        let separators = CharacterSet(charactersIn: ",，、").union(.whitespacesAndNewlines)
+        let tokens = trimmed.components(separatedBy: separators).filter { !$0.isEmpty }
+        guard !tokens.isEmpty else { return nil }
+        if case .success(let parsed) = IntervalRules.parseDraft(tokens), parsed == reviewIntervals {
+            return nil
+        }
+        return tokens
+    }
+
+    private func presentSubmitError(_ message: String) {
+        resultMessage = message
+        resultType = .error
+        session.resultMessage = message
+        session.resultType = .error
+    }
+
+    private static func intervalDraftMessage(_ failure: IntervalDraftFailure) -> String {
+        switch failure {
+        case .empty:
+            return NSLocalizedString("interval_min_error", comment: "")
+        case .tooMany:
+            return NSLocalizedString("interval_max_error", comment: "")
+        case .invalidAt(let index):
+            return String(format: NSLocalizedString("interval_invalid_at", comment: ""), "\(index)")
+        case .notIncreasingAt(let index):
+            return String(format: NSLocalizedString("interval_not_increasing_at", comment: ""), "\(index)")
+        }
     }
 
     func undoReviewSchedule() async {
@@ -404,8 +525,9 @@ class ReviewViewModel: ObservableObject {
     func selectHistoryEntry(_ entry: HistoryEntry) {
         session.selectHistoryEntry(entry)
         pullSessionChrome()
+        updateReviewDates()
         showHistory = false
-        selectedSegment = .create
+        loadVisibleWindow()
     }
 
     var todayCreatedEntries: [HistoryEntry] {
