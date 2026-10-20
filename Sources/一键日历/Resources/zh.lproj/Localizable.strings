@@ -271,3 +271,18 @@
 "occurrence_status_done" = "已完成";
 "occurrence_status_skipped" = "已跳过";
 "close" = "关闭";
+
+// Canvas
+"canvas_toggle" = "切换画布";
+"canvas_toggle_to_wide" = "切换到宽画布（⌥⌘L）";
+"canvas_toggle_to_compact" = "切换到紧凑画布（⌥⌘L）";
+"canvas_shortcut" = "⌥⌘L";
+"canvas_screen_too_narrow" = "屏幕宽度不足以显示宽画布";
+"canvas_editor_placeholder" = "编辑栏";
+"weekday_mon" = "一";
+"weekday_tue" = "二";
+"weekday_wed" = "三";
+"weekday_thu" = "四";
+"weekday_fri" = "五";
+"weekday_sat" = "六";
+"weekday_sun" = "日";

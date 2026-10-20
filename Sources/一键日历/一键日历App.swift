@@ -21,18 +21,25 @@ struct 一键日历App: App {
     
     var body: some Scene {
         Window(NSLocalizedString("app_name", comment: ""), id: "main") {
-            ContentView()
+            CalendarShellView()
                 .environmentObject(viewModel)
                 .preferredColorScheme(viewModel.currentTheme.colorScheme)
-                .frame(width: 400, height: 600)
         }
-        .windowResizability(.contentSize)
+        .defaultSize(
+            width: CanvasWindowSizing.compactContentSize.width,
+            height: CanvasWindowSizing.compactContentSize.height
+        )
+        .windowResizability(.contentMinSize)
         .commands {
             CommandMenu(NSLocalizedString("command_menu", comment: "")) {
                 Button(NSLocalizedString("create_review_schedule", comment: "")) {
                     NotificationCenter.default.post(name: .createReviewSchedule, object: nil)
                 }
                 .keyboardShortcut(KeyEquivalent.return, modifiers: .command)
+                Button(NSLocalizedString("canvas_toggle", comment: "")) {
+                    NotificationCenter.default.post(name: .toggleCanvas, object: nil)
+                }
+                .keyboardShortcut("l", modifiers: [.command, .option])
             }
         }
     }
