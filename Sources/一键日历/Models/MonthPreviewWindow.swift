@@ -4,6 +4,17 @@ enum MonthPreviewOverflow: Equatable {
     case none
     case nextMonth(Int)
     case outsideWindow(Int)
+
+    func localizedLine() -> String? {
+        switch self {
+        case .none:
+            return nil
+        case .nextMonth(let count):
+            return String(format: NSLocalizedString("month_overflow_next", comment: ""), count)
+        case .outsideWindow(let count):
+            return String(format: NSLocalizedString("month_overflow_outside", comment: ""), count)
+        }
+    }
 }
 
 enum MonthPreviewWindow {

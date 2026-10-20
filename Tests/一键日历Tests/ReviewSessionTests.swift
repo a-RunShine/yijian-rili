@@ -169,6 +169,101 @@ final class ReviewSessionTests: XCTestCase {
             CreateSuccessTestSupport.date(2026, 2, 7),
             CreateSuccessTestSupport.date(2026, 3, 2),
         ])
+        XCTAssertEqual(session.resultMessage, Self.writtenCountMessage(3))
+    }
+
+    func testSingleCreateSuccessCopyCountsTheWrittenEvent() async {
+        let (session, _, _) = CreateSuccessTestSupport.makeSession()
+        session.title = "单次"
+        session.baseDate = CreateSuccessTestSupport.date(2026, 4, 2)
+        session.scheduleMode = .single
+
+        await session.create()
+
+        XCTAssertEqual(session.resultType, .success)
+        XCTAssertEqual(session.resultMessage, Self.writtenCountMessage(1))
+        XCTAssertTrue(session.canUndo)
+    }
+
+    func testUndoSuccessCopyCountsDeletedEventsWithoutTitle() async {
+        let (session, _, _) = CreateSuccessTestSupport.makeSession()
+        session.title = "可撤销三件"
+        session.baseDate = CreateSuccessTestSupport.date(2026, 1, 31)
+        session.reviewIntervals = [3, 7, 30]
+        session.scheduleMode = .review
+        await session.create()
+
+        await session.undo()
+
+        XCTAssertFalse(session.canUndo)
+        XCTAssertEqual(session.resultType, .success)
+        XCTAssertEqual(session.resultMessage, Self.undoneCountMessage(3))
+    }
+
+    func testPartialDuplicateStaysWarningAndRecordsWhatWasWritten() async {
+        let calendar = InMemoryCalendarService(grantAccessByDefault: true)
+        let (session, history, weekly) = CreateSuccessTestSupport.makeSession(calendar: calendar)
+        let base = CreateSuccessTestSupport.date(2026, 1, 31)
+        let duplicateDay = CreateSuccessTestSupport.date(2026, 2, 3)
+        let freshDay = CreateSuccessTestSupport.date(2026, 2, 7)
+        session.title = "部分新写入"
+        session.baseDate = base
+        session.scheduleMode = .review
+        session.reviewIntervals = [3]
+        await session.create()
+        XCTAssertEqual(history.load().count, 1)
+        XCTAssertEqual(weekly.appendCallCount, 1)
+
+        session.title = "部分新写入"
+        session.reviewIntervals = [3, 7]
+        await session.create()
+
+        XCTAssertEqual(session.resultType, .warning)
+        XCTAssertEqual(
+            session.resultMessage,
+            String(format: NSLocalizedString("warning_message", comment: ""), duplicateDay.formattedChinese())
+        )
+        XCTAssertTrue(session.canUndo)
+        XCTAssertEqual(history.load().count, 2)
+        XCTAssertEqual(weekly.appendCallCount, 2)
+        XCTAssertEqual(calendar.fetchEvents(on: freshDay).map(\.title), ["部分新写入"])
+        let recorded = history.load().first { entry in
+            entry.reviewDates.contains { Calendar.current.isDate($0, inSameDayAs: freshDay) }
+        }
+        XCTAssertNotNil(recorded)
+
+        await session.undo()
+
+        XCTAssertFalse(session.canUndo)
+        XCTAssertEqual(session.resultMessage, Self.undoneCountMessage(2))
+        XCTAssertEqual(history.load().count, 1)
+        XCTAssertTrue(calendar.fetchEvents(on: freshDay).isEmpty)
+        XCTAssertFalse(calendar.fetchEvents(on: duplicateDay).isEmpty)
+    }
+
+    func testDuplicateOnlyCreateDoesNotEnableUndo() async throws {
+        let calendar = InMemoryCalendarService(grantAccessByDefault: true)
+        let base = CreateSuccessTestSupport.date(2026, 3, 1)
+        _ = try await calendar.createSingleEvent(title: "已有", date: base, calendarId: nil)
+        let (session, history, weekly) = CreateSuccessTestSupport.makeSession(calendar: calendar)
+        session.title = "已有"
+        session.baseDate = base
+        session.scheduleMode = .single
+
+        await session.create()
+
+        XCTAssertEqual(session.resultType, .warning)
+        XCTAssertFalse(session.canUndo)
+        XCTAssertTrue(history.load().isEmpty)
+        XCTAssertEqual(weekly.appendCallCount, 0)
+    }
+
+    private static func writtenCountMessage(_ count: Int) -> String {
+        String(format: NSLocalizedString("write_success_count", comment: ""), count)
+    }
+
+    private static func undoneCountMessage(_ count: Int) -> String {
+        String(format: NSLocalizedString("undo_success_count", comment: ""), count)
     }
 
     func testCreateRejectsEmptyAndLongTitle() async {

@@ -479,14 +479,19 @@ final class ReviewSession {
                 let dupDates = createResult.duplicates.map { $0.formattedChinese() }.joined(separator: "、")
                 resultMessage = String(format: NSLocalizedString("warning_message", comment: ""), dupDates)
                 resultType = .warning
-            } else {
-                if scheduleMode == .single {
-                    let dateString = baseDate.formattedChinese()
-                    resultMessage = String(format: NSLocalizedString("single_success_message", comment: ""), dateString)
-                } else {
-                    let createdDates = createResult.created.map { $0.formattedChinese() }.joined(separator: "、")
-                    resultMessage = String(format: NSLocalizedString("success_message", comment: ""), createdDates)
+                let written = Self.datesWrittenDespiteDuplicates(createResult)
+                if !written.isEmpty {
+                    onCreateSuccess(
+                        trimmed: trimmedTitle,
+                        created: written,
+                        sharedDetail: detailForWrite
+                    )
                 }
+            } else {
+                resultMessage = String(
+                    format: NSLocalizedString("write_success_count", comment: ""),
+                    createResult.created.count
+                )
                 resultType = .success
                 onCreateSuccess(
                     trimmed: trimmedTitle,
@@ -502,19 +507,13 @@ final class ReviewSession {
 
     func undo() async {
         let undo = await calendar.undoLastCreation()
-        let undoneTitle = lastCreatedTitle ?? ""
         let recordedID = lastRecordedHistoryEntryID
 
         if undo.success {
-            if undoneTitle.isEmpty {
-                resultMessage = String(format: NSLocalizedString("undo_success", comment: ""), "\(undo.deletedCount)")
-            } else {
-                resultMessage = String(
-                    format: NSLocalizedString("undo_success_with_title", comment: ""),
-                    undoneTitle,
-                    "\(undo.deletedCount)"
-                )
-            }
+            resultMessage = String(
+                format: NSLocalizedString("undo_success_count", comment: ""),
+                undo.deletedCount
+            )
             resultType = .success
         } else {
             resultMessage = String(format: NSLocalizedString("undo_partial", comment: ""), "\(undo.alreadyDeletedCount)")
@@ -552,6 +551,12 @@ final class ReviewSession {
         title = ""
         detail = ""
         updateReviewDates()
+    }
+
+    private static func datesWrittenDespiteDuplicates(_ result: CreateEventsResult) -> [Date] {
+        result.created.filter { day in
+            !result.duplicates.contains { Calendar.current.isDate($0, inSameDayAs: day) }
+        }
     }
 
     private static func optionalDetail(from raw: String) -> String? {

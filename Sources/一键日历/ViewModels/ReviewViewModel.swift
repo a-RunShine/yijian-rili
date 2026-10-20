@@ -377,7 +377,7 @@ class ReviewViewModel: ObservableObject {
         if session.consumeHapticFlag() {
             NSHapticFeedbackManager.defaultPerformer.perform(.generic, performanceTime: .now)
         }
-        if session.resultType == .success {
+        if session.resultType == .success || session.resultType == .warning {
             refreshHistoryProjection()
             loadDisplayedDayEvents()
             loadVisibleWindow()

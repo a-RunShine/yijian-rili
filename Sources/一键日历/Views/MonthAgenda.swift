@@ -43,7 +43,7 @@ struct MonthDayAgenda: View {
 @MainActor
 struct MonthCompactFooter: View {
     let monthCount: Int
-    let selectedDate: Date
+    let baseDate: Date
     let dayCount: Int
     let palette: ThemePalette
     let createReview: () -> Void
@@ -54,7 +54,7 @@ struct MonthCompactFooter: View {
                 Text(String(format: NSLocalizedString("month_footer_month_count", comment: ""), monthCount))
                     .lineLimit(1)
                 Spacer(minLength: 8)
-                Text(MonthDayTitle.string(from: selectedDate))
+                Text(MonthDayTitle.string(from: baseDate))
                     .lineLimit(1)
                 Text(String(format: NSLocalizedString("month_footer_day_count", comment: ""), dayCount))
                     .lineLimit(1)
@@ -93,14 +93,110 @@ struct MonthPreviewOverflowLine: View {
     }
 
     private var copy: String {
-        switch overflow {
-        case .none:
-            return ""
-        case .nextMonth(let count):
-            return String(format: NSLocalizedString("month_overflow_next", comment: ""), count)
-        case .outsideWindow(let count):
-            return String(format: NSLocalizedString("month_overflow_outside", comment: ""), count)
+        overflow.localizedLine() ?? ""
+    }
+}
+
+@MainActor
+struct BaseDayEventList: View {
+    @EnvironmentObject private var viewModel: ReviewViewModel
+    let date: Date
+    let events: [CalendarEventInfo]
+    let palette: ThemePalette
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 8) {
+                Text(MonthDayTitle.string(from: date))
+                    .lineLimit(1)
+                Spacer(minLength: 8)
+                Text(String(format: NSLocalizedString("month_agenda_count", comment: ""), events.count))
+                    .lineLimit(1)
+            }
+            .font(.caption.monospacedDigit())
+            .foregroundStyle(palette.secondary)
+            if events.isEmpty {
+                Text(NSLocalizedString("month_agenda_empty", comment: ""))
+                    .font(.callout)
+                    .foregroundStyle(palette.secondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            } else {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 8) {
+                        ForEach(events) { event in
+                            row(event)
+                        }
+                    }
+                }
+                .frame(maxHeight: 220)
+            }
         }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func row(_ event: CalendarEventInfo) -> some View {
+        let status = viewModel.occurrenceStatus(for: event.id)
+        return VStack(alignment: .leading, spacing: 6) {
+            Button {
+                viewModel.beginSharedDetailEditFromBrowse(event)
+            } label: {
+                Text(event.title.isEmpty ? NSLocalizedString("untitled", comment: "") : event.title)
+                    .font(.callout)
+                    .foregroundStyle(palette.primary)
+                    .lineLimit(2)
+                    .multilineTextAlignment(.leading)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .buttonStyle(.plain)
+            HStack(spacing: 6) {
+                statusButton(
+                    title: NSLocalizedString("occurrence_mark_done", comment: ""),
+                    selected: status == .done
+                ) {
+                    viewModel.setOccurrenceStatus(
+                        eventId: event.id,
+                        status: status == .done ? .unmarked : .done
+                    )
+                }
+                statusButton(
+                    title: NSLocalizedString("occurrence_mark_skipped", comment: ""),
+                    selected: status == .skipped
+                ) {
+                    viewModel.setOccurrenceStatus(
+                        eventId: event.id,
+                        status: status == .skipped ? .unmarked : .skipped
+                    )
+                }
+                if status != .unmarked {
+                    Text(status == .done
+                         ? NSLocalizedString("occurrence_status_done", comment: "")
+                         : NSLocalizedString("occurrence_status_skipped", comment: ""))
+                        .font(.caption2)
+                        .foregroundStyle(palette.secondary)
+                        .lineLimit(1)
+                }
+            }
+        }
+        .padding(8)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(palette.background, in: RoundedRectangle(cornerRadius: 8))
+    }
+
+    private func statusButton(
+        title: String,
+        selected: Bool,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            Text(title)
+                .font(.caption.weight(.medium))
+                .foregroundStyle(selected ? palette.onAccent : palette.primary)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(selected ? palette.accent : palette.chip, in: RoundedRectangle(cornerRadius: 6))
+        }
+        .buttonStyle(.plain)
     }
 }
 

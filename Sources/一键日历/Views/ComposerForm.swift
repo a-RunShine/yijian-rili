@@ -304,22 +304,11 @@ struct ComposerForm: View {
             Text(countLine("composer_preview_summary", viewModel.reviewDates.count))
                 .font(.callout.monospacedDigit())
                 .foregroundStyle(palette.primary)
-            if let line = overflowLine(overflow) {
+            if let line = overflow.localizedLine() {
                 Text(line)
                     .font(.caption.monospacedDigit())
                     .foregroundStyle(palette.secondary)
             }
-        }
-    }
-
-    private func overflowLine(_ overflow: MonthPreviewOverflow) -> String? {
-        switch overflow {
-        case .none:
-            return nil
-        case .nextMonth(let count):
-            return String(format: NSLocalizedString("month_overflow_next", comment: ""), count)
-        case .outsideWindow(let count):
-            return String(format: NSLocalizedString("month_overflow_outside", comment: ""), count)
         }
     }
 

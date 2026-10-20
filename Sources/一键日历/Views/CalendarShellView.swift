@@ -11,7 +11,7 @@ struct CalendarShellView: View {
     @State private var composerOpen = false
     @State private var menuSubmitPending = false
     @State private var contentWidth: CGFloat = CanvasWindowSizing.compactContentSize.width
-    @FocusState private var monthGridFocused: Bool
+    @State private var arrowKeyMonitor: Any?
 
     private let weekdayKeys = [
         "weekday_mon",
@@ -80,6 +80,8 @@ struct CalendarShellView: View {
             dismissTopPanel()
         }
         .onExitCommand(perform: canDismissWithEscape ? { dismissTopPanel() } : nil)
+        .onAppear(perform: installArrowKeyMonitor)
+        .onDisappear(perform: removeArrowKeyMonitor)
         .onChange(of: viewModel.resultMessage) { _, _ in
             finishMenuSubmitIfNeeded()
         }
@@ -148,6 +150,14 @@ struct CalendarShellView: View {
         VStack(spacing: 0) {
             ComposerForm(density: .wide, onWillSubmit: noteComposerSubmit)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
+            Rectangle()
+                .fill(palette.separator)
+                .frame(height: 1)
+            BaseDayEventList(
+                date: viewModel.baseDate,
+                events: events(on: viewModel.baseDate),
+                palette: palette
+            )
             Rectangle()
                 .fill(palette.separator)
                 .frame(height: 1)
@@ -233,17 +243,28 @@ struct CalendarShellView: View {
     private func finishMenuSubmitIfNeeded() {
         guard menuSubmitPending else { return }
         guard viewModel.resultType != nil else { return }
-        let succeeded = viewModel.resultType == .success
+        let close = shouldCloseComposerAfterSubmit
         menuSubmitPending = false
-        guard succeeded, CanvasBreakpoint.mode(forWidth: contentWidth) == .compact else { return }
+        guard close, CanvasBreakpoint.mode(forWidth: contentWidth) == .compact else { return }
         setComposerOpen(false)
+    }
+
+    private var shouldCloseComposerAfterSubmit: Bool {
+        switch viewModel.resultType {
+        case .success:
+            return true
+        case .warning:
+            return viewModel.canUndo
+        case .error, .none:
+            return false
+        }
     }
 
     private func finishMenuSubmitIfTitleCleared(from oldTitle: String, to newTitle: String) {
         guard menuSubmitPending else { return }
         let wasFilled = !oldTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         let nowEmpty = newTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-        guard wasFilled, nowEmpty, viewModel.resultType == .success else { return }
+        guard wasFilled, nowEmpty, shouldCloseComposerAfterSubmit else { return }
         menuSubmitPending = false
         guard CanvasBreakpoint.mode(forWidth: contentWidth) == .compact else { return }
         setComposerOpen(false)
@@ -292,7 +313,7 @@ struct CalendarShellView: View {
                     horizontalSeparator
                     MonthCompactFooter(
                         monthCount: displayedMonthEventCount(),
-                        selectedDate: viewModel.baseDate,
+                        baseDate: viewModel.baseDate,
                         dayCount: selectedEvents.count,
                         palette: palette
                     ) {
@@ -457,8 +478,7 @@ struct CalendarShellView: View {
                         events: events(on: cell.date),
                         previewOrdinal: ordinals[cell.date],
                         rowHeight: rowHeight,
-                        palette: palette,
-                        onMonthGridFocus: { monthGridFocused = $0 }
+                        palette: palette
                     )
                 }
             }
@@ -466,12 +486,6 @@ struct CalendarShellView: View {
             .padding(.horizontal, 12)
             .padding(.bottom, 12)
             .frame(width: proxy.size.width, height: proxy.size.height, alignment: .top)
-        }
-        .focusable()
-        .focused($monthGridFocused)
-        .focusEffectDisabled()
-        .onMoveCommand { direction in
-            moveSelectedDay(direction)
         }
     }
 
@@ -518,27 +532,19 @@ struct CalendarShellView: View {
         }
     }
 
-    private func moveSelectedDay(_ direction: MoveCommandDirection) {
-        guard monthGridFocused, !textInsertionIsFocused else { return }
-        let step: DayNavigationStep
-        switch direction {
-        case .left:
-            step = .previousDay
-        case .right:
-            step = .nextDay
-        case .up:
-            step = .previousWeek
-        case .down:
-            step = .nextWeek
-        default:
-            return
+    private func installArrowKeyMonitor() {
+        guard arrowKeyMonitor == nil else { return }
+        let relay = ArrowKeyRelay(viewModel: viewModel)
+        arrowKeyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
+            relay.consume(event)
         }
-        viewModel.selectDay(DayNavigation.day(from: viewModel.baseDate, step: step))
     }
 
-    private var textInsertionIsFocused: Bool {
-        guard let responder = NSApp.keyWindow?.firstResponder else { return false }
-        return responder is NSTextView || responder is NSTextField
+    private func removeArrowKeyMonitor() {
+        if let arrowKeyMonitor {
+            NSEvent.removeMonitor(arrowKeyMonitor)
+        }
+        arrowKeyMonitor = nil
     }
 
     private func toggleCanvas() {
@@ -637,6 +643,47 @@ private struct CalendarShellPresentations: ViewModifier {
             .onChange(of: viewModel.scheduleMode) { _, _ in
                 viewModel.updateReviewDates()
             }
+    }
+}
+
+private final class ArrowKeyRelay: @unchecked Sendable {
+    private let viewModel: ReviewViewModel
+
+    init(viewModel: ReviewViewModel) {
+        self.viewModel = viewModel
+    }
+
+    func consume(_ event: NSEvent) -> NSEvent? {
+        guard let step = Self.step(for: event) else { return event }
+        let model = viewModel
+        let focused = MainActor.assumeIsolated { Self.textInsertionIsFocused }
+        guard !focused else { return event }
+        MainActor.assumeIsolated {
+            model.selectDay(DayNavigation.day(from: model.baseDate, step: step))
+        }
+        return nil
+    }
+
+    private static func step(for event: NSEvent) -> DayNavigationStep? {
+        guard event.modifierFlags.intersection([.command, .option, .control]).isEmpty else { return nil }
+        switch event.keyCode {
+        case 123:
+            return .previousDay
+        case 124:
+            return .nextDay
+        case 126:
+            return .previousWeek
+        case 125:
+            return .nextWeek
+        default:
+            return nil
+        }
+    }
+
+    @MainActor
+    private static var textInsertionIsFocused: Bool {
+        guard let responder = NSApp.keyWindow?.firstResponder else { return false }
+        return responder is NSTextView || responder is NSTextField
     }
 }
 

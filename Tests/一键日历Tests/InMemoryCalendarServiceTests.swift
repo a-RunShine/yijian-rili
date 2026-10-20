@@ -303,6 +303,46 @@ final class ReviewViewModelCalendarInjectionTests: XCTestCase {
         XCTAssertEqual(calendar.lastCreatedEventIdentifiers.count, 3)
         XCTAssertFalse(viewModel.historyEntries.isEmpty)
         XCTAssertEqual(viewModel.historyEntries.first?.title, "注入日历 seam")
+        XCTAssertEqual(
+            viewModel.resultMessage,
+            String(format: NSLocalizedString("write_success_count", comment: ""), 3)
+        )
+    }
+
+    func testWarningWithPartialCreateReloadsVisibleWindowAndKeepsUndo() async {
+        let calendar = InMemoryCalendarService(grantAccessByDefault: true)
+        let viewModel = ReviewViewModel(calendar: calendar)
+        let base = date(2026, 10, 20)
+        let duplicateDay = date(2026, 10, 23)
+        let freshDay = date(2026, 10, 27)
+        viewModel.selectDay(base)
+        viewModel.title = "部分写入"
+        viewModel.scheduleMode = .review
+        viewModel.reviewIntervals = [3]
+        viewModel.updateReviewDates()
+
+        await viewModel.createReviewSchedule()
+        XCTAssertEqual(viewModel.resultType, .success)
+
+        viewModel.title = "部分写入"
+        viewModel.reviewIntervals = [3, 7]
+        viewModel.updateReviewDates()
+        await viewModel.createReviewSchedule()
+
+        XCTAssertEqual(viewModel.resultType, .warning)
+        XCTAssertEqual(
+            viewModel.resultMessage,
+            String(format: NSLocalizedString("warning_message", comment: ""), duplicateDay.formattedChinese())
+        )
+        XCTAssertTrue(viewModel.canUndo)
+        XCTAssertEqual(viewModel.eventsByDay[freshDay]?.map(\.title) ?? [], ["部分写入"])
+        XCTAssertEqual(viewModel.historyEntries.count, 2)
+        XCTAssertEqual(
+            viewModel.weeklyReviewViewModel.weeklyEntries.filter {
+                $0.title == "部分写入" && !$0.isPreOccupiedNextWeek
+            }.count,
+            2
+        )
     }
 
     func testDefaultSegmentIsCreate() {
