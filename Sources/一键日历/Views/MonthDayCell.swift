@@ -34,6 +34,7 @@ struct MonthDayCell: View {
             .contentShape(RoundedRectangle(cornerRadius: cornerRadius))
             .onTapGesture(count: 1, perform: selectDay)
             .onHover { isHovered = $0 }
+            .pointingHandOnHover(!isSelected)
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(accessibilityLabel)
             .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)

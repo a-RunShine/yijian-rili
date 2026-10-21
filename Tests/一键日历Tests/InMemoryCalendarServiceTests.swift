@@ -940,6 +940,58 @@ final class ReviewViewModelCalendarInjectionTests: XCTestCase {
         XCTAssertEqual(viewModel.sharedDetailDraft, "完成态仍可改")
     }
 
+    func testMarkingAnOccurrenceWithoutSeriesRecordSurfacesUnavailableFeedback() throws {
+        let calendar = InMemoryCalendarService(grantAccessByDefault: true, events: [
+            CalendarEventInfo(
+                id: "legacy-no-ids",
+                title: "旧复习",
+                start: date(2026, 10, 20),
+                end: date(2026, 10, 21),
+                isAllDay: true,
+                notes: nil,
+                calendarId: "outlook-default",
+                calendarTitle: "日历",
+                calendarSourceTitle: "Outlook",
+                colorHex: "#0078D4"
+            ),
+        ])
+        let viewModel = ReviewViewModel(calendar: calendar)
+        viewModel.selectDay(date(2026, 10, 20))
+        viewModel.resultMessage = nil
+        viewModel.resultType = nil
+
+        XCTAssertFalse(viewModel.canMarkOccurrence(eventId: "legacy-no-ids"))
+
+        viewModel.setOccurrenceStatus(eventId: "legacy-no-ids", status: .done)
+
+        XCTAssertEqual(viewModel.occurrenceStatus(for: "legacy-no-ids"), OccurrenceStatus.unmarked)
+        XCTAssertEqual(viewModel.resultType, .warning)
+        XCTAssertEqual(
+            viewModel.resultMessage,
+            NSLocalizedString("occurrence_mark_unavailable", comment: "")
+        )
+    }
+
+    func testMarkingACreatedReviewOccurrenceDoesNotWarn() async throws {
+        let calendar = InMemoryCalendarService(grantAccessByDefault: true)
+        let viewModel = ReviewViewModel(calendar: calendar)
+        viewModel.title = "可标记-\(UUID().uuidString.prefix(8))"
+        viewModel.baseDate = date(2026, 10, 20)
+        viewModel.scheduleMode = .review
+        viewModel.reviewIntervals = [3, 7, 30]
+        viewModel.updateReviewDates()
+        await viewModel.createReviewSchedule()
+
+        let entry = try XCTUnwrap(viewModel.historyEntries.first)
+        let eventId = try XCTUnwrap(entry.createdEventIdentifiers.first)
+        XCTAssertTrue(viewModel.canMarkOccurrence(eventId: eventId))
+
+        viewModel.setOccurrenceStatus(eventId: eventId, status: .done)
+
+        XCTAssertEqual(viewModel.occurrenceStatus(for: eventId), .done)
+        XCTAssertNotEqual(viewModel.resultType, .warning)
+    }
+
     func testWideCanvasRowResolvesDoneOccurrenceThroughProjectedHitAndOpensSharedDetail() async throws {
         let calendar = InMemoryCalendarService(grantAccessByDefault: true)
         let viewModel = ReviewViewModel(calendar: calendar)
@@ -1004,6 +1056,58 @@ final class ReviewViewModelCalendarInjectionTests: XCTestCase {
         XCTAssertEqual(hit.members.count, 3)
         XCTAssertTrue(hit.needsSelectiveDelete)
         XCTAssertEqual(hit.id, outsideMember.id)
+    }
+
+    func testTrashRoutingKeepsSeriesIdentityWhenEventIsOutsideTheLoadedWindow() async throws {
+        let calendar = InMemoryCalendarService(grantAccessByDefault: true)
+        let viewModel = ReviewViewModel(calendar: calendar)
+        let marker = "trash-routing-\(UUID().uuidString.prefix(8))"
+        viewModel.title = marker
+        viewModel.baseDate = date(2026, 10, 20)
+        viewModel.scheduleMode = .review
+        viewModel.reviewIntervals = [3, 7, 30]
+        viewModel.updateReviewDates()
+        await viewModel.createReviewSchedule()
+
+        let batch = try XCTUnwrap(viewModel.historyEntries.first(where: { $0.title == marker }))
+        let outsideDay = date(2026, 11, 19)
+        XCTAssertNil(viewModel.eventsByDay[outsideDay])
+        let outsideMember = try XCTUnwrap(
+            batch.createdEventIdentifiers
+                .compactMap { calendar.event(withId: $0) }
+                .first(where: { Calendar.current.isDate($0.start, inSameDayAs: outsideDay) })
+        )
+
+        let hit = viewModel.projectedHit(for: outsideMember, on: outsideDay)
+
+        XCTAssertTrue(hit.isSeries)
+        XCTAssertEqual(hit.kind, .series(historyEntryID: batch.id))
+        XCTAssertEqual(hit.members.count, 3)
+        XCTAssertTrue(hit.needsSelectiveDelete)
+    }
+
+    func testProjectedHitForASingleEventStaysSingleAndDeletable() throws {
+        let calendar = InMemoryCalendarService(grantAccessByDefault: true)
+        let viewModel = ReviewViewModel(calendar: calendar)
+        let holiday = CalendarEventInfo(
+            id: "holiday-trash-\(UUID().uuidString.prefix(8))",
+            title: "节假日",
+            start: date(2026, 10, 1),
+            end: date(2026, 10, 1),
+            isAllDay: true,
+            notes: nil,
+            calendarId: nil,
+            calendarTitle: "中国大陆节假日",
+            calendarSourceTitle: nil,
+            colorHex: nil
+        )
+
+        let hit = viewModel.projectedHit(for: holiday, on: date(2026, 10, 1))
+
+        XCTAssertFalse(hit.isSeries)
+        XCTAssertEqual(hit.kind, .single)
+        XCTAssertEqual(hit.members.count, 1)
+        XCTAssertFalse(hit.needsSelectiveDelete)
     }
 
     func testProjectedHitFallsBackToSingleForAnUnrelatedEvent() throws {

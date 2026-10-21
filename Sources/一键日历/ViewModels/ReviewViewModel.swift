@@ -324,6 +324,16 @@ class ReviewViewModel: ObservableObject {
         return projectedDayHits([event]).first
     }
 
+    func projectedHit(for event: CalendarEventInfo, on day: Date) -> SearchHit {
+        _ = historyRevision
+        let start = Calendar.current.startOfDay(for: day)
+        let resolved = (eventsByDay[start] ?? []).first(where: { $0.id == event.id })
+            ?? calendar.event(withId: event.id)
+            ?? event
+        return projectedDayHits([resolved]).first
+            ?? SearchHit(id: resolved.id, kind: .single, title: resolved.title, members: [resolved])
+    }
+
     private func pushInputsToSession() {
         session.title = title
         session.detail = detail
@@ -566,9 +576,21 @@ class ReviewViewModel: ObservableObject {
     }
 
     func setOccurrenceStatus(eventId: String, status: OccurrenceStatus) {
+        guard canMarkOccurrence(eventId: eventId) else {
+            resultMessage = NSLocalizedString("occurrence_mark_unavailable", comment: "")
+            resultType = .warning
+            session.resultMessage = resultMessage
+            session.resultType = resultType
+            scheduleResultDismissal()
+            return
+        }
         session.setOccurrenceStatus(eventId: eventId, status: status)
         occurrenceRevision &+= 1
         weeklyReviewViewModel.refreshOccurrenceMaterials()
+    }
+
+    func canMarkOccurrence(eventId: String) -> Bool {
+        session.canMarkOccurrence(eventId: eventId)
     }
 
     func selectHistoryEntry(_ entry: HistoryEntry) {

@@ -95,6 +95,10 @@ final class ReviewSession {
         occurrenceStatuses.setStatus(status, for: eventId)
     }
 
+    func canMarkOccurrence(eventId: String) -> Bool {
+        isReviewSeriesEvent(eventId)
+    }
+
     func occurrenceMaterials(weekStart: Date, weekEnd: Date) -> [OccurrenceReviewMaterial] {
         let marked = occurrenceStatuses.markedEntries()
         guard !marked.isEmpty else { return [] }

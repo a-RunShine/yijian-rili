@@ -124,14 +124,11 @@ struct BaseDayEventList: View {
                     .foregroundStyle(palette.secondary)
                     .frame(maxWidth: .infinity, alignment: .leading)
             } else {
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 8) {
-                        ForEach(events) { event in
-                            row(event)
-                        }
+                VStack(alignment: .leading, spacing: 8) {
+                    ForEach(events) { event in
+                        row(event)
                     }
                 }
-                .frame(maxHeight: 220)
             }
         }
         .padding(12)
@@ -159,16 +156,16 @@ struct BaseDayEventList: View {
         }
         .padding(8)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background {
-            Button {
-                viewModel.beginSharedDetailEditFromBrowse(event, on: date)
-            } label: {
-                shape
-                    .fill(palette.background)
-                    .contentShape(shape)
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel(title)
+        .background(shape.fill(palette.background))
+        .contentShape(shape)
+        .onTapGesture {
+            viewModel.beginSharedDetailEditFromBrowse(event, on: date)
+        }
+        .pointingHandOnHover()
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel(title)
+        .accessibilityAction {
+            viewModel.beginSharedDetailEditFromBrowse(event, on: date)
         }
     }
 
@@ -188,8 +185,7 @@ struct BaseDayEventList: View {
     }
 
     private func requestDelete(_ event: CalendarEventInfo) {
-        guard let hit = viewModel.projectedHit(forEventId: event.id, on: date) else { return }
-        deleteFlow.request(hit, in: viewModel)
+        deleteFlow.request(viewModel.projectedHit(for: event, on: date), in: viewModel)
     }
 
     private func occurrenceStatusRow(
