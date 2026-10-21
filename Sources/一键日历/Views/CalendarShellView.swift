@@ -304,9 +304,10 @@ struct CalendarShellView: View {
                 weekdayHeader
                 monthGrid(mode: mode)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
-                if overflow != .none {
-                    MonthPreviewOverflowLine(overflow: overflow, palette: palette)
-                }
+                MonthPreviewOverflowLine(
+                    overflow: viewModel.scheduleMode == .review ? overflow : .none,
+                    palette: palette
+                )
                 if mode == .compact {
                     horizontalSeparator
                     MonthDayAgenda(date: viewModel.baseDate, events: selectedEvents, palette: palette)
@@ -483,10 +484,50 @@ struct CalendarShellView: View {
                 }
             }
             .frame(width: gridWidth, height: gridHeight, alignment: .top)
+            .contentShape(Rectangle())
+            .simultaneousGesture(monthDrag(cells: cells, gridWidth: gridWidth, rowHeight: rowHeight, spacing: spacing))
             .padding(.horizontal, 12)
             .padding(.bottom, 12)
             .frame(width: proxy.size.width, height: proxy.size.height, alignment: .top)
         }
+    }
+
+    private func monthDrag(
+        cells: [MonthCell],
+        gridWidth: CGFloat,
+        rowHeight: CGFloat,
+        spacing: CGFloat
+    ) -> some Gesture {
+        DragGesture(minimumDistance: 6)
+            .onChanged { value in
+                guard let day = day(
+                    at: value.location,
+                    cells: cells,
+                    gridWidth: gridWidth,
+                    rowHeight: rowHeight,
+                    spacing: spacing
+                ) else { return }
+                viewModel.moveSelection(to: day)
+            }
+    }
+
+    private func day(
+        at location: CGPoint,
+        cells: [MonthCell],
+        gridWidth: CGFloat,
+        rowHeight: CGFloat,
+        spacing: CGFloat
+    ) -> Date? {
+        let columnWidth = (gridWidth - spacing * 6) / 7
+        let strideX = columnWidth + spacing
+        let strideY = rowHeight + spacing
+        guard strideX > 0, strideY > 0 else { return nil }
+        let column = Int(location.x / strideX)
+        let row = Int(location.y / strideY)
+        guard column >= 0, column < 7, row >= 0, row < 6 else { return nil }
+        let index = row * 7 + column
+        guard cells.indices.contains(index) else { return nil }
+        return cells[index].date
     }
 
     private func events(on day: Date) -> [CalendarEventInfo] {

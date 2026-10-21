@@ -931,6 +931,46 @@ final class OccurrenceStatusTests: XCTestCase {
         defaults.removePersistentDomain(forName: suiteName)
     }
 
+    func testOccurrenceStatusToggleAndMutualExclusion() async throws {
+        let suiteName = "occurrence-toggle-\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defaults.removePersistentDomain(forName: suiteName)
+
+        let calendar = InMemoryCalendarService(grantAccessByDefault: true)
+        let history = HistoryStore(defaults: defaults)
+        let weekly = WeeklyReviewViewModel(defaults: defaults)
+        let statuses = OccurrenceStatusStore(defaults: defaults)
+        let outcomes = CreateSuccessOutcomes(history: history, weekly: weekly)
+        let session = ReviewSession(calendar: calendar, outcomes: outcomes, occurrenceStatuses: statuses)
+
+        session.title = "互斥完成态"
+        session.baseDate = Date()
+        session.scheduleMode = .review
+        session.reviewIntervals = [3, 7, 30]
+        session.updateReviewDates()
+        await session.create()
+
+        let eventId = try XCTUnwrap(history.load().first?.createdEventIdentifiers.first)
+
+        session.setOccurrenceStatus(eventId: eventId, status: .done)
+        XCTAssertEqual(session.occurrenceStatus(for: eventId), .done)
+        session.setOccurrenceStatus(eventId: eventId, status: .unmarked)
+        XCTAssertEqual(session.occurrenceStatus(for: eventId), .unmarked)
+
+        session.setOccurrenceStatus(eventId: eventId, status: .skipped)
+        XCTAssertEqual(session.occurrenceStatus(for: eventId), .skipped)
+        session.setOccurrenceStatus(eventId: eventId, status: .unmarked)
+        XCTAssertEqual(session.occurrenceStatus(for: eventId), .unmarked)
+
+        session.setOccurrenceStatus(eventId: eventId, status: .done)
+        session.setOccurrenceStatus(eventId: eventId, status: .skipped)
+        XCTAssertEqual(session.occurrenceStatus(for: eventId), .skipped)
+        session.setOccurrenceStatus(eventId: eventId, status: .done)
+        XCTAssertEqual(session.occurrenceStatus(for: eventId), .done)
+
+        defaults.removePersistentDomain(forName: suiteName)
+    }
+
     func testOccurrenceStatusIgnoresNonReviewEventsAndMaterials() async throws {
         let suiteName = "occurrence-scope-\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suiteName)!

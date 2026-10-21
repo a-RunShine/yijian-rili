@@ -46,9 +46,14 @@ class ReviewViewModel: ObservableObject {
                 return
             }
             session.baseDate = start
-            visibleMonth = Self.monthStart(for: start)
+            if !keepVisibleMonth {
+                visibleMonth = Self.monthStart(for: start)
+            }
         }
     }
+    private var keepVisibleMonth = false
+    private var loadedWindowStart: Date?
+    private var loadedWindowEnd: Date?
     @Published private(set) var visibleMonth: Date = ReviewViewModel.monthStart(for: Date())
     @Published private(set) var eventsByDay: [Date: [CalendarEventInfo]] = [:]
     @Published var customIntervalDraft: String = ""
@@ -323,7 +328,16 @@ class ReviewViewModel: ObservableObject {
     func selectDay(_ day: Date) {
         baseDate = day
         updateReviewDates()
-        loadVisibleWindow()
+        loadVisibleWindowIfNeeded()
+    }
+
+    func moveSelection(to day: Date) {
+        let start = Calendar.current.startOfDay(for: day)
+        guard start != baseDate else { return }
+        keepVisibleMonth = true
+        baseDate = start
+        keepVisibleMonth = false
+        updateReviewDates()
     }
 
     func goToToday(now: Date = Date()) {
@@ -332,28 +346,37 @@ class ReviewViewModel: ObservableObject {
 
     func shiftVisibleMonth(by months: Int) {
         let calendar = Calendar.current
-        let day = calendar.component(.day, from: baseDate)
         guard let shifted = calendar.date(byAdding: .month, value: months, to: visibleMonth) else { return }
-        let first = Self.monthStart(for: shifted)
-        guard let range = calendar.range(of: .day, in: .month, for: first) else { return }
-        let clamped = min(day, range.count)
-        guard let newDay = calendar.date(byAdding: .day, value: clamped - 1, to: first) else { return }
-        baseDate = newDay
-        updateReviewDates()
+        visibleMonth = Self.monthStart(for: shifted)
         loadVisibleWindow()
     }
 
     private func loadVisibleWindow() {
+        loadedWindowStart = nil
+        loadedWindowEnd = nil
+        loadVisibleWindowIfNeeded()
+    }
+
+    private func loadVisibleWindowIfNeeded() {
         let cells = MonthGrid.cells(in: visibleMonth, today: Date())
         guard let first = cells.first?.date, let last = cells.last?.date else {
             eventsByDay = [:]
+            loadedWindowStart = nil
+            loadedWindowEnd = nil
             return
         }
         guard let end = Calendar.current.date(byAdding: .day, value: 1, to: last) else {
             eventsByDay = [:]
+            loadedWindowStart = nil
+            loadedWindowEnd = nil
+            return
+        }
+        if loadedWindowStart == first, loadedWindowEnd == end {
             return
         }
         eventsByDay = CalendarEventGrouping.byDay(calendar.fetchEvents(from: first, to: end))
+        loadedWindowStart = first
+        loadedWindowEnd = end
     }
 
     private static func monthStart(for day: Date) -> Date {
@@ -529,7 +552,7 @@ class ReviewViewModel: ObservableObject {
         pullSessionChrome()
         updateReviewDates()
         showHistory = false
-        loadVisibleWindow()
+        loadVisibleWindowIfNeeded()
     }
 
     var todayCreatedEntries: [HistoryEntry] {
