@@ -107,6 +107,8 @@ struct BaseDayEventList: View {
     let palette: ThemePalette
     @StateObject private var deleteFlow = SearchHitDeleteFlow()
 
+    private let dayListMaxHeight: CGFloat = 220
+
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 8) {
@@ -124,11 +126,14 @@ struct BaseDayEventList: View {
                     .foregroundStyle(palette.secondary)
                     .frame(maxWidth: .infinity, alignment: .leading)
             } else {
-                VStack(alignment: .leading, spacing: 8) {
-                    ForEach(events) { event in
-                        row(event)
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 8) {
+                        ForEach(events) { event in
+                            row(event)
+                        }
                     }
                 }
+                .frame(maxHeight: dayListMaxHeight)
             }
         }
         .padding(12)
