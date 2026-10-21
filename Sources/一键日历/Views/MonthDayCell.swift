@@ -13,8 +13,7 @@ struct MonthDayCell: View {
     var onMonthGridFocus: (Bool) -> Void = { _ in }
 
     @State private var isHovered = false
-    @State private var lastClickDate: Date?
-    @State private var lastClickTime: Date = .distantPast
+    @State private var lastClick: MonthCellClickRecord?
 
     private let cornerRadius: CGFloat = 8
 
@@ -140,15 +139,17 @@ struct MonthDayCell: View {
     }
 
     private func selectDay() {
-        let now = Date()
-        let isRepeatedClick = lastClickDate == cell.date
-            && now.timeIntervalSince(lastClickTime) <= NSEvent.doubleClickInterval
-        lastClickDate = isRepeatedClick ? nil : cell.date
-        lastClickTime = now
-        viewModel.selectDay(cell.date)
-        if isRepeatedClick {
+        let record = MonthCellClickRecord.register(
+            previous: lastClick,
+            day: cell.date,
+            at: Date(),
+            within: NSEvent.doubleClickInterval
+        )
+        lastClick = record.next
+        if record.isRepeated {
             focusTitle()
         } else {
+            viewModel.selectDay(cell.date)
             onMonthGridFocus(true)
         }
     }

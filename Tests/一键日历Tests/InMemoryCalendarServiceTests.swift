@@ -1,7 +1,6 @@
 import XCTest
 @testable import 一键日历
 
-/// 日历 seam（`InMemoryCalendarService`）行为测试；对齐 Windows InMemory 能力集合。
 @MainActor
 final class InMemoryCalendarServiceTests: XCTestCase {
     func testHasCloudCalendarAndLocalSortsLast() {
@@ -939,6 +938,135 @@ final class ReviewViewModelCalendarInjectionTests: XCTestCase {
         XCTAssertNil(viewModel.browseSharedDetailUnavailableEvent)
         XCTAssertTrue(viewModel.canEditSharedDetailForSelection)
         XCTAssertEqual(viewModel.sharedDetailDraft, "完成态仍可改")
+    }
+
+    func testWideCanvasRowResolvesDoneOccurrenceThroughProjectedHitAndOpensSharedDetail() async throws {
+        let calendar = InMemoryCalendarService(grantAccessByDefault: true)
+        let viewModel = ReviewViewModel(calendar: calendar)
+        let marker = "wide-row-\(UUID().uuidString.prefix(8))"
+        viewModel.title = marker
+        viewModel.detail = "宽画布完成态仍可改"
+        viewModel.baseDate = date(2026, 10, 20)
+        viewModel.scheduleMode = .review
+        viewModel.reviewIntervals = [3, 7, 30]
+        viewModel.updateReviewDates()
+        await viewModel.createReviewSchedule()
+
+        let batch = try XCTUnwrap(viewModel.historyEntries.first(where: { $0.title == marker }))
+        let rowDay = date(2026, 10, 23)
+        let member = try XCTUnwrap(viewModel.eventsByDay[rowDay]?.first(where: { $0.title == marker }))
+        viewModel.selectDay(rowDay)
+        XCTAssertEqual(viewModel.baseDate, rowDay)
+        XCTAssertEqual(viewModel.visibleMonth, date(2026, 10, 1))
+
+        for status in [OccurrenceStatus.done, OccurrenceStatus.skipped] {
+            viewModel.setOccurrenceStatus(eventId: member.id, status: status)
+            XCTAssertEqual(viewModel.occurrenceStatus(for: member.id), status)
+
+            let hit = try XCTUnwrap(viewModel.projectedHit(forEventId: member.id, on: viewModel.baseDate))
+            XCTAssertTrue(hit.isSeries)
+            XCTAssertEqual(hit.kind, .series(historyEntryID: batch.id))
+            XCTAssertEqual(hit.members.count, 3)
+
+            viewModel.beginSharedDetailEditFromBrowse(member, on: viewModel.baseDate)
+            XCTAssertEqual(viewModel.editingSharedDetailEntryID, batch.id)
+            XCTAssertNil(viewModel.browseSharedDetailUnavailableEvent)
+            XCTAssertTrue(viewModel.canEditSharedDetailForSelection)
+            XCTAssertEqual(viewModel.sharedDetailDraft, "宽画布完成态仍可改")
+            viewModel.cancelSharedDetailEdit()
+        }
+    }
+
+    func testProjectedHitOutsideTheLoadedWindowKeepsSeriesIdentity() async throws {
+        let calendar = InMemoryCalendarService(grantAccessByDefault: true)
+        let viewModel = ReviewViewModel(calendar: calendar)
+        let marker = "wide-fallback-\(UUID().uuidString.prefix(8))"
+        viewModel.title = marker
+        viewModel.baseDate = date(2026, 10, 20)
+        viewModel.scheduleMode = .review
+        viewModel.reviewIntervals = [3, 7, 30]
+        viewModel.updateReviewDates()
+        await viewModel.createReviewSchedule()
+
+        let batch = try XCTUnwrap(viewModel.historyEntries.first(where: { $0.title == marker }))
+        let outsideDay = date(2026, 11, 19)
+        XCTAssertNil(viewModel.eventsByDay[outsideDay])
+        let outsideMember = try XCTUnwrap(
+            batch.createdEventIdentifiers
+                .compactMap { calendar.event(withId: $0) }
+                .first(where: { Calendar.current.isDate($0.start, inSameDayAs: outsideDay) })
+        )
+
+        let hit = try XCTUnwrap(viewModel.projectedHit(forEventId: outsideMember.id, on: outsideDay))
+
+        XCTAssertTrue(hit.isSeries)
+        XCTAssertEqual(hit.kind, .series(historyEntryID: batch.id))
+        XCTAssertEqual(hit.members.count, 3)
+        XCTAssertTrue(hit.needsSelectiveDelete)
+        XCTAssertEqual(hit.id, outsideMember.id)
+    }
+
+    func testProjectedHitFallsBackToSingleForAnUnrelatedEvent() throws {
+        let holiday = CalendarEventInfo(
+            id: "holiday-window-\(UUID().uuidString.prefix(8))",
+            title: "节假日",
+            start: date(2026, 10, 1),
+            end: date(2026, 10, 1),
+            isAllDay: true,
+            notes: nil,
+            calendarId: nil,
+            calendarTitle: "中国大陆节假日",
+            calendarSourceTitle: nil,
+            colorHex: nil
+        )
+        let viewModel = ReviewViewModel(
+            calendar: InMemoryCalendarService(grantAccessByDefault: true, events: [holiday])
+        )
+        viewModel.selectDay(date(2026, 10, 1))
+
+        let hit = try XCTUnwrap(
+            viewModel.projectedHit(forEventId: holiday.id, on: date(2026, 10, 1))
+        )
+
+        XCTAssertFalse(hit.isSeries)
+        XCTAssertEqual(hit.kind, .single)
+        XCTAssertEqual(hit.members.map(\.id), [holiday.id])
+        XCTAssertFalse(hit.needsSelectiveDelete)
+
+        viewModel.beginSharedDetailEditFromBrowse(holiday, on: date(2026, 10, 1))
+        XCTAssertNil(viewModel.editingSharedDetailEntryID)
+        XCTAssertEqual(viewModel.browseSharedDetailUnavailableEvent?.id, holiday.id)
+        XCTAssertFalse(viewModel.canEditSharedDetailForSelection)
+    }
+
+    func testDeletingAnOccurrenceRefreshesTheWeeklySummaryMaterials() async throws {
+        let calendar = InMemoryCalendarService(grantAccessByDefault: true)
+        let viewModel = ReviewViewModel(calendar: calendar)
+        let marker = "weekly-delete-\(UUID().uuidString.prefix(8))"
+        let today = Calendar.current.startOfDay(for: Date())
+        viewModel.title = marker
+        viewModel.baseDate = Calendar.current.date(byAdding: .day, value: -3, to: today)!
+        viewModel.scheduleMode = .review
+        viewModel.reviewIntervals = [3, 7, 30]
+        viewModel.updateReviewDates()
+        await viewModel.createReviewSchedule()
+
+        viewModel.selectDayType(.today)
+        let row = try XCTUnwrap(viewModel.displayedDayHits.first(where: { $0.title == marker }))
+        viewModel.setOccurrenceStatus(eventId: row.id, status: .done)
+        XCTAssertTrue(
+            viewModel.weeklyReviewViewModel.occurrenceMaterialsInCurrentWeek
+                .contains(where: { $0.eventId == row.id })
+        )
+        let revisionAfterStatusChange = viewModel.weeklyReviewViewModel.revision
+
+        XCTAssertEqual(viewModel.deleteSearchHitMembers(ids: [row.id]).deletedCount, 1)
+
+        XCTAssertGreaterThan(viewModel.weeklyReviewViewModel.revision, revisionAfterStatusChange)
+        XCTAssertFalse(
+            viewModel.weeklyReviewViewModel.occurrenceMaterialsInCurrentWeek
+                .contains(where: { $0.eventId == row.id })
+        )
     }
 
     func testDayRowEditOnUnmatchedEventStaysUnavailableAndCannotSave() {

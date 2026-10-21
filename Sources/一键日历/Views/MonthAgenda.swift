@@ -105,7 +105,7 @@ struct BaseDayEventList: View {
     let date: Date
     let events: [CalendarEventInfo]
     let palette: ThemePalette
-    @State private var hitPendingDelete: SearchHit?
+    @StateObject private var deleteFlow = SearchHitDeleteFlow()
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -136,27 +136,7 @@ struct BaseDayEventList: View {
         }
         .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .alert(
-            NSLocalizedString("search_delete_confirm_title", comment: ""),
-            isPresented: Binding(
-                get: { hitPendingDelete != nil },
-                set: { if !$0 { hitPendingDelete = nil } }
-            ),
-            presenting: hitPendingDelete
-        ) { hit in
-            Button(NSLocalizedString("search_delete_cancel", comment: ""), role: .cancel) {
-                hitPendingDelete = nil
-            }
-            Button(NSLocalizedString("search_delete_confirm_action", comment: ""), role: .destructive) {
-                hitPendingDelete = nil
-                _ = viewModel.deleteSearchHit(hit)
-            }
-        } message: { hit in
-            Text(String(
-                format: NSLocalizedString("search_delete_confirm_message", comment: ""),
-                hit.title.isEmpty ? NSLocalizedString("untitled", comment: "") : hit.title
-            ))
-        }
+        .searchHitDeleteAlert(deleteFlow, viewModel: viewModel)
     }
 
     private func row(_ event: CalendarEventInfo) -> some View {
@@ -181,7 +161,7 @@ struct BaseDayEventList: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background {
             Button {
-                viewModel.beginSharedDetailEditFromBrowse(event)
+                viewModel.beginSharedDetailEditFromBrowse(event, on: date)
             } label: {
                 shape
                     .fill(palette.background)
@@ -194,11 +174,12 @@ struct BaseDayEventList: View {
 
     private func deleteButton(_ event: CalendarEventInfo) -> some View {
         Button {
-            requestDelete(viewModel.dayBrowseHit(for: event, on: date))
+            requestDelete(event)
         } label: {
             Image(systemName: "trash")
                 .font(.caption)
                 .foregroundStyle(.red)
+                .frame(width: 24, height: 24)
                 .contentShape(Rectangle())
         }
         .buttonStyle(.borderless)
@@ -206,12 +187,9 @@ struct BaseDayEventList: View {
         .accessibilityLabel(NSLocalizedString("search_delete_button", comment: ""))
     }
 
-    private func requestDelete(_ hit: SearchHit) {
-        if hit.needsSelectiveDelete {
-            viewModel.beginSeriesDelete(hit)
-        } else {
-            hitPendingDelete = hit
-        }
+    private func requestDelete(_ event: CalendarEventInfo) {
+        guard let hit = viewModel.projectedHit(forEventId: event.id, on: date) else { return }
+        deleteFlow.request(hit, in: viewModel)
     }
 
     private func occurrenceStatusRow(

@@ -313,11 +313,15 @@ class ReviewViewModel: ObservableObject {
         )
     }
 
-    func dayBrowseHit(for event: CalendarEventInfo, on day: Date) -> SearchHit {
+    func projectedHit(forEventId eventId: String, on day: Date) -> SearchHit? {
         _ = historyRevision
-        let dayEvents = eventsByDay[Calendar.current.startOfDay(for: day)] ?? []
-        return projectedDayHits(dayEvents).first(where: { $0.id == event.id })
-            ?? SearchHit(id: event.id, kind: .single, title: event.title, members: [event])
+        let start = Calendar.current.startOfDay(for: day)
+        let dayEvents = eventsByDay[start] ?? []
+        guard let event = dayEvents.first(where: { $0.id == eventId })
+            ?? calendar.event(withId: eventId) else {
+            return nil
+        }
+        return projectedDayHits([event]).first
     }
 
     private func pushInputsToSession() {
@@ -617,6 +621,11 @@ class ReviewViewModel: ObservableObject {
         sharedDetailDraft = entry.sharedDetail ?? ""
     }
 
+    func beginSharedDetailEditFromBrowse(_ event: CalendarEventInfo, on day: Date) {
+        let target = projectedHit(forEventId: event.id, on: day)?.focusedEvent ?? event
+        beginSharedDetailEditFromBrowse(target)
+    }
+
     func beginSharedDetailEditFromBrowse(_ event: CalendarEventInfo) {
         sharedDetailEditOutcomeVisible = false
         sharedDetailResultOnToday = false
@@ -837,11 +846,7 @@ class ReviewViewModel: ObservableObject {
         selectedSearchResult = browse.selectedSearchResult
         displayedEvents = browse.displayedEvents
         if success {
-            session.removeEventsFromRecorded(ids: [event.id])
-            refreshHistoryProjection()
-            rebuildSearchHits()
-            rebuildDisplayedDayHits()
-            loadVisibleWindow()
+            applyDeletedEvents(ids: [event.id])
             if selectedSearchHit?.id == hit.id {
                 selectedSearchHit = nil
             }
@@ -856,11 +861,7 @@ class ReviewViewModel: ObservableObject {
         selectedSearchResult = browse.selectedSearchResult
         displayedEvents = browse.displayedEvents
         if outcome.deletedCount > 0 {
-            session.removeEventsFromRecorded(ids: ids)
-            refreshHistoryProjection()
-            rebuildSearchHits()
-            rebuildDisplayedDayHits()
-            loadVisibleWindow()
+            applyDeletedEvents(ids: ids)
             if let selected = selectedSearchHit,
                selected.members.contains(where: { ids.contains($0.id) }) {
                 selectedSearchHit = searchHits.first(where: { $0.id == selected.id })
@@ -869,6 +870,15 @@ class ReviewViewModel: ObservableObject {
         }
         seriesPendingDelete = nil
         return outcome
+    }
+
+    private func applyDeletedEvents(ids: [String]) {
+        session.removeEventsFromRecorded(ids: ids)
+        refreshHistoryProjection()
+        rebuildSearchHits()
+        rebuildDisplayedDayHits()
+        loadVisibleWindow()
+        weeklyReviewViewModel.refreshOccurrenceMaterials()
     }
 
     func beginSeriesDelete(_ hit: SearchHit) {

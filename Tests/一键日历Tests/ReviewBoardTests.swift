@@ -319,7 +319,7 @@ final class ReviewBoardTests: XCTestCase {
         XCTAssertEqual(viewModel.displayedDayHits.map(\.id), ["today-a"])
 
         let target = try XCTUnwrap(viewModel.eventsByDay[today]?.first)
-        let hit = viewModel.dayBrowseHit(for: target, on: today)
+        let hit = try XCTUnwrap(viewModel.projectedHit(forEventId: target.id, on: today))
         XCTAssertFalse(hit.needsSelectiveDelete)
         XCTAssertTrue(viewModel.deleteSearchHit(hit))
 
@@ -346,7 +346,7 @@ final class ReviewBoardTests: XCTestCase {
 
         let firstReviewDay = date(2026, 10, 23)
         let member = try XCTUnwrap(viewModel.eventsByDay[firstReviewDay]?.first)
-        let hit = viewModel.dayBrowseHit(for: member, on: firstReviewDay)
+        let hit = try XCTUnwrap(viewModel.projectedHit(forEventId: member.id, on: firstReviewDay))
         XCTAssertTrue(hit.needsSelectiveDelete)
         XCTAssertEqual(hit.members.count, 3)
 
@@ -361,7 +361,10 @@ final class ReviewBoardTests: XCTestCase {
         XCTAssertEqual(outcome.deletedCount, 1)
         XCTAssertNil(viewModel.seriesPendingDelete)
         XCTAssertFalse(ids(on: firstReviewDay, in: viewModel).contains(removed.id))
-        XCTAssertEqual(viewModel.dayBrowseHit(for: member, on: firstReviewDay).members.count, 2)
+        XCTAssertEqual(
+            try XCTUnwrap(viewModel.projectedHit(forEventId: member.id, on: firstReviewDay)).members.count,
+            2
+        )
 
         let windowGrouped = CalendarEventGrouping.byDay(
             calendar.fetchEvents(from: date(2026, 9, 28), to: date(2026, 11, 9))

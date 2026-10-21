@@ -3,7 +3,7 @@ import SwiftUI
 struct SearchSheetView: View {
     @ObservedObject var viewModel: ReviewViewModel
     @FocusState private var isFieldFocused: Bool
-    @State private var hitPendingDelete: SearchHit?
+    @StateObject private var deleteFlow = SearchHitDeleteFlow()
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -40,44 +40,11 @@ struct SearchSheetView: View {
         .onAppear {
             isFieldFocused = viewModel.selectedSearchHit == nil
         }
-        .alert(
-            NSLocalizedString("search_delete_confirm_title", comment: ""),
-            isPresented: Binding(
-                get: { hitPendingDelete != nil },
-                set: { if !$0 { hitPendingDelete = nil } }
-            ),
-            presenting: hitPendingDelete
-        ) { hit in
-            Button(NSLocalizedString("search_delete_cancel", comment: ""), role: .cancel) {
-                hitPendingDelete = nil
-            }
-            Button(NSLocalizedString("search_delete_confirm_action", comment: ""), role: .destructive) {
-                performDirectDelete(hit)
-            }
-        } message: { hit in
-            Text(String(
-                format: NSLocalizedString("search_delete_confirm_message", comment: ""),
-                hit.title.isEmpty ? NSLocalizedString("untitled", comment: "") : hit.title
-            ))
-        }
-    }
-
-    private func performDirectDelete(_ hit: SearchHit) {
-        hitPendingDelete = nil
-        let success = viewModel.deleteSearchHit(hit)
-        if success, viewModel.selectedSearchHit?.id == hit.id {
-            withAnimation(.spring(response: 0.4, dampingFraction: 0.85)) {
-                viewModel.clearSearchSelection()
-            }
-        }
+        .searchHitDeleteAlert(deleteFlow, viewModel: viewModel)
     }
 
     private func requestDelete(_ hit: SearchHit) {
-        if hit.needsSelectiveDelete {
-            viewModel.beginSeriesDelete(hit)
-        } else {
-            hitPendingDelete = hit
-        }
+        deleteFlow.request(hit, in: viewModel)
     }
 
     private var searchHeader: some View {
