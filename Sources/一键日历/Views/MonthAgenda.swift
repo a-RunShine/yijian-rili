@@ -105,6 +105,7 @@ struct BaseDayEventList: View {
     let date: Date
     let events: [CalendarEventInfo]
     let palette: ThemePalette
+    @State private var hitPendingDelete: SearchHit?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -135,6 +136,27 @@ struct BaseDayEventList: View {
         }
         .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)
+        .alert(
+            NSLocalizedString("search_delete_confirm_title", comment: ""),
+            isPresented: Binding(
+                get: { hitPendingDelete != nil },
+                set: { if !$0 { hitPendingDelete = nil } }
+            ),
+            presenting: hitPendingDelete
+        ) { hit in
+            Button(NSLocalizedString("search_delete_cancel", comment: ""), role: .cancel) {
+                hitPendingDelete = nil
+            }
+            Button(NSLocalizedString("search_delete_confirm_action", comment: ""), role: .destructive) {
+                hitPendingDelete = nil
+                _ = viewModel.deleteSearchHit(hit)
+            }
+        } message: { hit in
+            Text(String(
+                format: NSLocalizedString("search_delete_confirm_message", comment: ""),
+                hit.title.isEmpty ? NSLocalizedString("untitled", comment: "") : hit.title
+            ))
+        }
     }
 
     private func row(_ event: CalendarEventInfo) -> some View {
@@ -142,14 +164,17 @@ struct BaseDayEventList: View {
         let title = event.title.isEmpty ? NSLocalizedString("untitled", comment: "") : event.title
         let shape = RoundedRectangle(cornerRadius: 8)
         return VStack(alignment: .leading, spacing: 6) {
-            Text(title)
-                .font(.callout)
-                .foregroundStyle(palette.primary)
-                .lineLimit(2)
-                .multilineTextAlignment(.leading)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .allowsHitTesting(false)
-                .accessibilityHidden(true)
+            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                Text(title)
+                    .font(.callout)
+                    .foregroundStyle(palette.primary)
+                    .lineLimit(2)
+                    .multilineTextAlignment(.leading)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .allowsHitTesting(false)
+                    .accessibilityHidden(true)
+                deleteButton(event)
+            }
             occurrenceStatusRow(event: event, status: status)
         }
         .padding(8)
@@ -164,6 +189,28 @@ struct BaseDayEventList: View {
             }
             .buttonStyle(.plain)
             .accessibilityLabel(title)
+        }
+    }
+
+    private func deleteButton(_ event: CalendarEventInfo) -> some View {
+        Button {
+            requestDelete(viewModel.dayBrowseHit(for: event, on: date))
+        } label: {
+            Image(systemName: "trash")
+                .font(.caption)
+                .foregroundStyle(.red)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.borderless)
+        .help(NSLocalizedString("search_delete_button", comment: ""))
+        .accessibilityLabel(NSLocalizedString("search_delete_button", comment: ""))
+    }
+
+    private func requestDelete(_ hit: SearchHit) {
+        if hit.needsSelectiveDelete {
+            viewModel.beginSeriesDelete(hit)
+        } else {
+            hitPendingDelete = hit
         }
     }
 

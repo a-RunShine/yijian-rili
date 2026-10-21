@@ -302,11 +302,22 @@ class ReviewViewModel: ObservableObject {
 
     private func rebuildDisplayedDayHits() {
         _ = historyRevision
-        displayedDayHits = DayEventProjection.project(
-            dayEvents: browse.displayedEvents,
+        displayedDayHits = projectedDayHits(browse.displayedEvents)
+    }
+
+    private func projectedDayHits(_ dayEvents: [CalendarEventInfo]) -> [SearchHit] {
+        DayEventProjection.project(
+            dayEvents: dayEvents,
             history: historyStore.load(),
             eventById: { [calendar] id in calendar.event(withId: id) }
         )
+    }
+
+    func dayBrowseHit(for event: CalendarEventInfo, on day: Date) -> SearchHit {
+        _ = historyRevision
+        let dayEvents = eventsByDay[Calendar.current.startOfDay(for: day)] ?? []
+        return projectedDayHits(dayEvents).first(where: { $0.id == event.id })
+            ?? SearchHit(id: event.id, kind: .single, title: event.title, members: [event])
     }
 
     private func pushInputsToSession() {
@@ -821,6 +832,7 @@ class ReviewViewModel: ObservableObject {
             refreshHistoryProjection()
             rebuildSearchHits()
             rebuildDisplayedDayHits()
+            loadVisibleWindow()
             if selectedSearchHit?.id == hit.id {
                 selectedSearchHit = nil
             }
@@ -839,6 +851,7 @@ class ReviewViewModel: ObservableObject {
             refreshHistoryProjection()
             rebuildSearchHits()
             rebuildDisplayedDayHits()
+            loadVisibleWindow()
             if let selected = selectedSearchHit,
                selected.members.contains(where: { ids.contains($0.id) }) {
                 selectedSearchHit = searchHits.first(where: { $0.id == selected.id })
