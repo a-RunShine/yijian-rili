@@ -304,6 +304,75 @@ final class ReviewBoardTests: XCTestCase {
         XCTAssertEqual(viewModel.baseDate, date(2026, 10, 20))
     }
 
+    func testDeletingADayEventRefreshesTheVisibleMonthWindowAndDayBrowseRows() throws {
+        let today = Calendar.current.startOfDay(for: Date())
+        let tomorrow = try XCTUnwrap(Calendar.current.date(byAdding: .day, value: 1, to: today))
+        let dayAfterTomorrow = try XCTUnwrap(Calendar.current.date(byAdding: .day, value: 1, to: tomorrow))
+        let calendar = RangeQueryCalendar(events: [
+            event(id: "today-a", title: "今日", start: today, end: tomorrow, isAllDay: true),
+            event(id: "tomorrow-b", title: "明日", start: tomorrow, end: dayAfterTomorrow, isAllDay: true),
+        ])
+        let viewModel = ReviewViewModel(calendar: calendar)
+        viewModel.selectDay(today)
+        viewModel.selectDayType(.today)
+        XCTAssertEqual(ids(on: today, in: viewModel), ["today-a"])
+        XCTAssertEqual(viewModel.displayedDayHits.map(\.id), ["today-a"])
+
+        let target = try XCTUnwrap(viewModel.eventsByDay[today]?.first)
+        let hit = viewModel.dayBrowseHit(for: target, on: today)
+        XCTAssertFalse(hit.needsSelectiveDelete)
+        XCTAssertTrue(viewModel.deleteSearchHit(hit))
+
+        let monthStart = try XCTUnwrap(
+            Calendar.current.date(from: Calendar.current.dateComponents([.year, .month], from: today))
+        )
+        XCTAssertEqual(viewModel.visibleMonth, monthStart)
+        XCTAssertEqual(ids(on: today, in: viewModel), [])
+        XCTAssertEqual(ids(on: tomorrow, in: viewModel), ["tomorrow-b"])
+        XCTAssertTrue(viewModel.displayedDayHits.isEmpty)
+        XCTAssertNil(calendar.event(withId: "today-a"))
+    }
+
+    func testSelectiveSeriesDeleteRefreshesTheVisibleMonthWindow() async throws {
+        let calendar = RangeQueryCalendar(events: [])
+        let viewModel = ReviewViewModel(calendar: calendar)
+        viewModel.title = "窗口系列"
+        viewModel.baseDate = date(2026, 10, 20)
+        viewModel.scheduleMode = .review
+        viewModel.reviewIntervals = [3, 7, 30]
+        viewModel.updateReviewDates()
+        await viewModel.createReviewSchedule()
+        XCTAssertEqual(viewModel.resultType, .success)
+
+        let firstReviewDay = date(2026, 10, 23)
+        let member = try XCTUnwrap(viewModel.eventsByDay[firstReviewDay]?.first)
+        let hit = viewModel.dayBrowseHit(for: member, on: firstReviewDay)
+        XCTAssertTrue(hit.needsSelectiveDelete)
+        XCTAssertEqual(hit.members.count, 3)
+
+        viewModel.beginSeriesDelete(hit)
+        XCTAssertEqual(viewModel.seriesPendingDelete?.id, hit.id)
+
+        let removed = try XCTUnwrap(
+            hit.members.first { Calendar.current.isDate($0.start, inSameDayAs: date(2026, 10, 27)) }
+        )
+        let outcome = viewModel.deleteSearchHitMembers(ids: [removed.id])
+
+        XCTAssertEqual(outcome.deletedCount, 1)
+        XCTAssertNil(viewModel.seriesPendingDelete)
+        XCTAssertFalse(ids(on: firstReviewDay, in: viewModel).contains(removed.id))
+        XCTAssertEqual(viewModel.dayBrowseHit(for: member, on: firstReviewDay).members.count, 2)
+
+        let windowGrouped = CalendarEventGrouping.byDay(
+            calendar.fetchEvents(from: date(2026, 9, 28), to: date(2026, 11, 9))
+        )
+        XCTAssertEqual(Set(viewModel.eventsByDay.keys), Set(windowGrouped.keys))
+        for (day, events) in windowGrouped {
+            XCTAssertEqual(ids(on: day, in: viewModel), events.map(\.id))
+            XCTAssertFalse(events.contains(where: { $0.id == removed.id }))
+        }
+    }
+
     private func ids(on day: Date, in viewModel: ReviewViewModel) -> [String] {
         viewModel.eventsByDay[day]?.map(\.id) ?? []
     }
