@@ -905,6 +905,65 @@ final class ReviewViewModelCalendarInjectionTests: XCTestCase {
         XCTAssertFalse(after.members.contains(where: { $0.id == removeID }))
     }
 
+    func testDayRowEditOpensSharedDetailWhenReviewOccurrenceIsDoneOrSkipped() async throws {
+        let calendar = InMemoryCalendarService(grantAccessByDefault: true)
+        let viewModel = ReviewViewModel(calendar: calendar)
+        let marker = "day-row-state-\(UUID().uuidString.prefix(8))"
+        let base = Calendar.current.date(byAdding: .day, value: -3, to: Date())!
+        viewModel.title = marker
+        viewModel.detail = "完成态仍可改"
+        viewModel.baseDate = base
+        viewModel.scheduleMode = .review
+        viewModel.reviewIntervals = [3, 7, 30]
+        viewModel.updateReviewDates()
+        await viewModel.createReviewSchedule()
+
+        let batch = try XCTUnwrap(viewModel.historyEntries.first(where: { $0.title == marker }))
+        viewModel.selectDayType(.today)
+        let row = try XCTUnwrap(viewModel.displayedDayHits.first)
+
+        viewModel.setOccurrenceStatus(eventId: row.id, status: .done)
+        XCTAssertEqual(viewModel.occurrenceStatus(for: row.id), .done)
+
+        viewModel.beginSharedDetailEditFromBrowse(row.focusedEvent)
+        XCTAssertEqual(viewModel.editingSharedDetailEntryID, batch.id)
+        XCTAssertNil(viewModel.browseSharedDetailUnavailableEvent)
+        XCTAssertTrue(viewModel.canEditSharedDetailForSelection)
+        viewModel.cancelSharedDetailEdit()
+
+        viewModel.setOccurrenceStatus(eventId: row.id, status: .skipped)
+        XCTAssertEqual(viewModel.occurrenceStatus(for: row.id), .skipped)
+
+        viewModel.beginSharedDetailEditFromBrowse(row.focusedEvent)
+        XCTAssertEqual(viewModel.editingSharedDetailEntryID, batch.id)
+        XCTAssertNil(viewModel.browseSharedDetailUnavailableEvent)
+        XCTAssertTrue(viewModel.canEditSharedDetailForSelection)
+        XCTAssertEqual(viewModel.sharedDetailDraft, "完成态仍可改")
+    }
+
+    func testDayRowEditOnUnmatchedEventStaysUnavailableAndCannotSave() {
+        let viewModel = ReviewViewModel(calendar: InMemoryCalendarService(grantAccessByDefault: true))
+        let event = CalendarEventInfo(
+            id: "holiday-row-\(UUID().uuidString.prefix(8))",
+            title: "节假日",
+            start: date(2026, 10, 1),
+            end: date(2026, 10, 1),
+            isAllDay: true,
+            notes: nil,
+            calendarId: nil,
+            calendarTitle: "中国大陆节假日",
+            calendarSourceTitle: nil,
+            colorHex: nil
+        )
+
+        viewModel.beginSharedDetailEditFromBrowse(event)
+
+        XCTAssertNil(viewModel.editingSharedDetailEntryID)
+        XCTAssertEqual(viewModel.browseSharedDetailUnavailableEvent?.id, event.id)
+        XCTAssertFalse(viewModel.canEditSharedDetailForSelection)
+        XCTAssertEqual(viewModel.commitSharedDetailEdit(), .unavailable)
+    }
+
     func testDayLoadKeepsOneRowPerDayEventAndStillReconciles() async throws {
         let calendar = InMemoryCalendarService(grantAccessByDefault: true)
         let viewModel = ReviewViewModel(calendar: calendar)

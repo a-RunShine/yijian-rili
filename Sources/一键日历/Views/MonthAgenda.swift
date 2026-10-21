@@ -139,50 +139,67 @@ struct BaseDayEventList: View {
 
     private func row(_ event: CalendarEventInfo) -> some View {
         let status = viewModel.occurrenceStatus(for: event.id)
+        let title = event.title.isEmpty ? NSLocalizedString("untitled", comment: "") : event.title
+        let shape = RoundedRectangle(cornerRadius: 8)
         return VStack(alignment: .leading, spacing: 6) {
-            Button {
-                viewModel.beginSharedDetailEditFromBrowse(event)
-            } label: {
-                Text(event.title.isEmpty ? NSLocalizedString("untitled", comment: "") : event.title)
-                    .font(.callout)
-                    .foregroundStyle(palette.primary)
-                    .lineLimit(2)
-                    .multilineTextAlignment(.leading)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-            }
-            .buttonStyle(.plain)
-            HStack(spacing: 6) {
-                statusButton(
-                    title: NSLocalizedString("occurrence_mark_done", comment: ""),
-                    selected: status == .done
-                ) {
-                    viewModel.setOccurrenceStatus(
-                        eventId: event.id,
-                        status: status == .done ? .unmarked : .done
-                    )
-                }
-                statusButton(
-                    title: NSLocalizedString("occurrence_mark_skipped", comment: ""),
-                    selected: status == .skipped
-                ) {
-                    viewModel.setOccurrenceStatus(
-                        eventId: event.id,
-                        status: status == .skipped ? .unmarked : .skipped
-                    )
-                }
-                if status != .unmarked {
-                    Text(status == .done
-                         ? NSLocalizedString("occurrence_status_done", comment: "")
-                         : NSLocalizedString("occurrence_status_skipped", comment: ""))
-                        .font(.caption2)
-                        .foregroundStyle(palette.secondary)
-                        .lineLimit(1)
-                }
-            }
+            Text(title)
+                .font(.callout)
+                .foregroundStyle(palette.primary)
+                .lineLimit(2)
+                .multilineTextAlignment(.leading)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .allowsHitTesting(false)
+                .accessibilityHidden(true)
+            occurrenceStatusRow(event: event, status: status)
         }
         .padding(8)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(palette.background, in: RoundedRectangle(cornerRadius: 8))
+        .background {
+            Button {
+                viewModel.beginSharedDetailEditFromBrowse(event)
+            } label: {
+                shape
+                    .fill(palette.background)
+                    .contentShape(shape)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(title)
+        }
+    }
+
+    private func occurrenceStatusRow(
+        event: CalendarEventInfo,
+        status: OccurrenceStatus
+    ) -> some View {
+        HStack(spacing: 6) {
+            statusButton(
+                title: NSLocalizedString("occurrence_mark_done", comment: ""),
+                selected: status == .done
+            ) {
+                viewModel.setOccurrenceStatus(
+                    eventId: event.id,
+                    status: status == .done ? .unmarked : .done
+                )
+            }
+            statusButton(
+                title: NSLocalizedString("occurrence_mark_skipped", comment: ""),
+                selected: status == .skipped
+            ) {
+                viewModel.setOccurrenceStatus(
+                    eventId: event.id,
+                    status: status == .skipped ? .unmarked : .skipped
+                )
+            }
+            if status != .unmarked {
+                Text(status == .done
+                     ? NSLocalizedString("occurrence_status_done", comment: "")
+                     : NSLocalizedString("occurrence_status_skipped", comment: ""))
+                    .font(.caption2)
+                    .foregroundStyle(palette.secondary)
+                    .lineLimit(1)
+                    .allowsHitTesting(false)
+            }
+        }
     }
 
     private func statusButton(
