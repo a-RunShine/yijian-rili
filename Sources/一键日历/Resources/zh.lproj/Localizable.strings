@@ -272,6 +272,7 @@
 "occurrence_mark_skipped" = "跳过";
 "occurrence_status_done" = "已完成";
 "occurrence_status_skipped" = "已跳过";
+"occurrence_mark_unavailable" = "这条日程缺少系列记录，无法标记完成或跳过";
 "close" = "关闭";
 
 // Canvas

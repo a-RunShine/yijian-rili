@@ -105,6 +105,7 @@ struct BaseDayEventList: View {
     let date: Date
     let events: [CalendarEventInfo]
     let palette: ThemePalette
+    @StateObject private var deleteFlow = SearchHitDeleteFlow()
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -123,66 +124,103 @@ struct BaseDayEventList: View {
                     .foregroundStyle(palette.secondary)
                     .frame(maxWidth: .infinity, alignment: .leading)
             } else {
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 8) {
-                        ForEach(events) { event in
-                            row(event)
-                        }
+                VStack(alignment: .leading, spacing: 8) {
+                    ForEach(events) { event in
+                        row(event)
                     }
                 }
-                .frame(maxHeight: 220)
             }
         }
         .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)
+        .searchHitDeleteAlert(deleteFlow, viewModel: viewModel)
     }
 
     private func row(_ event: CalendarEventInfo) -> some View {
         let status = viewModel.occurrenceStatus(for: event.id)
+        let title = event.title.isEmpty ? NSLocalizedString("untitled", comment: "") : event.title
+        let shape = RoundedRectangle(cornerRadius: 8)
         return VStack(alignment: .leading, spacing: 6) {
-            Button {
-                viewModel.beginSharedDetailEditFromBrowse(event)
-            } label: {
-                Text(event.title.isEmpty ? NSLocalizedString("untitled", comment: "") : event.title)
+            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                Text(title)
                     .font(.callout)
                     .foregroundStyle(palette.primary)
                     .lineLimit(2)
                     .multilineTextAlignment(.leading)
                     .frame(maxWidth: .infinity, alignment: .leading)
+                    .allowsHitTesting(false)
+                    .accessibilityHidden(true)
+                deleteButton(event)
             }
-            .buttonStyle(.plain)
-            HStack(spacing: 6) {
-                statusButton(
-                    title: NSLocalizedString("occurrence_mark_done", comment: ""),
-                    selected: status == .done
-                ) {
-                    viewModel.setOccurrenceStatus(
-                        eventId: event.id,
-                        status: status == .done ? .unmarked : .done
-                    )
-                }
-                statusButton(
-                    title: NSLocalizedString("occurrence_mark_skipped", comment: ""),
-                    selected: status == .skipped
-                ) {
-                    viewModel.setOccurrenceStatus(
-                        eventId: event.id,
-                        status: status == .skipped ? .unmarked : .skipped
-                    )
-                }
-                if status != .unmarked {
-                    Text(status == .done
-                         ? NSLocalizedString("occurrence_status_done", comment: "")
-                         : NSLocalizedString("occurrence_status_skipped", comment: ""))
-                        .font(.caption2)
-                        .foregroundStyle(palette.secondary)
-                        .lineLimit(1)
-                }
-            }
+            occurrenceStatusRow(event: event, status: status)
         }
         .padding(8)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(palette.background, in: RoundedRectangle(cornerRadius: 8))
+        .background(shape.fill(palette.background))
+        .contentShape(shape)
+        .onTapGesture {
+            viewModel.beginSharedDetailEditFromBrowse(event, on: date)
+        }
+        .pointingHandOnHover()
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel(title)
+        .accessibilityAction {
+            viewModel.beginSharedDetailEditFromBrowse(event, on: date)
+        }
+    }
+
+    private func deleteButton(_ event: CalendarEventInfo) -> some View {
+        Button {
+            requestDelete(event)
+        } label: {
+            Image(systemName: "trash")
+                .font(.caption)
+                .foregroundStyle(.red)
+                .frame(width: 24, height: 24)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.borderless)
+        .help(NSLocalizedString("search_delete_button", comment: ""))
+        .accessibilityLabel(NSLocalizedString("search_delete_button", comment: ""))
+    }
+
+    private func requestDelete(_ event: CalendarEventInfo) {
+        deleteFlow.request(viewModel.projectedHit(for: event, on: date), in: viewModel)
+    }
+
+    private func occurrenceStatusRow(
+        event: CalendarEventInfo,
+        status: OccurrenceStatus
+    ) -> some View {
+        HStack(spacing: 6) {
+            statusButton(
+                title: NSLocalizedString("occurrence_mark_done", comment: ""),
+                selected: status == .done
+            ) {
+                viewModel.setOccurrenceStatus(
+                    eventId: event.id,
+                    status: status == .done ? .unmarked : .done
+                )
+            }
+            statusButton(
+                title: NSLocalizedString("occurrence_mark_skipped", comment: ""),
+                selected: status == .skipped
+            ) {
+                viewModel.setOccurrenceStatus(
+                    eventId: event.id,
+                    status: status == .skipped ? .unmarked : .skipped
+                )
+            }
+            if status != .unmarked {
+                Text(status == .done
+                     ? NSLocalizedString("occurrence_status_done", comment: "")
+                     : NSLocalizedString("occurrence_status_skipped", comment: ""))
+                    .font(.caption2)
+                    .foregroundStyle(palette.secondary)
+                    .lineLimit(1)
+                    .allowsHitTesting(false)
+            }
+        }
     }
 
     private func statusButton(

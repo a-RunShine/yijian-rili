@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 @MainActor
@@ -12,6 +13,7 @@ struct MonthDayCell: View {
     var onMonthGridFocus: (Bool) -> Void = { _ in }
 
     @State private var isHovered = false
+    @State private var lastClick: MonthCellClickRecord?
 
     private let cornerRadius: CGFloat = 8
 
@@ -30,9 +32,9 @@ struct MonthDayCell: View {
             .frame(maxWidth: .infinity)
             .frame(height: rowHeight)
             .contentShape(RoundedRectangle(cornerRadius: cornerRadius))
-            .onTapGesture(count: 2, perform: focusTitle)
             .onTapGesture(count: 1, perform: selectDay)
             .onHover { isHovered = $0 }
+            .pointingHandOnHover(!isSelected)
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(accessibilityLabel)
             .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
@@ -138,12 +140,22 @@ struct MonthDayCell: View {
     }
 
     private func selectDay() {
-        viewModel.selectDay(cell.date)
-        onMonthGridFocus(true)
+        let record = MonthCellClickRecord.register(
+            previous: lastClick,
+            day: cell.date,
+            at: Date(),
+            within: NSEvent.doubleClickInterval
+        )
+        lastClick = record.next
+        if record.isRepeated {
+            focusTitle()
+        } else {
+            viewModel.selectDay(cell.date)
+            onMonthGridFocus(true)
+        }
     }
 
     private func focusTitle() {
-        viewModel.selectDay(cell.date)
         onMonthGridFocus(false)
         NotificationCenter.default.post(name: .focusComposerTitle, object: nil)
     }
