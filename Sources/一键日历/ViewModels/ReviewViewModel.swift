@@ -326,14 +326,23 @@ class ReviewViewModel: ObservableObject {
     }
 
     func selectDay(_ day: Date) {
-        baseDate = day
-        updateReviewDates()
+        let start = Calendar.current.startOfDay(for: day)
+        if Self.monthStart(for: start) == visibleMonth {
+            reselectWithinVisibleMonth(start)
+        } else {
+            baseDate = start
+            updateReviewDates()
+        }
         loadVisibleWindowIfNeeded()
     }
 
     func moveSelection(to day: Date) {
         let start = Calendar.current.startOfDay(for: day)
         guard start != baseDate else { return }
+        reselectWithinVisibleMonth(start)
+    }
+
+    private func reselectWithinVisibleMonth(_ start: Date) {
         keepVisibleMonth = true
         baseDate = start
         keepVisibleMonth = false
