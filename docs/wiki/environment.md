@@ -44,6 +44,20 @@ fatal: unable to access 'https://github.com/a-RunShine/yijian-rili.git/':
 
 `make test` 在 macOS 上可用（需 `import SwiftUI`/`EventKit`，Cloud Linux 跑不了）。
 
+## 2026-10-27：从错误的基线建分支会静默丢掉未合并的成果
+
+删除 openspec skill 时用 `git checkout -b chore/remove-openspec-skills master` 建了新分支——从 `master` 而不是当前的工作分支。结果新分支只含删除动作，把同一轮里尚未合入 master 的 11 个加固提交全丢了。当时 `ls scripts/`、`docs/wiki`、`macos-ci.yml` 全部为空才发现。
+
+修正方式是把两个 commit cherry-pick 到正确基线上：
+
+```bash
+git checkout chore/enforce-constraints
+git cherry-pick 9d7b0ee 22c7e2f
+git branch -D chore/remove-openspec-skills
+```
+
+**教训**：`git checkout -b <new> master` 显式指定了 `master`，看起来比 `git checkout -b <new>` 更严谨，实际更容易丢掉当前分支未合并的工作。开新分支前先问「这条新分支应该基于谁」，而不是默认写 `master`。验证方法：建完立刻看 `git log --oneline master..HEAD` 条数是否符合预期。
+
 ## 2026-10-27：工作区与 HEAD 可能不同步
 
 一次 `git checkout master` 之后 `git log` 显示 HEAD 已在 `master`（`65b89f6`），但 `git status` 显示 13 个文件仍是旧分支内容——那次 checkout 只挪了 HEAD 没更新工作区。
