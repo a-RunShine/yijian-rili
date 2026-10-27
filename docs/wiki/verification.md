@@ -54,3 +54,22 @@ macOS runner 可能排队很久（2026-10-27 有一次 15 分钟仍无 runner �
 - `swift test` 覆盖领域逻辑，**不覆盖** SwiftUI 手势、布局与 EventKit 真实读写
 - 涉及滚动、点击可达、窗口布局的改动必须用 `make open` 人工确认（`docs/agents/release.md` 记录 `make run` 会故意失败，因裸 `swift run` 没有 app bundle 上下文，`Info.plist` 的日历权限与 `LSUIElement` 不生效）
 - EventKit 相关改动无法在 CI 中验证，只能靠 in-memory seam 的测试 + 人工
+
+## 2026-10-27：加 CI 立刻抓出一个既有测试缺陷
+
+CI 第一次真正跑起来（Swift 6.2.4 / macOS 15 SDK）时，`build-and-test` 在 `testChoosingHistoryAlignsTheBoardToThatEntryBaseDate` 上以 `signal code 6`（SIGABRT）退出。本地 Swift 6.4 下 202 个测试全绿，同一个测试单独跑也绿。
+
+定位过程与结论：
+
+- 日志时间戳需排序后再看。GitHub 把并行 suite 的输出交错排列，直接搜 `unexpected signal` 会误判崩溃点。按时间戳取「有 started 无 passed」的测试才准确。
+- 本地 `swift test --parallel` 能复现成**断言失败**而不是崩溃：`members.count` 期望 3 得到 1，`旧详情` 泄漏进下一个测试。
+- 根因：`ReviewViewModel.init` 硬编码 `HistoryStore()` / `WeeklyReviewViewModel()` / `OccurrenceStatusStore()`，三者都默认 `.standard`；`ReviewViewModel` 还有 4 个 `@AppStorage` 与 2 处直读 `.standard`。于是每个测试都在同一个全局域里读写 history、occurrence 状态、周末总结、间隔预设。
+- 兄弟类型**已经有** `init(defaults: UserDefaults = .standard)` 这个 seam，只是 `ReviewViewModel` 绕过了它。
+
+`swift test --parallel` 三次结果是 `4 / 4 / 0` 个错误——不是稳定复现，而是取决于执行顺序，这正好符合共享状态污染的签名。
+
+**这是既有缺陷，不是加 CI 引入的**。此前没有任何自动化跑过这套测试，所以它一直没被发现。这正是加 CI 的第一份真实收益：不是防止未来出错，是让一直存在的错误可见。
+
+已在 issue `#74` 立项。修复应该给 `ReviewViewModel` 补上同形状的 `defaults` 注入点，而不是在测试里用 `removePersistentDomain` 清全局域——那样只是把顺序依赖藏得更深。
+
+一个方法论上的提醒：**不要用 CI 当调试循环**。macOS runner 排队可能十几分钟，而本地 `swift test --parallel` 一秒就能暴露同一个根因。先在本地复现，再让 CI 确认。
