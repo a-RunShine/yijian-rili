@@ -43,6 +43,16 @@ jobs:
       - name: Test
         run: swift test
 
+      - name: Dump crash reports on failure
+        if: failure()
+        run: |
+          ls -la ~/Library/Logs/DiagnosticReports/ 2>/dev/null || true
+          for f in ~/Library/Logs/DiagnosticReports/*.ips; do
+            [ -e "$f" ] || continue
+            echo "===== $f"
+            head -c 40000 "$f"
+          done
+
   lint:
     runs-on: ubuntu-latest
     steps:
