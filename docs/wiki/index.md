@@ -16,7 +16,7 @@
 
 | 页面 | 摘要 |
 |---|---|
-| [environment.md](environment.md) | 本机 `git fetch` 到 github.com 超时，远程查询须走 `gh api`；无 dotnet、无 SwiftLint |
+| [environment.md](environment.md) | 工具链现状（无 dotnet / 无 SwiftLint）；`git fetch` 曾超时但当晚恢复，勿据旧结论绕道 |
 
 ### 验证与约束
 

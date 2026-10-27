@@ -39,11 +39,13 @@
 
 ## 删除方式
 
-本机 `git push --delete` 不可用（见 [environment.md](environment.md)），用：
+当时本机 `git push --delete` 不可用，改用：
 
 ```bash
 gh api --method DELETE repos/a-RunShine/yijian-rili/git/refs/heads/<branch>
 ```
+
+`gh api` 这条路当晚生效，且不依赖 git 的网络栈。同日晚间 `git fetch`/`git push` 也恢复了（见 [environment.md](environment.md)）——所以两种方式都可用，`gh api` 作为降级路径保留。
 
 `wip/issue-47-salvage-uncommitted` 从未推到远程，远程删除返回 `422 Reference does not exist`——这是正常结果，不是失败。
 
