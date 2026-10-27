@@ -13,8 +13,6 @@ AppIcon.iconset/
 releases/*.zip
 releases/*.dmg
 
-retrospectives/
-
 # .NET / Windows
 **/bin/
 **/obj/
