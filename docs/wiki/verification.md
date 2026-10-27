@@ -21,7 +21,7 @@ Executed 182 tests, with 0 failures (0 unexpected) in 0.404 seconds
 
 对照：Windows 移植有 `domain-tests`（ubuntu-latest）与 `windows-build`（windows-latest）双 job。主平台反而没有。
 
-`AGENTS.md` 的「macOS：`make test`」与 `docs/agents/release.md` 第 1 步的「在 macOS 上 `swift build` + `swift test`」都只是对人的嘱咐，PR 可以完全跳过测试合入。
+**已在 `Chore/enforce-constraints` 分支修复**（未合入 master）：新增 `.github/workflows/macos-ci.yml`，`build-and-test` 在 `macos-14` 上跑 `swift build` + `swift test`，`lint` 在 `ubuntu-latest` 上跑 `make lint`。钉 `macos-14` 而非 `latest`，因为 `Package.swift` 声明 `.macOS(.v14)`。
 
 跟踪：issue `#67`
 

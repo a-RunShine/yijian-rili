@@ -18,6 +18,10 @@
 
 `Sources/` 零违规说明这条约束**本身是可执行的**，问题只在没人检查。当前无 SwiftLint、无 SwiftFormat、无 pre-commit hook、无 `.editorconfig`。
 
+**已在 `chore/enforce-constraints` 分支修复**（未合入 master）：`scripts/lint-comments.sh` + `make lint`，零依赖，扫三个面，命中即非零退出。同一次提交把 227 处违规清干净，让门禁从第一天就是绿的。清理只删复述代码的注释，无信息损失。
+
+脚本第一版漏了内联写法 `{ /* no-op */ }`，正则里补 `(/\*.*\*/)` 才覆盖。
+
 跟踪：issue `#68`
 
 ## `@MainActor` 约定
