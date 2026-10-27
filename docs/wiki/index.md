@@ -26,6 +26,12 @@
 | [constraints.md](constraints.md) | AGENTS.md 的「禁注释」硬约束现状：Sources 零违规，Tests/windows 共 218 处 |
 | [branch-lineage.md](branch-lineage.md) | 10 条残留分支与 master 的关系；完整行为对照尚未完成，不得删除 |
 
+### 交接
+
+| 页面 | 摘要 |
+|---|---|
+| [handoff-2026-10-27.md](handoff-2026-10-27.md) | 环境加固的交接：已完成项、唯一红灯（#74）、明天从哪开始 |
+
 ## 相关但不在 wiki 的文档
 
 - `AGENTS.md` — agent 操作契约（always-loaded）
