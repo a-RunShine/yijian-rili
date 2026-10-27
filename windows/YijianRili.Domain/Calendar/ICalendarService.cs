@@ -1,9 +1,5 @@
 namespace YijianRili.Domain.Calendar;
 
-/// <summary>
-/// 日历服务抽象，形状对齐 macOS CalendarManager。
-/// Windows 实现：WinRT Appointments；测试：InMemoryCalendarService。
-/// </summary>
 public interface ICalendarService
 {
     CalendarAccessStatus AuthorizationStatus { get; }

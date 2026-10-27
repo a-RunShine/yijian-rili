@@ -4,7 +4,6 @@ using WinRT.Interop;
 
 namespace YijianRili.App.Services;
 
-/// <summary>HWND_TOPMOST 窗口置顶（对齐 macOS NSWindow.Level.floating）。</summary>
 public static class WindowTopMost
 {
     private static readonly IntPtr HwndTopMost = new(-1);

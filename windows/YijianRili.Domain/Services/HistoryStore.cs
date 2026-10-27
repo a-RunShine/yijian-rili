@@ -2,7 +2,6 @@ using YijianRili.Domain.Models;
 
 namespace YijianRili.Domain.Services;
 
-/// <summary>历史记录 JSON 存储（上限 20，最新在前）。</summary>
 public sealed class HistoryStore
 {
     public const string StorageKey = "historyEntriesData";
@@ -16,7 +15,6 @@ public sealed class HistoryStore
     {
         var list = JsonSettings.Deserialize<List<HistoryEntry>>(_settings.GetString(StorageKey))
                    ?? new List<HistoryEntry>();
-        // 反序列化后立即截断，防止被篡改的本地数据膨胀
         return list.Count <= MaxEntries ? list : list.Take(MaxEntries).ToList();
     }
 

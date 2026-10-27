@@ -1,6 +1,5 @@
 namespace YijianRili.Domain.Services;
 
-/// <summary>键值持久化抽象（macOS UserDefaults / Windows ApplicationData）。</summary>
 public interface ISettingsStore
 {
     string? GetString(string key);
@@ -9,7 +8,6 @@ public interface ISettingsStore
     void SetBool(string key, bool value);
 }
 
-/// <summary>进程内字典实现，供单测与无 UI 场景使用。</summary>
 public sealed class InMemorySettingsStore : ISettingsStore
 {
     private readonly Dictionary<string, string> _strings = new(StringComparer.Ordinal);

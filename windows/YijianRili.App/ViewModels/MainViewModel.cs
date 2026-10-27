@@ -34,7 +34,6 @@ public sealed class MainViewModel : INotifyPropertyChanged
     public ObservableCollection<HistoryEntry> History { get; } = new();
     public ObservableCollection<string> PreviewLines { get; } = new();
 
-    /// <summary>日历列表刷新计数；UI 监听后重新 BindCalendars。</summary>
     public int CalendarsRevision
     {
         get => _calendarsRevision;
@@ -231,7 +230,6 @@ public sealed class MainViewModel : INotifyPropertyChanged
         foreach (var c in _calendar.AvailableCalendars)
             Calendars.Add(c);
 
-        // 若持久化的 id 已失效，清空并通知 UI
         if (!string.IsNullOrEmpty(Session.SelectedCalendarIdentifier) &&
             _calendar.GetCalendar(Session.SelectedCalendarIdentifier) is null)
         {
@@ -273,7 +271,6 @@ public sealed class MainViewModel : INotifyPropertyChanged
         }
         catch (OperationCanceledException)
         {
-            // newer request superseded this one
         }
     }
 
@@ -296,7 +293,6 @@ public sealed class MainViewModel : INotifyPropertyChanged
             await Session.CreateAsync().ConfigureAwait(true);
             StatusText = Session.ResultMessage ?? "完成";
 
-            // 失效回退：选择被清空时刷新 combo
             if (!string.Equals(calendarBefore, Session.SelectedCalendarIdentifier, StringComparison.Ordinal))
             {
                 OnPropertyChanged(nameof(SelectedCalendarId));
@@ -349,7 +345,6 @@ public sealed class MainViewModel : INotifyPropertyChanged
         Session.HasShownFirstRunGuide = true;
     }
 
-    /// <summary>仅置位；由 MainWindow 统一弹出一次对话框。</summary>
     public void OpenSyncGuide() => ShowSyncGuide = true;
 
     public void UseHistory(HistoryEntry entry)

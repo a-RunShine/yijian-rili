@@ -7,7 +7,6 @@ using YijianRili.Domain.Models;
 
 namespace YijianRili.App.Services;
 
-/// <summary>把 AppTheme 应用到 WinUI 视觉树。</summary>
 public static class ThemeApplier
 {
     public static void Apply(FrameworkElement root, AppTheme theme)
@@ -30,7 +29,6 @@ public static class ThemeApplier
             };
         }
 
-        // Claude 强调色
         if (Application.Current.Resources is ResourceDictionary resources)
         {
             if (theme == AppTheme.Claude)

@@ -729,7 +729,6 @@ final class ReviewViewModelCalendarInjectionTests: XCTestCase {
         XCTAssertEqual(viewModel.resultMessage, detailMessage)
     }
 
-
     func testBeginSharedDetailEditFromBrowseResolvesHistoryAndUsesSharedDetail() async {
         let calendar = InMemoryCalendarService(grantAccessByDefault: true)
         let viewModel = ReviewViewModel(calendar: calendar)

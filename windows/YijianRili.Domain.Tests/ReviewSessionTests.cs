@@ -61,7 +61,6 @@ public class ReviewSessionTests
         Assert.False(session.CanUndo);
         Assert.Empty(calendar.LastCreatedEventIdentifiers);
         var todayEvents = await calendar.FetchEventsAsync(DateTime.Today.AddDays(3));
-        // events may be on future dates; just ensure undo cleared IDs
         Assert.Empty(calendar.LastCreatedEventIdentifiers);
     }
 
@@ -94,7 +93,7 @@ public class ReviewSessionTests
     {
         var settings = new InMemorySettingsStore();
         var weekly = new WeeklyReviewService(settings);
-        var saturday = new DateTime(2026, 10, 3, 15, 0, 0); // Saturday
+        var saturday = new DateTime(2026, 10, 3, 15, 0, 0);
         var entry = new HistoryEntry
         {
             Id = Guid.NewGuid(),

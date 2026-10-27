@@ -15,7 +15,6 @@ public static class DateFormats
     public static string FormattedTime(DateTime date)
         => date.ToString("HH:mm", ZhCn);
 
-    /// <summary>全天事件的 9:00 提醒时刻。</summary>
     public static DateTime AlarmAtNine(DateTime day)
         => day.Date.AddHours(9);
 }

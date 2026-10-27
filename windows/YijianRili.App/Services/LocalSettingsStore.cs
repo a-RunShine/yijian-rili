@@ -3,7 +3,6 @@ using YijianRili.Domain.Services;
 
 namespace YijianRili.App.Services;
 
-/// <summary>ApplicationData.LocalSettings 实现 ISettingsStore。</summary>
 public sealed class LocalSettingsStore : ISettingsStore
 {
     private readonly ApplicationDataContainer _container =

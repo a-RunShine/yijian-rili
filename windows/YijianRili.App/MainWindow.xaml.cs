@@ -248,7 +248,6 @@ public sealed partial class MainWindow : Window
 
     private void HelpButton_Click(object sender, RoutedEventArgs e)
     {
-        // 只置位，由 PropertyChanged → ShowSyncGuideAsync 统一弹窗，避免叠开两次
         _vm.OpenSyncGuide();
     }
 
