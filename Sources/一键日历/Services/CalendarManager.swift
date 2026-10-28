@@ -203,14 +203,14 @@ final class CalendarManager: ObservableObject, CalendarService, CalendarEventSto
     }
 
     func event(withId id: String) -> CalendarEventInfo? {
-        guard let event = eventStore.event(withIdentifier: id) else { return nil }
+        guard let event = resolveEvent(id: id) else { return nil }
         return Self.mapEvent(event)
     }
 
     @discardableResult
     func deleteEvent(id: String) -> Bool {
-        guard let event = eventStore.event(withIdentifier: id) else {
-            logger.warning("deleteEvent: event \(id) not found")
+        guard let event = resolveEvent(id: id) else {
+            logger.warning("deleteEvent: event \(id) not found after refresh")
             return false
         }
         do {
@@ -221,6 +221,19 @@ final class CalendarManager: ObservableObject, CalendarService, CalendarEventSto
             logger.error("Failed to delete event: \(error.localizedDescription)")
             return false
         }
+    }
+
+    private func resolveEvent(id: String) -> EKEvent? {
+        if let direct = eventStore.event(withIdentifier: id) {
+            return direct
+        }
+        eventStore.refreshSourcesIfNecessary()
+        if let refreshed = eventStore.event(withIdentifier: id) {
+            return refreshed
+        }
+        guard let colon = id.firstIndex(of: ":") else { return nil }
+        let bare = String(id[id.index(after: colon)...])
+        return eventStore.event(withIdentifier: bare)
     }
 
     func eventNotes(id: String) -> String? {
