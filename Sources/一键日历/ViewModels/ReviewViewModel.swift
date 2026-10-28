@@ -991,19 +991,23 @@ class ReviewViewModel: ObservableObject {
 
     @discardableResult
     func deleteSearchHit(_ hit: SearchHit) -> Bool {
-        guard !hit.needsSelectiveDelete else { return false }
         guard let event = hit.members.first else { return false }
-        let success = browse.deleteSearchResult(event)
+        let report = DeletionPlan(calendar: calendar).execute(ids: [event.id])
+        browse.reloadAfterExternalDeletion(deletedIDs: report.deleted)
         searchResults = browse.searchResults
         selectedSearchResult = browse.selectedSearchResult
         displayedEvents = browse.displayedEvents
-        if success {
-            applyDeletedEvents(ids: [event.id])
+        if !report.deleted.isEmpty {
+            session.removeEventsFromRecorded(ids: report.deleted, reason: .userDeletedOccurrence)
+            refreshAllProjections()
             if selectedSearchHit?.id == hit.id {
                 selectedSearchHit = nil
             }
         }
-        return success
+        if !report.failed.isEmpty {
+            presentDeletionFailure(report)
+        }
+        return report.failed.isEmpty && !report.deleted.isEmpty
     }
 
     @discardableResult
