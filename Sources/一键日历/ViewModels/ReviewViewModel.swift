@@ -145,8 +145,8 @@ class ReviewViewModel: ObservableObject {
         return historyStore.load()
     }
 
-    private var notificationToken: Any?
-    private var activeToken: Any?
+    nonisolated(unsafe) private var notificationToken: Any?
+    nonisolated(unsafe) private var activeToken: Any?
     private var resultDismissTask: Task<Void, Never>?
     private var cancellables = Set<AnyCancellable>()
 
@@ -269,8 +269,7 @@ class ReviewViewModel: ObservableObject {
         }
     }
 
-    @MainActor
-    deinit {
+    nonisolated deinit {
         if let token = notificationToken {
             NotificationCenter.default.removeObserver(token)
         }
