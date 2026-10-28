@@ -29,4 +29,5 @@ enum RemoveEventsFromRecordedOutcome: Equatable {
     case noMatch
     case updated(id: UUID, remainingIdentifiers: [String])
     case discarded(id: UUID)
+    case refusedNoAuthority
 }

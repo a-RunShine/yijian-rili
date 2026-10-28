@@ -532,15 +532,15 @@ final class ReviewViewModelCalendarInjectionTests: XCTestCase {
         viewModel.searchText = marker
         viewModel.performSearch()
 
-        XCTAssertTrue(viewModel.searchHits.isEmpty)
-        XCTAssertFalse(viewModel.historyEntries.contains(where: { $0.id == batch.id }))
-        XCTAssertFalse(viewModel.todayCreatedEntries.contains(where: { $0.id == batch.id }))
-        XCTAssertFalse(
+        XCTAssertFalse(viewModel.historyEntries.isEmpty)
+        XCTAssertTrue(viewModel.historyEntries.contains(where: { $0.id == batch.id }))
+        XCTAssertTrue(viewModel.todayCreatedEntries.contains(where: { $0.id == batch.id }))
+        XCTAssertTrue(
             viewModel.weeklyReviewViewModel.weeklyEntries.contains(where: { $0.id == batch.id })
         )
     }
 
-    func testTodayCreatedListingReconcilesPartialMissingMembers() async throws {
+    func testTodayCreatedListingKeepsIdsWhenOneLookupMisses() async throws {
         let calendar = InMemoryCalendarService(grantAccessByDefault: true)
         let viewModel = ReviewViewModel(calendar: calendar, defaults: freshDefaults())
         let marker = "today-reconcile-\(UUID().uuidString.prefix(8))"
@@ -558,8 +558,8 @@ final class ReviewViewModelCalendarInjectionTests: XCTestCase {
         let listed = viewModel.todayCreatedEntries
         let after = try XCTUnwrap(listed.first(where: { $0.title == marker }))
         XCTAssertEqual(after.id, batch.id)
-        XCTAssertEqual(after.createdEventIdentifiers.count, 2)
-        XCTAssertFalse(after.createdEventIdentifiers.contains(ids[0]))
+        XCTAssertEqual(after.createdEventIdentifiers.count, 3)
+        XCTAssertTrue(after.createdEventIdentifiers.contains(ids[0]))
         XCTAssertTrue(
             viewModel.weeklyReviewViewModel.weeklyEntries.contains(where: { $0.id == batch.id })
         )
@@ -584,8 +584,8 @@ final class ReviewViewModelCalendarInjectionTests: XCTestCase {
 
         viewModel.loadDisplayedDayEvents()
 
-        XCTAssertFalse(viewModel.historyEntries.contains(where: { $0.id == batch.id }))
-        XCTAssertFalse(
+        XCTAssertTrue(viewModel.historyEntries.contains(where: { $0.id == batch.id }))
+        XCTAssertTrue(
             viewModel.weeklyReviewViewModel.weeklyEntries.contains(where: { $0.id == batch.id })
         )
     }
@@ -818,6 +818,30 @@ final class ReviewViewModelCalendarInjectionTests: XCTestCase {
         let outcome = viewModel.updateSharedDetail(for: legacy, detail: "不应写入")
         XCTAssertEqual(outcome, .unavailable)
         XCTAssertEqual(viewModel.resultType, .warning)
+    }
+
+    func testSeriesKeepsAllMembersAfterIdentifiersAreReassigned() async throws {
+        let calendar = InMemoryCalendarService(grantAccessByDefault: true)
+        let viewModel = ReviewViewModel(calendar: calendar, defaults: freshDefaults())
+        let marker = "reassigned-\(UUID().uuidString.prefix(8))"
+        let base = Calendar.current.date(byAdding: .day, value: -3, to: Date())!
+        viewModel.title = marker
+        viewModel.baseDate = base
+        viewModel.scheduleMode = .review
+        viewModel.reviewIntervals = [3, 7, 30]
+        viewModel.updateReviewDates()
+        await viewModel.createReviewSchedule()
+
+        let batch = try XCTUnwrap(viewModel.historyEntries.first(where: { $0.title == marker }))
+        XCTAssertEqual(batch.createdEventIdentifiers.count, 3)
+
+        _ = calendar.reassignAllEventIdentifiersForTesting()
+
+        viewModel.selectDayType(.today)
+        let row = try XCTUnwrap(viewModel.displayedDayHits.first(where: { $0.title == marker }))
+        XCTAssertTrue(row.isSeries, "id 变化后仍应识别为系列")
+        XCTAssertEqual(row.members.count, 3, "系列应展开全部成员")
+        XCTAssertTrue(row.needsSelectiveDelete, "多成员时应弹选择性删除列表")
     }
 
     func testDayLoadProjectsReviewMemberAsSeriesAwareRow() async throws {
@@ -1201,7 +1225,7 @@ final class ReviewViewModelCalendarInjectionTests: XCTestCase {
         XCTAssertEqual(viewModel.commitSharedDetailEdit(), .unavailable)
     }
 
-    func testDayLoadKeepsOneRowPerDayEventAndStillReconciles() async throws {
+    func testDayLoadKeepsAllIdsWhenSomeLookupsMiss() async throws {
         let calendar = InMemoryCalendarService(grantAccessByDefault: true)
         let viewModel = ReviewViewModel(calendar: calendar, defaults: freshDefaults())
         let marker = "day-reconcile-rows-\(UUID().uuidString.prefix(8))"
@@ -1221,11 +1245,7 @@ final class ReviewViewModelCalendarInjectionTests: XCTestCase {
         viewModel.loadDisplayedDayEvents()
 
         let remaining = try XCTUnwrap(viewModel.historyEntries.first(where: { $0.id == batch.id }))
-        XCTAssertEqual(remaining.createdEventIdentifiers, [ids[0]])
-        XCTAssertEqual(viewModel.displayedDayHits.count, 1)
-        XCTAssertTrue(viewModel.displayedDayHits[0].isSeries)
-        XCTAssertEqual(viewModel.displayedDayHits[0].members.count, 1)
-        XCTAssertFalse(viewModel.displayedDayHits[0].needsSelectiveDelete)
+        XCTAssertEqual(remaining.createdEventIdentifiers, ids)
     }
 
     private func date(_ y: Int, _ m: Int, _ d: Int) -> Date {

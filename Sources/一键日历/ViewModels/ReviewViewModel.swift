@@ -328,8 +328,31 @@ class ReviewViewModel: ObservableObject {
         DayEventProjection.project(
             dayEvents: dayEvents,
             history: historyStore.load(),
+            candidates: loadedCandidates,
             eventById: { [calendar] id in calendar.event(withId: id) }
         )
+    }
+
+    private var loadedCandidates: [CalendarEventInfo] {
+        let loaded = eventsByDay.values.flatMap { $0 }
+        var seen = Set(loaded.map(\.id))
+        var all = loaded
+        for entry in historyStore.load() {
+            for id in entry.createdEventIdentifiers where !seen.contains(id) {
+                guard let event = calendar.event(withId: id) else { continue }
+                seen.insert(id)
+                all.append(event)
+            }
+            for day in entry.reviewDates {
+                let start = Calendar.current.startOfDay(for: day)
+                guard let end = Calendar.current.date(byAdding: .day, value: 1, to: start) else { continue }
+                for event in calendar.fetchEvents(from: start, to: end) where !seen.contains(event.id) {
+                    seen.insert(event.id)
+                    all.append(event)
+                }
+            }
+        }
+        return all
     }
 
     func projectedHit(forEventId eventId: String, on day: Date) -> SearchHit? {
@@ -574,7 +597,7 @@ class ReviewViewModel: ObservableObject {
     }
 
     private func reconcileRecordedWithCalendar() {
-        if session.reconcileRecordedWithCalendar() {
+        if case .unmatched = session.reconcileRecordedWithCalendar() {
             refreshHistoryProjection()
         }
     }
@@ -673,7 +696,7 @@ class ReviewViewModel: ObservableObject {
         if showHistory {
             showHistory = false
         }
-        if let entry = HistorySeriesLookup.entry(containingEventId: event.id, in: historyEntries) {
+        if let entry = HistorySeriesLookup.entry(matching: event, in: historyEntries) {
             browseSharedDetailUnavailableEvent = nil
             editingSharedDetailEntryID = entry.id
             seriesTitleDraft = entry.title
@@ -914,7 +937,7 @@ class ReviewViewModel: ObservableObject {
     }
 
     private func applyDeletedEvents(ids: [String]) {
-        session.removeEventsFromRecorded(ids: ids)
+        session.removeEventsFromRecorded(ids: ids, reason: .userDeletedOccurrence)
         refreshHistoryProjection()
         rebuildSearchHits()
         rebuildDisplayedDayHits()

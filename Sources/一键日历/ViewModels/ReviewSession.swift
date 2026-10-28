@@ -127,13 +127,12 @@ final class ReviewSession {
     }
 
     private func isReviewSeriesEvent(_ eventId: String) -> Bool {
-        guard let entry = HistorySeriesLookup.entry(
-            containingEventId: eventId,
-            in: outcomes.recordedEntries()
-        ) else {
-            return false
+        let history = outcomes.recordedEntries()
+        if let entry = HistorySeriesLookup.entry(containingEventId: eventId, in: history) {
+            return entry.type == .review
         }
-        return entry.type == .review
+        guard let event = calendar.event(withId: eventId) else { return false }
+        return HistorySeriesLookup.entry(matching: event, in: history) != nil
     }
 
     private func reviewSeriesEventIds() -> Set<String> {
@@ -276,33 +275,32 @@ final class ReviewSession {
     }
 
     @discardableResult
-    func removeEventsFromRecorded(ids: [String]) -> RemoveEventsFromRecordedOutcome {
-        let outcome = outcomes.removeEventsFromRecorded(ids: ids)
+    func removeEventsFromRecorded(
+        ids: [String],
+        reason: RecordedPruneReason
+    ) -> RemoveEventsFromRecordedOutcome {
+        let outcome = outcomes.removeEventsFromRecorded(ids: ids, reason: reason)
         switch outcome {
         case .updated, .discarded:
             occurrenceStatuses.clear(ids: ids)
-        case .noMatch:
+        case .noMatch, .refusedNoAuthority:
             break
         }
         return outcome
     }
 
     @discardableResult
-    func reconcileRecordedWithCalendar() -> Bool {
-        var didChange = false
+    func reconcileRecordedWithCalendar() -> ReconcileOutcome {
+        guard CalendarLookupAuthority.verified(authorizationStatus) != nil else {
+            return .skippedNoAccess
+        }
+        var unmatched = 0
         for entry in outcomes.recordedEntries() {
             let identifiers = entry.createdEventIdentifiers
             guard !identifiers.isEmpty else { continue }
-            let missing = identifiers.filter { calendar.event(withId: $0) == nil }
-            guard !missing.isEmpty else { continue }
-            switch removeEventsFromRecorded(ids: missing) {
-            case .updated, .discarded:
-                didChange = true
-            case .noMatch:
-                break
-            }
+            unmatched += identifiers.filter { calendar.event(withId: $0) == nil }.count
         }
-        return didChange
+        return unmatched > 0 ? .unmatched(count: unmatched) : .unchanged
     }
 
     @discardableResult

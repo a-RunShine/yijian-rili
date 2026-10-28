@@ -68,6 +68,35 @@ enum CreateSuccessTestSupport {
         var c = DateComponents(); c.year = y; c.month = m; c.day = d
         return Calendar.current.date(from: c)!
     }
+
+    static func makeSessionWithRealWeekly(
+        calendar: CalendarService = InMemoryCalendarService(grantAccessByDefault: true)
+    ) -> (ReviewSession, HistoryStore, WeeklyReviewViewModel, UserDefaults) {
+        let suiteName = "reconcile-test-\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defaults.removePersistentDomain(forName: suiteName)
+        let history = HistoryStore(defaults: defaults)
+        let weekly = WeeklyReviewViewModel(defaults: defaults)
+        let outcomes = CreateSuccessOutcomes(history: history, weekly: weekly)
+        let session = ReviewSession(calendar: calendar, outcomes: outcomes)
+        return (session, history, weekly, defaults)
+    }
+
+    static func seedReviewBatch(
+        _ session: ReviewSession,
+        title: String,
+        on defaults: UserDefaults
+    ) async throws -> ([String], UUID) {
+        session.title = title
+        session.baseDate = Date()
+        session.scheduleMode = .review
+        session.reviewIntervals = [3, 7, 30]
+        session.updateReviewDates()
+        await session.create()
+        let history = HistoryStore(defaults: defaults)
+        let entry = try XCTUnwrap(history.load().first)
+        return (entry.createdEventIdentifiers, entry.id)
+    }
 }
 
 @MainActor
@@ -302,13 +331,13 @@ final class ReviewSessionTests: XCTestCase {
         let ids = try XCTUnwrap(history.load().first?.createdEventIdentifiers)
         XCTAssertEqual(ids.count, 3)
 
-        let partial = session.removeEventsFromRecorded(ids: [ids[0]])
+        let partial = session.removeEventsFromRecorded(ids: [ids[0]], reason: .userDeletedOccurrence)
         XCTAssertEqual(partial, .updated(id: batchID, remainingIdentifiers: Array(ids.dropFirst())))
         XCTAssertEqual(history.load().first?.createdEventIdentifiers.count, 2)
         XCTAssertTrue(weekly.weeklyEntries.contains(where: { $0.id == batchID }))
 
         let rest = Array(ids.dropFirst())
-        let full = session.removeEventsFromRecorded(ids: rest)
+        let full = session.removeEventsFromRecorded(ids: rest, reason: .userDeletedOccurrence)
         XCTAssertEqual(full, .discarded(id: batchID))
         XCTAssertTrue(history.load().isEmpty)
         XCTAssertTrue(session.todayCreatedEntries().isEmpty)
@@ -678,7 +707,7 @@ final class ReviewSessionTests: XCTestCase {
         XCTAssertTrue(weekly.titleUpdates.isEmpty)
     }
 
-    func testReconcilePrunesMissingIdsKeepsRemainingAndWeekly() async throws {
+    func testReconcileKeepsAllIdsWhenOneLookupMisses() async throws {
         let suiteName = "reconcile-partial-\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suiteName)!
         defaults.removePersistentDomain(forName: suiteName)
@@ -707,16 +736,14 @@ final class ReviewSessionTests: XCTestCase {
 
         let after = try XCTUnwrap(history.load().first)
         XCTAssertEqual(after.id, batchID)
-        XCTAssertEqual(after.createdEventIdentifiers, Array(ids.dropFirst()))
-        XCTAssertNil(session.resultMessage)
-        XCTAssertNil(session.resultType)
+        XCTAssertEqual(after.createdEventIdentifiers, ids)
         XCTAssertTrue(weekly.weeklyEntries.contains(where: { $0.id == batchID }))
         XCTAssertTrue(session.todayCreatedEntries().contains(where: { $0.id == batchID }))
 
         defaults.removePersistentDomain(forName: suiteName)
     }
 
-    func testReconcileDiscardsBatchWhenAllCalendarEventsMissing() async throws {
+    func testReconcileKeepsBatchWhenAllCalendarEventsLookupsMiss() async throws {
         let suiteName = "reconcile-all-\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suiteName)!
         defaults.removePersistentDomain(forName: suiteName)
@@ -744,12 +771,11 @@ final class ReviewSessionTests: XCTestCase {
 
         let changed = session.reconcileRecordedWithCalendar()
 
-        XCTAssertTrue(changed)
-        XCTAssertTrue(history.load().isEmpty)
-        XCTAssertTrue(session.todayCreatedEntries().isEmpty)
-        XCTAssertFalse(weekly.weeklyEntries.contains(where: { $0.id == batchID }))
-        XCTAssertNil(session.resultMessage)
-        XCTAssertNil(session.resultType)
+        XCTAssertEqual(changed, .unmatched(count: 3))
+        let after = try XCTUnwrap(history.load().first)
+        XCTAssertEqual(after.id, batchID)
+        XCTAssertEqual(after.createdEventIdentifiers, ids)
+        XCTAssertTrue(weekly.weeklyEntries.contains(where: { $0.id == batchID }))
 
         defaults.removePersistentDomain(forName: suiteName)
     }
@@ -1029,7 +1055,7 @@ final class OccurrenceStatusTests: XCTestCase {
         session.setOccurrenceStatus(eventId: ids[1], status: .skipped)
         XCTAssertEqual(session.occurrenceStatus(for: ids[0]), .done)
 
-        _ = session.removeEventsFromRecorded(ids: [ids[0]])
+        _ = session.removeEventsFromRecorded(ids: [ids[0]], reason: .userDeletedOccurrence)
 
         XCTAssertEqual(session.occurrenceStatus(for: ids[0]), .unmarked)
         XCTAssertEqual(session.occurrenceStatus(for: ids[1]), .skipped)
@@ -1037,7 +1063,7 @@ final class OccurrenceStatusTests: XCTestCase {
         defaults.removePersistentDomain(forName: suiteName)
     }
 
-    func testReconcileClearsOccurrenceStatusForMissingEvents() async throws {
+    func testReconcileKeepsOccurrenceStatusWhenLookupMisses() async throws {
         let suiteName = "occurrence-reconcile-\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suiteName)!
         defaults.removePersistentDomain(forName: suiteName)
@@ -1063,9 +1089,178 @@ final class OccurrenceStatusTests: XCTestCase {
 
         session.reconcileRecordedWithCalendar()
 
-        XCTAssertEqual(session.occurrenceStatus(for: ids[0]), .unmarked)
+        XCTAssertEqual(session.occurrenceStatus(for: ids[0]), .done)
         XCTAssertEqual(session.occurrenceStatus(for: ids[1]), .skipped)
 
         defaults.removePersistentDomain(forName: suiteName)
+    }
+
+    func testReconcileWithoutFullAccessLeavesHistoryUntouched() async throws {
+        let suiteName = "reconcile-noauth-\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defaults.removePersistentDomain(forName: suiteName)
+
+        let calendar = InMemoryCalendarService(grantAccessByDefault: true)
+        let history = HistoryStore(defaults: defaults)
+        let weekly = WeeklyReviewViewModel(defaults: defaults)
+        let outcomes = CreateSuccessOutcomes(history: history, weekly: weekly)
+        let session = ReviewSession(calendar: calendar, outcomes: outcomes)
+
+        session.title = "无权限对账"
+        session.baseDate = Date()
+        session.scheduleMode = .review
+        session.reviewIntervals = [3, 7, 30]
+        session.updateReviewDates()
+        await session.create()
+
+        let batchID = try XCTUnwrap(history.load().first?.id)
+        let ids = try XCTUnwrap(history.load().first?.createdEventIdentifiers)
+        XCTAssertEqual(ids.count, 3)
+
+        calendar.setAuthorizationStatusForTesting(.notDetermined)
+        calendar.eventsUnreadable = true
+        session.authorizationStatus = .notDetermined
+
+        let changed = session.reconcileRecordedWithCalendar()
+
+        XCTAssertEqual(changed, .skippedNoAccess)
+        let after = try XCTUnwrap(history.load().first)
+        XCTAssertEqual(after.id, batchID)
+        XCTAssertEqual(after.createdEventIdentifiers, ids)
+        XCTAssertTrue(weekly.weeklyEntries.contains(where: { $0.id == batchID }))
+
+        defaults.removePersistentDomain(forName: suiteName)
+    }
+
+    func testReconcileWithoutFullAccessDoesNotDiscardBatchEvenWhenEventsUnreadable() async throws {
+        let suiteName = "reconcile-noauth-keep-\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defaults.removePersistentDomain(forName: suiteName)
+
+        let calendar = InMemoryCalendarService(grantAccessByDefault: true)
+        let history = HistoryStore(defaults: defaults)
+        let weekly = WeeklyReviewViewModel(defaults: defaults)
+        let outcomes = CreateSuccessOutcomes(history: history, weekly: weekly)
+        let session = ReviewSession(calendar: calendar, outcomes: outcomes)
+
+        session.title = "无权限不可丢"
+        session.baseDate = Date()
+        session.scheduleMode = .review
+        session.reviewIntervals = [3, 7, 30]
+        session.updateReviewDates()
+        await session.create()
+
+        let batchID = try XCTUnwrap(history.load().first?.id)
+        let ids = try XCTUnwrap(history.load().first?.createdEventIdentifiers)
+
+        calendar.setAuthorizationStatusForTesting(.denied)
+        calendar.eventsUnreadable = true
+        session.authorizationStatus = .denied
+
+        session.reconcileRecordedWithCalendar()
+
+        let after = try XCTUnwrap(history.load().first)
+        XCTAssertEqual(after.id, batchID)
+        XCTAssertEqual(after.createdEventIdentifiers, ids)
+
+        defaults.removePersistentDomain(forName: suiteName)
+    }
+
+    func testReconcileReportsUnmatchedOnceAccessIsReadyWithoutPruning() async throws {
+        let suiteName = "reconcile-resume-\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defaults.removePersistentDomain(forName: suiteName)
+
+        let calendar = InMemoryCalendarService(grantAccessByDefault: true)
+        let history = HistoryStore(defaults: defaults)
+        let weekly = WeeklyReviewViewModel(defaults: defaults)
+        let outcomes = CreateSuccessOutcomes(history: history, weekly: weekly)
+        let session = ReviewSession(calendar: calendar, outcomes: outcomes)
+
+        session.title = "恢复对账"
+        session.baseDate = Date()
+        session.scheduleMode = .review
+        session.reviewIntervals = [3, 7, 30]
+        session.updateReviewDates()
+        await session.create()
+
+        let ids = try XCTUnwrap(history.load().first?.createdEventIdentifiers)
+
+        calendar.setAuthorizationStatusForTesting(.notDetermined)
+        session.authorizationStatus = .notDetermined
+        session.reconcileRecordedWithCalendar()
+        XCTAssertEqual(history.load().first?.createdEventIdentifiers, ids)
+
+        calendar.setAuthorizationStatusForTesting(.fullAccess)
+        session.authorizationStatus = .fullAccess
+        XCTAssertTrue(calendar.deleteEvent(id: ids[0]))
+        let outcome = session.reconcileRecordedWithCalendar()
+
+        XCTAssertEqual(outcome, .unmatched(count: 1))
+        XCTAssertEqual(history.load().first?.createdEventIdentifiers, ids)
+
+        defaults.removePersistentDomain(forName: suiteName)
+    }
+
+    func testCalendarConfirmedMissingCannotBeConstructedWithoutFullAccess() {
+        XCTAssertNil(CalendarLookupAuthority.verified(.notDetermined))
+        XCTAssertNil(CalendarLookupAuthority.verified(.denied))
+        XCTAssertNil(CalendarLookupAuthority.verified(.restricted))
+        XCTAssertNotNil(CalendarLookupAuthority.verified(.fullAccess))
+    }
+
+    func testDirectPruneByUserStillWorksWithoutAccess() async throws {
+        let suiteName = "prune-user-\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defaults.removePersistentDomain(forName: suiteName)
+
+        let calendar = InMemoryCalendarService(grantAccessByDefault: true)
+        let history = HistoryStore(defaults: defaults)
+        let weekly = WeeklyReviewViewModel(defaults: defaults)
+        let outcomes = CreateSuccessOutcomes(history: history, weekly: weekly)
+        let session = ReviewSession(calendar: calendar, outcomes: outcomes)
+
+        session.title = "用户删除"
+        session.baseDate = Date()
+        session.scheduleMode = .review
+        session.reviewIntervals = [3, 7, 30]
+        session.updateReviewDates()
+        await session.create()
+
+        let ids = try XCTUnwrap(history.load().first?.createdEventIdentifiers)
+
+        session.authorizationStatus = .denied
+        let outcome = session.removeEventsFromRecorded(ids: [ids[0]], reason: .userDeletedOccurrence)
+
+        XCTAssertEqual(outcome, .updated(id: history.load().first!.id, remainingIdentifiers: Array(ids.dropFirst())))
+
+        defaults.removePersistentDomain(forName: suiteName)
+    }
+
+    func testSeriesStaysEditableAfterCalendarReassignsEveryIdentifier() async throws {
+        let calendar = InMemoryCalendarService(grantAccessByDefault: true)
+        let (session, history, _, defaults) = CreateSuccessTestSupport.makeSessionWithRealWeekly(calendar: calendar)
+        let (ids, batchID) = try await CreateSuccessTestSupport.seedReviewBatch(
+            session,
+            title: "CalDAV 重分配",
+            on: defaults
+        )
+        XCTAssertEqual(ids.count, 3)
+        XCTAssertTrue(session.canMarkOccurrence(eventId: ids[0]))
+
+        let remapped = calendar.reassignAllEventIdentifiersForTesting()
+        let freshIds = ids.compactMap { remapped[$0] }
+        XCTAssertEqual(freshIds.count, 3)
+
+        session.reconcileRecordedWithCalendar()
+
+        XCTAssertTrue(
+            session.canMarkOccurrence(eventId: freshIds[0]),
+            "CalDAV 重新分配 id 后，系列仍应可标记完成"
+        )
+        XCTAssertTrue(
+            history.load().contains(where: { $0.id == batchID })
+        )
+
     }
 }
