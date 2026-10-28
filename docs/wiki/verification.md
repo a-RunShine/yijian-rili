@@ -109,3 +109,39 @@ Thread 0 crashed:
 测试隔离确实有缺陷（`ReviewSession` / `ReviewViewModel` 硬编码 `UserDefaults.standard`），已补 `defaults` 注入并清理了全部全局清场。这部分**不是崩溃的成因**，但它让 `swift test --parallel` 从 49/37/60 个错误降到稳定 0，值得单独保留。
 
 判断某次修复是否真的解决了问题时，要问：**修复后 CI 的那个具体测试还崩吗？** 而不是「本地测试变绿了」。前者是证据，后者只是必要条件。
+
+## 2026-10-28：无权限对账会永久删除历史 id
+
+用户报：每次 `make open` / `make install` 之后，之前的复习系列丧失编辑能力，点「完成」「跳过」提示「这条日程缺少系列记录」。
+
+**现象与数据的差距**是这次的关键：用户说「记录都没了」，但实机 plist 里 `historyEntriesData` 有 8 条记录、1781 字符——记录还在，只是每条 `createdEventIdentifiers` 都是 `[]`。日历里的事件也还在。丢的是**关联**，不是内容。
+
+根因链条：
+
+```
+ReviewViewModel.init
+  pullBrowseState() → rebuildSearchHits() → reconcileRecordedWithCalendar()
+      ← 此时授权尚未就绪
+      calendar.event(withId:) 无权限，对每个 id 静默返回 nil
+      对账把 nil 读作「事件已被删除」
+      removeEventsFromRecorded 把这些 id 从 historyEntriesData 永久写回
+  if authorizationStatus == .fullAccess { … }   ← 权限检查在这里才到
+```
+
+### 为什么只在重装后复发
+
+`make bundle` 会重新 `codesign`。重签名后首次启动 EventKit 授权需要重建，于是又撞进那个窗口。日常反复启动同一个已签名的 app 不触发。
+
+### 为什么测试全绿却没抓到
+
+`InMemoryCalendarService` 默认 `grantAccessByDefault: true`，测试永远走不到无权限分支。而且它的 `event(withId:)` 不看权限——即使把 status 设成 `notDetermined`，事件照样查得到，于是「无权限」测试是**假绿**。必须同时让查询不可读（fake 的 `eventsUnreadable`）才真正进入回归路径。
+
+### 教训
+
+**「查不到」不等于「不存在」。** 这是本次 bug 的全部。任何把「查询返回空」当作删除证据的逻辑，都要先问：这次查询本身可信吗？
+
+修复把这条约束放进了类型：`CalendarLookupAuthority` 私有 init、只能由 full access 构造，所以 `.calendarConfirmedMissing` 这个修剪理由在无授权时**根本写不出来**。比在调用点加 `if authorizationStatus == .fullAccess` 更可靠——后者要靠每个新增调用点记得写。
+
+### 一个操作层面的教训
+
+本轮两次用 `git checkout -- <file>` 想撤销一次临时实验，结果把**未提交的整文件改动**一并丢掉，每次都要从备份恢复。临时验证防护是否生效时，用 `cp file /tmp/x.bak` 备份后改、验完 `cp` 回来，**不要用 `git checkout`**——它回滚到最近一次 commit，不是回滚到「我刚才改动之前」。
