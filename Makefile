@@ -11,7 +11,7 @@ BUILD_DIR   := .build/release
 BUILD_APP   := $(BUILD_DIR)/$(APP)
 APP_CONTENTS := $(BUILD_APP)/Contents
 
-.PHONY: build bundle test lint run open clean all install uninstall verify-install
+.PHONY: build bundle test lint check run open clean all install uninstall verify-install
 
 all: bundle
 
@@ -30,10 +30,12 @@ bundle: build
 	@echo "✅ Bundle 完成: $(BUILD_APP)"
 
 test:
-	swift test
+	SWIFT_BACKTRACE=enable=yes,threads=all swift test
 
 lint:
 	@./scripts/lint-comments.sh
+
+check: lint test
 
 # swift run 出来的是裸可执行文件，没有 app bundle 上下文，
 # Info.plist 里的 NSCalendarsFullAccessUsageDescription / LSUIElement 都不生效。
