@@ -304,6 +304,13 @@ final class ReviewSession {
     }
 
     @discardableResult
+    func discardRecordedEntry(id: UUID) {
+        if let entry = outcomes.recordedEntries().first(where: { $0.id == id }) {
+            occurrenceStatuses.clear(ids: statusKeys(for: entry))
+        }
+        outcomes.discardRecorded(id: id)
+    }
+
     func discardRecordedContainingEvent(id: String) -> UUID? {
         let entry = outcomes.recordedEntries().first(where: {
             $0.createdEventIdentifiers.contains(id)

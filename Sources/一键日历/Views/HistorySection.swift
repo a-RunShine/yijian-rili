@@ -140,6 +140,6 @@ struct HistorySection: View {
     }
 
     private func deleteEntry(_ entry: HistoryEntry) {
-        viewModel.deleteHistoryEntry(entry)
+        viewModel.requestHistoryDelete(entry)
     }
 }

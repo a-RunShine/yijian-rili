@@ -243,6 +243,14 @@
 "series_search_member_count" = "系列共 %@ 次复习";
 "series_day_row_badge" = "复习系列";
 "series_day_row_member_hint" = "系列共 %@ 次复习";
+"history_delete_title" = "删除这条历史记录";
+"history_delete_summary" = "这条记录有 %@ 个复习日";
+"history_delete_record_only" = "只删记录";
+"history_delete_record_only_hint" = "日历里的日程保留。它们将不再被识别为复习系列，无法标记完成或跳过。";
+"history_delete_events_too" = "连同日历日程一起删";
+"history_delete_events_too_hint" = "同时删除日历里的 %@ 条日程，不可撤销。";
+"history_delete_events_too_unavailable" = "这条记录没有关联的日历日程";
+"history_delete_cancel" = "取消";
 "series_delete_title" = "选择要删除的复习";
 "series_delete_subtitle" = "「%@」";
 "series_delete_confirm" = "删除所选";

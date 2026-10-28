@@ -79,17 +79,23 @@ def report_status(store, entries):
         known.update(entry.get("createdEventIdentifiers") or [])
 
     marked = {key: value for key, value in statuses.items() if value and value != "unmarked"}
-    unmatched = [key for key in marked if key not in known]
-    print(f"  条目数: {len(marked)}，其中 {len(unmatched)} 条不对应任何历史记录里的 id")
+    series = [key for key in marked if key.startswith("series:")]
+    unmatched = [key for key in marked if not key.startswith("series:") and key not in known]
+    print(
+        f"  条目数: {len(marked)}，新格式（series:）{len(series)} 条，"
+        f"旧格式 {len(marked) - len(series)} 条"
+    )
+    if series:
+        print("  新格式键挂在系列身份上，日历同步重分配 id 后仍然有效。")
     if unmatched:
-        print("  说明：标记按事件的实时 id 存。实时 id 只要不变，读写就一致，标记正常显示。")
-        print("        但日历同步一旦重分配该 id，这条标记就再也认领不到任何事件，")
-        print("        而位图里不会自动清理，会永久残留且无法恢复。")
+        print(f"  其中 {len(unmatched)} 条旧键已无法对应任何历史记录里的 id：")
+        print("  它们指向早已失效的事件 id，不会自动清理，但也不影响新操作。")
         for key in unmatched[:5]:
-            print(f"    {marked[key]:8} {key.split(':')[-1]}")
+            tail = key.split(":")[-1]
+            print(f"    {marked[key]:8} {tail[:16]}")
         if len(unmatched) > 5:
             print(f"    ... 另有 {len(unmatched) - 5} 条")
-    print("  判据：标记数 - 能对上历史 id 的数量 = 已失联数量。不为 0 说明丢过。")
+    print("  判据：出现 series: 前缀说明新标记是安全的；旧键数量只增不减才是问题。")
 
 
 def report_json_keys(store):

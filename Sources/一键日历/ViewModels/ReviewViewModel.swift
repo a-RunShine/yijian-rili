@@ -792,9 +792,40 @@ class ReviewViewModel: ObservableObject {
         refreshHistoryProjection()
     }
 
-    func deleteHistoryEntry(_ entry: HistoryEntry) {
+    @Published var historyPendingDelete: HistoryEntry?
+
+    enum HistoryDeleteScope {
+        case recordOnly
+        case eventsToo
+    }
+
+    func requestHistoryDelete(_ entry: HistoryEntry) {
+        historyPendingDelete = entry
+    }
+
+    func cancelHistoryDelete() {
+        historyPendingDelete = nil
+    }
+
+    func commitHistoryDelete(_ entry: HistoryEntry, scope: HistoryDeleteScope) {
+        if case .eventsToo = scope {
+            for id in entry.createdEventIdentifiers {
+                calendar.deleteEvent(id: id)
+            }
+        }
+        session.discardRecordedEntry(id: entry.id)
         outcomes.removeHistory(id: entry.id)
+        weeklyReviewViewModel.removeWeeklyEntries(id: entry.id)
+        historyPendingDelete = nil
         refreshHistoryProjection()
+        loadVisibleWindow()
+        loadDisplayedDayEvents()
+        rebuildSearchHits()
+        weeklyReviewViewModel.refreshOccurrenceMaterials()
+    }
+
+    func deleteHistoryEntry(_ entry: HistoryEntry) {
+        commitHistoryDelete(entry, scope: .recordOnly)
     }
 
     func deleteHistoryEntry(at offsets: IndexSet) {
