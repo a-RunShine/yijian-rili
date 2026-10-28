@@ -41,7 +41,14 @@ jobs:
         run: swift build
 
       - name: Test
-        run: swift test
+        run: |
+          set -o pipefail
+          swift test 2>&1 | tee /tmp/test.log
+
+      - name: Show assertion details on failure
+        if: failure()
+        run: |
+          grep -nE 'Fatal error|precondition|assertion|Illegal|Signal' /tmp/test.log || true
 
       - name: Dump crash reports on failure
         if: failure()

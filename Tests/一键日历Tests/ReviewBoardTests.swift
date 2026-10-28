@@ -3,19 +3,10 @@ import XCTest
 
 @MainActor
 final class ReviewBoardTests: XCTestCase {
-    private var _isolated: IsolatedDefaults?
-
-    private var isolated: IsolatedDefaults {
-        if let existing = _isolated { return existing }
-        let created = makeIsolatedDefaults()
-        _isolated = created
-        return created
-    }
-
-    override func tearDown() {
-        _isolated?.cleanUp()
-        _isolated = nil
-        super.tearDown()
+    private func freshDefaults() -> UserDefaults {
+        let isolated = makeIsolatedDefaults()
+        addTeardownBlock { isolated.cleanUp() }
+        return isolated.defaults
     }
     func testSelectingADayNormalizesBaseDateAndShowsTheFirstOfThatMonth() {
         let viewModel = ReviewViewModel(calendar: InMemoryCalendarService(grantAccessByDefault: true))
@@ -58,7 +49,7 @@ final class ReviewBoardTests: XCTestCase {
             event(id: "last", title: "末格", start: dateTime(2026, 11, 8, 10, 0), end: dateTime(2026, 11, 8, 11, 0), isAllDay: false),
             event(id: "after", title: "窗外后", start: date(2026, 11, 9), end: dateTime(2026, 11, 9, 1, 0), isAllDay: false),
         ])
-        let viewModel = ReviewViewModel(calendar: calendar, defaults: isolated.defaults)
+        let viewModel = ReviewViewModel(calendar: calendar, defaults: freshDefaults())
         let daysBefore = calendar.dayFetches
 
         viewModel.selectDay(date(2026, 10, 20))
@@ -81,7 +72,7 @@ final class ReviewBoardTests: XCTestCase {
 
     func testSelectingADayInsideTheVisibleMonthKeepsTheMonthAndWindowAndRecomputesThePreview() {
         let calendar = RangeQueryCalendar(events: [])
-        let viewModel = ReviewViewModel(calendar: calendar, defaults: isolated.defaults)
+        let viewModel = ReviewViewModel(calendar: calendar, defaults: freshDefaults())
         viewModel.applyPreset(.daily)
         viewModel.selectDay(date(2026, 10, 20))
         let rangesBefore = calendar.rangeFetches.count
@@ -100,13 +91,13 @@ final class ReviewBoardTests: XCTestCase {
 
     func testSelectingADayInsideTheVisibleMonthMatchesTheReselectionDrag() {
         let clicked = RangeQueryCalendar(events: [])
-        let clickedModel = ReviewViewModel(calendar: clicked, defaults: isolated.defaults)
+        let clickedModel = ReviewViewModel(calendar: clicked, defaults: freshDefaults())
         clickedModel.applyPreset(.daily)
         clickedModel.selectDay(date(2026, 10, 20))
         let clickedRangesBefore = clicked.rangeFetches.count
 
         let dragged = RangeQueryCalendar(events: [])
-        let draggedModel = ReviewViewModel(calendar: dragged, defaults: isolated.defaults)
+        let draggedModel = ReviewViewModel(calendar: dragged, defaults: freshDefaults())
         draggedModel.applyPreset(.daily)
         draggedModel.selectDay(date(2026, 10, 20))
         let draggedRangesBefore = dragged.rangeFetches.count
@@ -127,7 +118,7 @@ final class ReviewBoardTests: XCTestCase {
             event(id: "nov", title: "十一月", start: date(2026, 11, 30), end: date(2026, 12, 1), isAllDay: true),
             event(id: "dec", title: "十二月", start: date(2026, 12, 6), end: date(2026, 12, 7), isAllDay: true),
         ])
-        let viewModel = ReviewViewModel(calendar: calendar, defaults: isolated.defaults)
+        let viewModel = ReviewViewModel(calendar: calendar, defaults: freshDefaults())
         viewModel.applyPreset(.daily)
         viewModel.selectDay(date(2026, 10, 20))
         let rangesBefore = calendar.rangeFetches.count
@@ -152,7 +143,7 @@ final class ReviewBoardTests: XCTestCase {
             event(id: "oct", title: "十月", start: date(2026, 10, 20), end: date(2026, 10, 21), isAllDay: true),
             event(id: "nov", title: "十一月", start: date(2026, 11, 19), end: date(2026, 11, 20), isAllDay: true),
         ])
-        let viewModel = ReviewViewModel(calendar: calendar, defaults: isolated.defaults)
+        let viewModel = ReviewViewModel(calendar: calendar, defaults: freshDefaults())
         viewModel.applyPreset(.daily)
         viewModel.selectDay(date(2026, 10, 20))
         let rangesBefore = calendar.rangeFetches.count
@@ -194,7 +185,7 @@ final class ReviewBoardTests: XCTestCase {
 
     func testMovingSelectionInsideTheVisibleWindowDoesNotFetchAgain() {
         let calendar = RangeQueryCalendar(events: [])
-        let viewModel = ReviewViewModel(calendar: calendar, defaults: isolated.defaults)
+        let viewModel = ReviewViewModel(calendar: calendar, defaults: freshDefaults())
         viewModel.applyPreset(.daily)
         viewModel.selectDay(date(2026, 10, 20))
         let rangesBefore = calendar.rangeFetches.count
@@ -216,7 +207,7 @@ final class ReviewBoardTests: XCTestCase {
             event(id: "may", title: "五月", start: date(2026, 5, 4), end: date(2026, 5, 5), isAllDay: true),
             event(id: "dec", title: "十二月", start: date(2026, 12, 1), end: date(2026, 12, 2), isAllDay: true),
         ])
-        let viewModel = ReviewViewModel(calendar: calendar, defaults: isolated.defaults)
+        let viewModel = ReviewViewModel(calendar: calendar, defaults: freshDefaults())
         viewModel.selectDay(date(2026, 1, 15))
         let rangesBefore = calendar.rangeFetches.count
 
@@ -234,7 +225,7 @@ final class ReviewBoardTests: XCTestCase {
             event(id: "march", title: "三月", start: date(2026, 3, 15), end: date(2026, 3, 16), isAllDay: true),
             event(id: "jan", title: "一月", start: date(2026, 1, 1), end: date(2026, 1, 2), isAllDay: true),
         ])
-        let viewModel = ReviewViewModel(calendar: calendar, defaults: isolated.defaults)
+        let viewModel = ReviewViewModel(calendar: calendar, defaults: freshDefaults())
         viewModel.customIntervalDraft = "2, 6, 18"
         viewModel.selectedSegment = .today
         viewModel.selectDay(date(2026, 10, 20))
@@ -269,7 +260,7 @@ final class ReviewBoardTests: XCTestCase {
 
     func testBlankTitleDoesNotWrite() async {
         let calendar = InMemoryCalendarService(grantAccessByDefault: true)
-        let viewModel = ReviewViewModel(calendar: calendar, defaults: isolated.defaults)
+        let viewModel = ReviewViewModel(calendar: calendar, defaults: freshDefaults())
         viewModel.selectDay(date(2026, 10, 20))
         viewModel.title = " \n "
 
@@ -282,7 +273,7 @@ final class ReviewBoardTests: XCTestCase {
 
     func testSubmitAppliesUncommittedIntervalDraftBeforeWriting() async {
         let calendar = InMemoryCalendarService(grantAccessByDefault: true)
-        let viewModel = ReviewViewModel(calendar: calendar, defaults: isolated.defaults)
+        let viewModel = ReviewViewModel(calendar: calendar, defaults: freshDefaults())
         viewModel.selectDay(date(2026, 10, 20))
         viewModel.reviewIntervals = [3, 7, 30]
         viewModel.title = "自定义节奏"
@@ -303,7 +294,7 @@ final class ReviewBoardTests: XCTestCase {
 
     func testUncommittedInvalidIntervalDraftDoesNotWrite() async {
         let calendar = InMemoryCalendarService(grantAccessByDefault: true)
-        let viewModel = ReviewViewModel(calendar: calendar, defaults: isolated.defaults)
+        let viewModel = ReviewViewModel(calendar: calendar, defaults: freshDefaults())
         viewModel.selectDay(date(2026, 10, 20))
         viewModel.reviewIntervals = [3, 7, 30]
         viewModel.title = "不会写入"
@@ -326,7 +317,7 @@ final class ReviewBoardTests: XCTestCase {
             event(id: "today-a", title: "今日", start: today, end: tomorrow, isAllDay: true),
             event(id: "tomorrow-b", title: "明日", start: tomorrow, end: dayAfterTomorrow, isAllDay: true),
         ])
-        let viewModel = ReviewViewModel(calendar: calendar, defaults: isolated.defaults)
+        let viewModel = ReviewViewModel(calendar: calendar, defaults: freshDefaults())
         viewModel.selectDay(today)
         viewModel.selectDayType(.today)
         XCTAssertEqual(ids(on: today, in: viewModel), ["today-a"])
@@ -349,7 +340,7 @@ final class ReviewBoardTests: XCTestCase {
 
     func testSelectiveSeriesDeleteRefreshesTheVisibleMonthWindow() async throws {
         let calendar = RangeQueryCalendar(events: [])
-        let viewModel = ReviewViewModel(calendar: calendar, defaults: isolated.defaults)
+        let viewModel = ReviewViewModel(calendar: calendar, defaults: freshDefaults())
         viewModel.title = "窗口系列"
         viewModel.baseDate = date(2026, 10, 20)
         viewModel.scheduleMode = .review

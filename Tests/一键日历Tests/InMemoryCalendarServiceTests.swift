@@ -286,23 +286,14 @@ final class InMemoryCalendarServiceTests: XCTestCase {
 
 @MainActor
 final class ReviewViewModelCalendarInjectionTests: XCTestCase {
-    private var _isolated: IsolatedDefaults?
-
-    private var isolated: IsolatedDefaults {
-        if let existing = _isolated { return existing }
-        let created = makeIsolatedDefaults()
-        _isolated = created
-        return created
-    }
-
-    override func tearDown() {
-        _isolated?.cleanUp()
-        _isolated = nil
-        super.tearDown()
+    private func freshDefaults() -> UserDefaults {
+        let isolated = makeIsolatedDefaults()
+        addTeardownBlock { isolated.cleanUp() }
+        return isolated.defaults
     }
     func testCreateReviewScheduleSucceedsWithInMemoryCalendar() async {
         let calendar = InMemoryCalendarService(grantAccessByDefault: true)
-        let viewModel = ReviewViewModel(calendar: calendar, defaults: isolated.defaults)
+        let viewModel = ReviewViewModel(calendar: calendar, defaults: freshDefaults())
         viewModel.title = "注入日历 seam"
         viewModel.baseDate = date(2026, 1, 31)
         viewModel.reviewIntervals = [3, 7, 30]
@@ -324,7 +315,7 @@ final class ReviewViewModelCalendarInjectionTests: XCTestCase {
 
     func testWarningWithPartialCreateReloadsVisibleWindowAndKeepsUndo() async {
         let calendar = InMemoryCalendarService(grantAccessByDefault: true)
-        let viewModel = ReviewViewModel(calendar: calendar, defaults: isolated.defaults)
+        let viewModel = ReviewViewModel(calendar: calendar, defaults: freshDefaults())
         let base = date(2026, 10, 20)
         let duplicateDay = date(2026, 10, 23)
         let freshDay = date(2026, 10, 27)
@@ -359,13 +350,13 @@ final class ReviewViewModelCalendarInjectionTests: XCTestCase {
     }
 
     func testDefaultSegmentIsCreate() {
-        let viewModel = ReviewViewModel(calendar: InMemoryCalendarService(grantAccessByDefault: true), defaults: isolated.defaults)
+        let viewModel = ReviewViewModel(calendar: InMemoryCalendarService(grantAccessByDefault: true), defaults: freshDefaults())
         XCTAssertEqual(viewModel.selectedSegment, .create)
     }
 
     func testUndoClearsTodayCreatedAndWeeklyViaFacade() async {
         let calendar = InMemoryCalendarService(grantAccessByDefault: true)
-        let viewModel = ReviewViewModel(calendar: calendar, defaults: isolated.defaults)
+        let viewModel = ReviewViewModel(calendar: calendar, defaults: freshDefaults())
         let marker = "tip-smoke-undo-\(UUID().uuidString.prefix(8))"
         viewModel.title = marker
         viewModel.baseDate = date(2026, 2, 1)
@@ -400,7 +391,7 @@ final class ReviewViewModelCalendarInjectionTests: XCTestCase {
 
     func testDeleteSearchResultClearsTodayCreatedAndWeeklyViaFacade() async {
         let calendar = InMemoryCalendarService(grantAccessByDefault: true)
-        let viewModel = ReviewViewModel(calendar: calendar, defaults: isolated.defaults)
+        let viewModel = ReviewViewModel(calendar: calendar, defaults: freshDefaults())
         let marker = "tip-smoke-del-\(UUID().uuidString.prefix(8))"
         let eventDay = Date()
         viewModel.title = marker
@@ -437,7 +428,7 @@ final class ReviewViewModelCalendarInjectionTests: XCTestCase {
 
     func testSearchCollapsesReviewSeriesToOneHit() async {
         let calendar = InMemoryCalendarService(grantAccessByDefault: true)
-        let viewModel = ReviewViewModel(calendar: calendar, defaults: isolated.defaults)
+        let viewModel = ReviewViewModel(calendar: calendar, defaults: freshDefaults())
         let marker = "series-collapse-\(UUID().uuidString.prefix(8))"
         viewModel.title = marker
         viewModel.baseDate = Date()
@@ -459,7 +450,7 @@ final class ReviewViewModelCalendarInjectionTests: XCTestCase {
 
     func testSelectiveSeriesDeletePartialKeepsTodayCreatedAndWeekly() async throws {
         let calendar = InMemoryCalendarService(grantAccessByDefault: true)
-        let viewModel = ReviewViewModel(calendar: calendar, defaults: isolated.defaults)
+        let viewModel = ReviewViewModel(calendar: calendar, defaults: freshDefaults())
         let marker = "series-partial-\(UUID().uuidString.prefix(8))"
         viewModel.title = marker
         viewModel.baseDate = Date()
@@ -494,7 +485,7 @@ final class ReviewViewModelCalendarInjectionTests: XCTestCase {
 
     func testSelectiveSeriesDeleteAllDiscardsTodayCreatedAndWeekly() async throws {
         let calendar = InMemoryCalendarService(grantAccessByDefault: true)
-        let viewModel = ReviewViewModel(calendar: calendar, defaults: isolated.defaults)
+        let viewModel = ReviewViewModel(calendar: calendar, defaults: freshDefaults())
         let marker = "series-all-\(UUID().uuidString.prefix(8))"
         viewModel.title = marker
         viewModel.baseDate = Date()
@@ -522,7 +513,7 @@ final class ReviewViewModelCalendarInjectionTests: XCTestCase {
 
     func testSearchRebuildReconcilesGhostSeriesMembers() async throws {
         let calendar = InMemoryCalendarService(grantAccessByDefault: true)
-        let viewModel = ReviewViewModel(calendar: calendar, defaults: isolated.defaults)
+        let viewModel = ReviewViewModel(calendar: calendar, defaults: freshDefaults())
         let marker = "search-reconcile-\(UUID().uuidString.prefix(8))"
         viewModel.title = marker
         viewModel.baseDate = Date()
@@ -551,7 +542,7 @@ final class ReviewViewModelCalendarInjectionTests: XCTestCase {
 
     func testTodayCreatedListingReconcilesPartialMissingMembers() async throws {
         let calendar = InMemoryCalendarService(grantAccessByDefault: true)
-        let viewModel = ReviewViewModel(calendar: calendar, defaults: isolated.defaults)
+        let viewModel = ReviewViewModel(calendar: calendar, defaults: freshDefaults())
         let marker = "today-reconcile-\(UUID().uuidString.prefix(8))"
         viewModel.title = marker
         viewModel.baseDate = Date()
@@ -576,7 +567,7 @@ final class ReviewViewModelCalendarInjectionTests: XCTestCase {
 
     func testDayLoadReconcilesMissingMembers() async throws {
         let calendar = InMemoryCalendarService(grantAccessByDefault: true)
-        let viewModel = ReviewViewModel(calendar: calendar, defaults: isolated.defaults)
+        let viewModel = ReviewViewModel(calendar: calendar, defaults: freshDefaults())
         let marker = "day-reconcile-\(UUID().uuidString.prefix(8))"
         viewModel.title = marker
         viewModel.baseDate = Date()
@@ -601,7 +592,7 @@ final class ReviewViewModelCalendarInjectionTests: XCTestCase {
 
     func testDetailBindingRoundsTripToSession() async {
         let calendar = InMemoryCalendarService(grantAccessByDefault: true)
-        let viewModel = ReviewViewModel(calendar: calendar, defaults: isolated.defaults)
+        let viewModel = ReviewViewModel(calendar: calendar, defaults: freshDefaults())
         viewModel.detail = "  课堂补充  "
         viewModel.title = "详情绑定"
         viewModel.baseDate = date(2026, 1, 31)
@@ -623,7 +614,7 @@ final class ReviewViewModelCalendarInjectionTests: XCTestCase {
 
     func testUpdateSharedDetailViaFacade() async {
         let calendar = InMemoryCalendarService(grantAccessByDefault: true)
-        let viewModel = ReviewViewModel(calendar: calendar, defaults: isolated.defaults)
+        let viewModel = ReviewViewModel(calendar: calendar, defaults: freshDefaults())
         viewModel.title = "系列编辑"
         viewModel.detail = "初始"
         viewModel.baseDate = date(2026, 1, 31)
@@ -645,7 +636,7 @@ final class ReviewViewModelCalendarInjectionTests: XCTestCase {
 
     func testUpdateSeriesTitleViaFacadeUpdatesHistoryTodayCreatedAndWeekly() async {
         let calendar = InMemoryCalendarService(grantAccessByDefault: true)
-        let viewModel = ReviewViewModel(calendar: calendar, defaults: isolated.defaults)
+        let viewModel = ReviewViewModel(calendar: calendar, defaults: freshDefaults())
         viewModel.title = "旧门面标题"
         viewModel.detail = "保留详情"
         viewModel.baseDate = date(2026, 1, 31)
@@ -687,7 +678,7 @@ final class ReviewViewModelCalendarInjectionTests: XCTestCase {
 
     func testCommitSharedDetailEditAlsoSavesSeriesTitle() async {
         let calendar = InMemoryCalendarService(grantAccessByDefault: true)
-        let viewModel = ReviewViewModel(calendar: calendar, defaults: isolated.defaults)
+        let viewModel = ReviewViewModel(calendar: calendar, defaults: freshDefaults())
         viewModel.title = "提交前"
         viewModel.detail = "旧详情"
         viewModel.baseDate = date(2026, 1, 31)
@@ -718,7 +709,7 @@ final class ReviewViewModelCalendarInjectionTests: XCTestCase {
 
     func testCommitSharedDetailEditWithEmptyTitleStillSavesDetail() async {
         let calendar = InMemoryCalendarService(grantAccessByDefault: true)
-        let viewModel = ReviewViewModel(calendar: calendar, defaults: isolated.defaults)
+        let viewModel = ReviewViewModel(calendar: calendar, defaults: freshDefaults())
         viewModel.title = "仅改详情"
         viewModel.detail = "旧详情"
         viewModel.baseDate = date(2026, 1, 31)
@@ -745,7 +736,7 @@ final class ReviewViewModelCalendarInjectionTests: XCTestCase {
 
     func testBeginSharedDetailEditFromBrowseResolvesHistoryAndUsesSharedDetail() async {
         let calendar = InMemoryCalendarService(grantAccessByDefault: true)
-        let viewModel = ReviewViewModel(calendar: calendar, defaults: isolated.defaults)
+        let viewModel = ReviewViewModel(calendar: calendar, defaults: freshDefaults())
         viewModel.title = "浏览点开"
         viewModel.detail = "初始详情"
         viewModel.baseDate = date(2026, 1, 31)
@@ -770,7 +761,7 @@ final class ReviewViewModelCalendarInjectionTests: XCTestCase {
 
     func testBeginSharedDetailEditFromBrowseFillsDraftFromNotesWhenSharedDetailNil() async {
         let calendar = InMemoryCalendarService(grantAccessByDefault: true)
-        let viewModel = ReviewViewModel(calendar: calendar, defaults: isolated.defaults)
+        let viewModel = ReviewViewModel(calendar: calendar, defaults: freshDefaults())
         viewModel.title = "从备注填"
         viewModel.detail = ""
         viewModel.baseDate = date(2026, 1, 31)
@@ -796,7 +787,7 @@ final class ReviewViewModelCalendarInjectionTests: XCTestCase {
     }
 
     func testBeginSharedDetailEditFromBrowseUnavailableWhenUnmatched() {
-        let viewModel = ReviewViewModel(calendar: InMemoryCalendarService(grantAccessByDefault: true), defaults: isolated.defaults)
+        let viewModel = ReviewViewModel(calendar: InMemoryCalendarService(grantAccessByDefault: true), defaults: freshDefaults())
         let event = CalendarEventInfo(
             id: "holiday-1",
             title: "国庆节",
@@ -816,7 +807,7 @@ final class ReviewViewModelCalendarInjectionTests: XCTestCase {
     }
 
     func testSharedDetailUnavailableWhenNoIdentifiers() {
-        let viewModel = ReviewViewModel(calendar: InMemoryCalendarService(grantAccessByDefault: true), defaults: isolated.defaults)
+        let viewModel = ReviewViewModel(calendar: InMemoryCalendarService(grantAccessByDefault: true), defaults: freshDefaults())
         let legacy = HistoryEntry(
             title: "旧记录",
             baseDate: date(2026, 1, 1),
@@ -831,7 +822,7 @@ final class ReviewViewModelCalendarInjectionTests: XCTestCase {
 
     func testDayLoadProjectsReviewMemberAsSeriesAwareRow() async throws {
         let calendar = InMemoryCalendarService(grantAccessByDefault: true)
-        let viewModel = ReviewViewModel(calendar: calendar, defaults: isolated.defaults)
+        let viewModel = ReviewViewModel(calendar: calendar, defaults: freshDefaults())
         let marker = "day-series-\(UUID().uuidString.prefix(8))"
         let base = Calendar.current.date(byAdding: .day, value: -3, to: Date())!
         viewModel.title = marker
@@ -860,7 +851,7 @@ final class ReviewViewModelCalendarInjectionTests: XCTestCase {
 
     func testDayLoadProjectsSingleAndUnmatchedAsSingleRows() async throws {
         let calendar = InMemoryCalendarService(grantAccessByDefault: true)
-        let viewModel = ReviewViewModel(calendar: calendar, defaults: isolated.defaults)
+        let viewModel = ReviewViewModel(calendar: calendar, defaults: freshDefaults())
         let marker = "day-single-\(UUID().uuidString.prefix(8))"
         viewModel.title = marker
         viewModel.baseDate = Date()
@@ -879,7 +870,7 @@ final class ReviewViewModelCalendarInjectionTests: XCTestCase {
 
     func testDaySeriesRowEditAndSelectiveDeleteReuseSearchPaths() async throws {
         let calendar = InMemoryCalendarService(grantAccessByDefault: true)
-        let viewModel = ReviewViewModel(calendar: calendar, defaults: isolated.defaults)
+        let viewModel = ReviewViewModel(calendar: calendar, defaults: freshDefaults())
         let marker = "day-ops-\(UUID().uuidString.prefix(8))"
         let base = Calendar.current.date(byAdding: .day, value: -3, to: Date())!
         viewModel.title = marker
@@ -919,7 +910,7 @@ final class ReviewViewModelCalendarInjectionTests: XCTestCase {
 
     func testDayRowEditOpensSharedDetailWhenReviewOccurrenceIsDoneOrSkipped() async throws {
         let calendar = InMemoryCalendarService(grantAccessByDefault: true)
-        let viewModel = ReviewViewModel(calendar: calendar, defaults: isolated.defaults)
+        let viewModel = ReviewViewModel(calendar: calendar, defaults: freshDefaults())
         let marker = "day-row-state-\(UUID().uuidString.prefix(8))"
         let base = Calendar.current.date(byAdding: .day, value: -3, to: Date())!
         viewModel.title = marker
@@ -968,7 +959,7 @@ final class ReviewViewModelCalendarInjectionTests: XCTestCase {
                 colorHex: "#0078D4"
             ),
         ])
-        let viewModel = ReviewViewModel(calendar: calendar, defaults: isolated.defaults)
+        let viewModel = ReviewViewModel(calendar: calendar, defaults: freshDefaults())
         viewModel.selectDay(date(2026, 10, 20))
         viewModel.resultMessage = nil
         viewModel.resultType = nil
@@ -987,7 +978,7 @@ final class ReviewViewModelCalendarInjectionTests: XCTestCase {
 
     func testMarkingACreatedReviewOccurrenceDoesNotWarn() async throws {
         let calendar = InMemoryCalendarService(grantAccessByDefault: true)
-        let viewModel = ReviewViewModel(calendar: calendar, defaults: isolated.defaults)
+        let viewModel = ReviewViewModel(calendar: calendar, defaults: freshDefaults())
         viewModel.title = "可标记-\(UUID().uuidString.prefix(8))"
         viewModel.baseDate = date(2026, 10, 20)
         viewModel.scheduleMode = .review
@@ -1007,7 +998,7 @@ final class ReviewViewModelCalendarInjectionTests: XCTestCase {
 
     func testWideCanvasRowResolvesDoneOccurrenceThroughProjectedHitAndOpensSharedDetail() async throws {
         let calendar = InMemoryCalendarService(grantAccessByDefault: true)
-        let viewModel = ReviewViewModel(calendar: calendar, defaults: isolated.defaults)
+        let viewModel = ReviewViewModel(calendar: calendar, defaults: freshDefaults())
         let marker = "wide-row-\(UUID().uuidString.prefix(8))"
         viewModel.title = marker
         viewModel.detail = "宽画布完成态仍可改"
@@ -1044,7 +1035,7 @@ final class ReviewViewModelCalendarInjectionTests: XCTestCase {
 
     func testProjectedHitOutsideTheLoadedWindowKeepsSeriesIdentity() async throws {
         let calendar = InMemoryCalendarService(grantAccessByDefault: true)
-        let viewModel = ReviewViewModel(calendar: calendar, defaults: isolated.defaults)
+        let viewModel = ReviewViewModel(calendar: calendar, defaults: freshDefaults())
         let marker = "wide-fallback-\(UUID().uuidString.prefix(8))"
         viewModel.title = marker
         viewModel.baseDate = date(2026, 10, 20)
@@ -1073,7 +1064,7 @@ final class ReviewViewModelCalendarInjectionTests: XCTestCase {
 
     func testTrashRoutingKeepsSeriesIdentityWhenEventIsOutsideTheLoadedWindow() async throws {
         let calendar = InMemoryCalendarService(grantAccessByDefault: true)
-        let viewModel = ReviewViewModel(calendar: calendar, defaults: isolated.defaults)
+        let viewModel = ReviewViewModel(calendar: calendar, defaults: freshDefaults())
         let marker = "trash-routing-\(UUID().uuidString.prefix(8))"
         viewModel.title = marker
         viewModel.baseDate = date(2026, 10, 20)
@@ -1101,7 +1092,7 @@ final class ReviewViewModelCalendarInjectionTests: XCTestCase {
 
     func testProjectedHitForASingleEventStaysSingleAndDeletable() throws {
         let calendar = InMemoryCalendarService(grantAccessByDefault: true)
-        let viewModel = ReviewViewModel(calendar: calendar, defaults: isolated.defaults)
+        let viewModel = ReviewViewModel(calendar: calendar, defaults: freshDefaults())
         let holiday = CalendarEventInfo(
             id: "holiday-trash-\(UUID().uuidString.prefix(8))",
             title: "节假日",
@@ -1158,7 +1149,7 @@ final class ReviewViewModelCalendarInjectionTests: XCTestCase {
 
     func testDeletingAnOccurrenceRefreshesTheWeeklySummaryMaterials() async throws {
         let calendar = InMemoryCalendarService(grantAccessByDefault: true)
-        let viewModel = ReviewViewModel(calendar: calendar, defaults: isolated.defaults)
+        let viewModel = ReviewViewModel(calendar: calendar, defaults: freshDefaults())
         let marker = "weekly-delete-\(UUID().uuidString.prefix(8))"
         let today = Calendar.current.startOfDay(for: Date())
         viewModel.title = marker
@@ -1187,7 +1178,7 @@ final class ReviewViewModelCalendarInjectionTests: XCTestCase {
     }
 
     func testDayRowEditOnUnmatchedEventStaysUnavailableAndCannotSave() {
-        let viewModel = ReviewViewModel(calendar: InMemoryCalendarService(grantAccessByDefault: true), defaults: isolated.defaults)
+        let viewModel = ReviewViewModel(calendar: InMemoryCalendarService(grantAccessByDefault: true), defaults: freshDefaults())
         let event = CalendarEventInfo(
             id: "holiday-row-\(UUID().uuidString.prefix(8))",
             title: "节假日",
@@ -1211,7 +1202,7 @@ final class ReviewViewModelCalendarInjectionTests: XCTestCase {
 
     func testDayLoadKeepsOneRowPerDayEventAndStillReconciles() async throws {
         let calendar = InMemoryCalendarService(grantAccessByDefault: true)
-        let viewModel = ReviewViewModel(calendar: calendar, defaults: isolated.defaults)
+        let viewModel = ReviewViewModel(calendar: calendar, defaults: freshDefaults())
         let marker = "day-reconcile-rows-\(UUID().uuidString.prefix(8))"
         let base = Calendar.current.date(byAdding: .day, value: -3, to: Date())!
         viewModel.title = marker

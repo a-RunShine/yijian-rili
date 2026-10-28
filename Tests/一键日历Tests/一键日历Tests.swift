@@ -3,19 +3,10 @@ import XCTest
 
 @MainActor
 final class 一键日历Tests: XCTestCase {
-    private var _isolated: IsolatedDefaults?
-
-    private var isolated: IsolatedDefaults {
-        if let existing = _isolated { return existing }
-        let created = makeIsolatedDefaults()
-        _isolated = created
-        return created
-    }
-
-    override func tearDown() {
-        _isolated?.cleanUp()
-        _isolated = nil
-        super.tearDown()
+    private func freshDefaults() -> UserDefaults {
+        let isolated = makeIsolatedDefaults()
+        addTeardownBlock { isolated.cleanUp() }
+        return isolated.defaults
     }
     func testDateCalculation() throws {
         let calendar = Calendar.current
@@ -118,7 +109,7 @@ final class 一键日历Tests: XCTestCase {
     
     @MainActor
     func testViewModelValidation() async {
-        let viewModel = ReviewViewModel(defaults: isolated.defaults)
+        let viewModel = ReviewViewModel(defaults: freshDefaults())
         
         viewModel.title = ""
         await viewModel.createReviewSchedule()
@@ -174,7 +165,7 @@ final class 一键日历Tests: XCTestCase {
 
     @MainActor
     func testDynamicIntervalCount() {
-        let viewModel = ReviewViewModel(defaults: isolated.defaults)
+        let viewModel = ReviewViewModel(defaults: freshDefaults())
 
         viewModel.reviewIntervals = [5]
         viewModel.updateReviewDates()
@@ -192,7 +183,7 @@ final class 一键日历Tests: XCTestCase {
     @MainActor
     func testCustomPresetSaveAndApply() {
         UserDefaults.standard.set("[]", forKey: "customPresetsData")
-        let viewModel = ReviewViewModel(defaults: isolated.defaults)
+        let viewModel = ReviewViewModel(defaults: freshDefaults())
 
         XCTAssertEqual(viewModel.customPresets.count, 0)
 
@@ -216,7 +207,7 @@ final class 一键日历Tests: XCTestCase {
     @MainActor
     func testCustomPresetDuplicateName() {
         UserDefaults.standard.set("[]", forKey: "customPresetsData")
-        let viewModel = ReviewViewModel(defaults: isolated.defaults)
+        let viewModel = ReviewViewModel(defaults: freshDefaults())
 
         viewModel.reviewIntervals = [1, 3, 7]
         viewModel.saveCustomPreset(name: "测试")
@@ -326,7 +317,8 @@ final class 一键日历Tests: XCTestCase {
 
     @MainActor
     func testWeeklyReviewToggleAndPersist() {
-        let vm = WeeklyReviewViewModel(defaults: isolated.defaults)
+        let shared = freshDefaults()
+        let vm = WeeklyReviewViewModel(defaults: shared)
         vm.resetForTest()
 
         let historyEntry = HistoryEntry(
@@ -342,7 +334,7 @@ final class 一键日历Tests: XCTestCase {
         vm.toggleReviewed(historyEntry.id)
         XCTAssertTrue(vm.isReviewed(historyEntry.id))
 
-        let vm2 = WeeklyReviewViewModel(defaults: isolated.defaults)
+        let vm2 = WeeklyReviewViewModel(defaults: shared)
         XCTAssertTrue(vm2.isReviewed(historyEntry.id))
 
         vm2.toggleReviewed(historyEntry.id)
@@ -353,7 +345,7 @@ final class 一键日历Tests: XCTestCase {
 
     @MainActor
     func testWeeklyReviewWeekBoundary() {
-        let vm = WeeklyReviewViewModel(defaults: isolated.defaults)
+        let vm = WeeklyReviewViewModel(defaults: freshDefaults())
         vm.resetForTest()
 
         let cal = Calendar.current
@@ -398,7 +390,8 @@ final class 一键日历Tests: XCTestCase {
 
     @MainActor
     func testWeeklyReviewNotePersistence() {
-        let vm = WeeklyReviewViewModel(defaults: isolated.defaults)
+        let shared = freshDefaults()
+        let vm = WeeklyReviewViewModel(defaults: shared)
         vm.resetForTest()
 
         let key = vm.currentWeekKey
@@ -407,7 +400,7 @@ final class 一键日历Tests: XCTestCase {
         vm.updateNote("本周学习心得")
         XCTAssertEqual(vm.noteDraft, "本周学习心得")
 
-        let vm2 = WeeklyReviewViewModel(defaults: isolated.defaults)
+        let vm2 = WeeklyReviewViewModel(defaults: shared)
         XCTAssertEqual(vm2.currentWeekNote, "本周学习心得")
 
         vm2.goToPreviousWeek()
