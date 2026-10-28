@@ -292,26 +292,16 @@ final class ReviewSession {
 
     @discardableResult
     func reconcileRecordedWithCalendar() -> ReconcileOutcome {
-        guard let authority = CalendarLookupAuthority.verified(authorizationStatus) else {
+        guard CalendarLookupAuthority.verified(authorizationStatus) != nil else {
             return .skippedNoAccess
         }
-        var pruned = 0
+        var unmatched = 0
         for entry in outcomes.recordedEntries() {
             let identifiers = entry.createdEventIdentifiers
             guard !identifiers.isEmpty else { continue }
-            let missing = identifiers.filter { calendar.event(withId: $0) == nil }
-            guard !missing.isEmpty else { continue }
-            switch removeEventsFromRecorded(
-                ids: missing,
-                reason: .calendarConfirmedMissing(authority)
-            ) {
-            case .updated, .discarded:
-                pruned += missing.count
-            case .noMatch, .refusedNoAuthority:
-                break
-            }
+            unmatched += identifiers.filter { calendar.event(withId: $0) == nil }.count
         }
-        return pruned > 0 ? .pruned(count: pruned) : .unchanged
+        return unmatched > 0 ? .unmatched(count: unmatched) : .unchanged
     }
 
     @discardableResult

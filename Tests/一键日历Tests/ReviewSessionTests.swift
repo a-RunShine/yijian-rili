@@ -678,7 +678,7 @@ final class ReviewSessionTests: XCTestCase {
         XCTAssertTrue(weekly.titleUpdates.isEmpty)
     }
 
-    func testReconcilePrunesMissingIdsKeepsRemainingAndWeekly() async throws {
+    func testReconcileKeepsAllIdsWhenOneLookupMisses() async throws {
         let suiteName = "reconcile-partial-\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suiteName)!
         defaults.removePersistentDomain(forName: suiteName)
@@ -707,16 +707,14 @@ final class ReviewSessionTests: XCTestCase {
 
         let after = try XCTUnwrap(history.load().first)
         XCTAssertEqual(after.id, batchID)
-        XCTAssertEqual(after.createdEventIdentifiers, Array(ids.dropFirst()))
-        XCTAssertNil(session.resultMessage)
-        XCTAssertNil(session.resultType)
+        XCTAssertEqual(after.createdEventIdentifiers, ids)
         XCTAssertTrue(weekly.weeklyEntries.contains(where: { $0.id == batchID }))
         XCTAssertTrue(session.todayCreatedEntries().contains(where: { $0.id == batchID }))
 
         defaults.removePersistentDomain(forName: suiteName)
     }
 
-    func testReconcileDiscardsBatchWhenAllCalendarEventsMissing() async throws {
+    func testReconcileKeepsBatchWhenAllCalendarEventsLookupsMiss() async throws {
         let suiteName = "reconcile-all-\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suiteName)!
         defaults.removePersistentDomain(forName: suiteName)
@@ -744,12 +742,11 @@ final class ReviewSessionTests: XCTestCase {
 
         let changed = session.reconcileRecordedWithCalendar()
 
-        XCTAssertEqual(changed, .pruned(count: 3))
-        XCTAssertTrue(history.load().isEmpty)
-        XCTAssertTrue(session.todayCreatedEntries().isEmpty)
-        XCTAssertFalse(weekly.weeklyEntries.contains(where: { $0.id == batchID }))
-        XCTAssertNil(session.resultMessage)
-        XCTAssertNil(session.resultType)
+        XCTAssertEqual(changed, .unmatched(count: 3))
+        let after = try XCTUnwrap(history.load().first)
+        XCTAssertEqual(after.id, batchID)
+        XCTAssertEqual(after.createdEventIdentifiers, ids)
+        XCTAssertTrue(weekly.weeklyEntries.contains(where: { $0.id == batchID }))
 
         defaults.removePersistentDomain(forName: suiteName)
     }
@@ -1037,7 +1034,7 @@ final class OccurrenceStatusTests: XCTestCase {
         defaults.removePersistentDomain(forName: suiteName)
     }
 
-    func testReconcileClearsOccurrenceStatusForMissingEvents() async throws {
+    func testReconcileKeepsOccurrenceStatusWhenLookupMisses() async throws {
         let suiteName = "occurrence-reconcile-\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suiteName)!
         defaults.removePersistentDomain(forName: suiteName)
@@ -1063,7 +1060,7 @@ final class OccurrenceStatusTests: XCTestCase {
 
         session.reconcileRecordedWithCalendar()
 
-        XCTAssertEqual(session.occurrenceStatus(for: ids[0]), .unmarked)
+        XCTAssertEqual(session.occurrenceStatus(for: ids[0]), .done)
         XCTAssertEqual(session.occurrenceStatus(for: ids[1]), .skipped)
 
         defaults.removePersistentDomain(forName: suiteName)
@@ -1140,7 +1137,7 @@ final class OccurrenceStatusTests: XCTestCase {
         defaults.removePersistentDomain(forName: suiteName)
     }
 
-    func testReconcileResumesPruningOnceAccessIsReady() async throws {
+    func testReconcileReportsUnmatchedOnceAccessIsReadyWithoutPruning() async throws {
         let suiteName = "reconcile-resume-\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suiteName)!
         defaults.removePersistentDomain(forName: suiteName)
@@ -1168,9 +1165,10 @@ final class OccurrenceStatusTests: XCTestCase {
         calendar.setAuthorizationStatusForTesting(.fullAccess)
         session.authorizationStatus = .fullAccess
         XCTAssertTrue(calendar.deleteEvent(id: ids[0]))
-        session.reconcileRecordedWithCalendar()
+        let outcome = session.reconcileRecordedWithCalendar()
 
-        XCTAssertEqual(history.load().first?.createdEventIdentifiers, Array(ids.dropFirst()))
+        XCTAssertEqual(outcome, .unmatched(count: 1))
+        XCTAssertEqual(history.load().first?.createdEventIdentifiers, ids)
 
         defaults.removePersistentDomain(forName: suiteName)
     }

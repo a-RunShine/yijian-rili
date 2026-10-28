@@ -574,7 +574,7 @@ class ReviewViewModel: ObservableObject {
     }
 
     private func reconcileRecordedWithCalendar() {
-        if case .pruned = session.reconcileRecordedWithCalendar() {
+        if case .unmatched = session.reconcileRecordedWithCalendar() {
             refreshHistoryProjection()
         }
     }

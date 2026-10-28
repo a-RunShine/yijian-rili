@@ -9,12 +9,11 @@ struct CalendarLookupAuthority: Equatable {
 }
 
 enum RecordedPruneReason: Equatable {
-    case calendarConfirmedMissing(CalendarLookupAuthority)
     case userDeletedOccurrence
 }
 
 enum ReconcileOutcome: Equatable {
     case skippedNoAccess
     case unchanged
-    case pruned(count: Int)
+    case unmatched(count: Int)
 }
