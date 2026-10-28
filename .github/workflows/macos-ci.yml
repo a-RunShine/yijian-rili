@@ -43,7 +43,7 @@ jobs:
       - name: Test
         run: |
           set -o pipefail
-          swift test 2>&1 | tee /tmp/test.log
+          SWIFT_BACKTRACE=enable=yes,threads=all swift test 2>&1 | tee /tmp/test.log
 
       - name: Show assertion details on failure
         if: failure()
