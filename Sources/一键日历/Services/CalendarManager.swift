@@ -142,6 +142,7 @@ final class CalendarManager: ObservableObject, CalendarService, CalendarEventSto
         }
 
         try eventStore.save(event, span: .thisEvent)
+        try eventStore.commit()
         logger.info("Created event for \(day.formattedChinese()) in calendar \(targetCalendar.title)")
         return event.eventIdentifier ?? UUID().uuidString
     }
@@ -154,6 +155,7 @@ final class CalendarManager: ObservableObject, CalendarService, CalendarEventSto
             if let event = eventStore.event(withIdentifier: identifier) {
                 do {
                     try eventStore.remove(event, span: .thisEvent)
+                    try eventStore.commit()
                     deletedCount += 1
                     logger.info("Undo: deleted event with identifier \(identifier)")
                 } catch {
@@ -215,6 +217,7 @@ final class CalendarManager: ObservableObject, CalendarService, CalendarEventSto
         }
         do {
             try eventStore.remove(event, span: .thisEvent)
+            try eventStore.commit()
             logger.info("Deleted event \(id) for \(event.startDate.formattedChinese())")
             return true
         } catch {
@@ -264,6 +267,7 @@ final class CalendarManager: ObservableObject, CalendarService, CalendarEventSto
         event.notes = notes
         do {
             try eventStore.save(event, span: .thisEvent)
+            try eventStore.commit()
             logger.info("Updated notes for event \(id)")
             return true
         } catch {
@@ -281,6 +285,7 @@ final class CalendarManager: ObservableObject, CalendarService, CalendarEventSto
         event.title = title
         do {
             try eventStore.save(event, span: .thisEvent)
+            try eventStore.commit()
             logger.info("Updated title for event \(id)")
             return true
         } catch {
