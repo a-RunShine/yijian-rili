@@ -95,10 +95,7 @@ class ReviewViewModel: ObservableObject {
             }
         }
     }
-    @Published var currentTheme: Theme = {
-        let rawValue = UserDefaults.standard.string(forKey: "themeName") ?? Theme.light.rawValue
-        return Theme(rawValue: rawValue) ?? .light
-    }()
+    @Published var currentTheme: Theme
 
     @Published var availableCalendars: [CalendarInfo] = []
     @Published var hasCloudCalendar: Bool = false
@@ -106,15 +103,28 @@ class ReviewViewModel: ObservableObject {
     @Published private(set) var historyRevision: Int = 0
     @Published private(set) var occurrenceRevision: Int = 0
 
-    @AppStorage("selectedCalendarIdentifier") var selectedCalendarIdentifier: String = "" {
+    private let defaults: UserDefaults
+
+    @Published var selectedCalendarIdentifier: String {
         didSet {
+            guard selectedCalendarIdentifier != oldValue else { return }
             session.selectedCalendarIdentifier = selectedCalendarIdentifier
             session.persistSelectedCalendar()
+            defaults.set(selectedCalendarIdentifier, forKey: "selectedCalendarIdentifier")
         }
     }
-    @AppStorage("hasShownFirstRunGuide") private var hasShownFirstRunGuide: Bool = false
-    @AppStorage("calendarPickerExpanded") var calendarPickerExpanded: Bool = false
-    @AppStorage("windowSettingsExpanded") var windowSettingsExpanded: Bool = false
+
+    @Published var hasShownFirstRunGuide: Bool {
+        didSet { defaults.set(hasShownFirstRunGuide, forKey: "hasShownFirstRunGuide") }
+    }
+
+    @Published var calendarPickerExpanded: Bool {
+        didSet { defaults.set(calendarPickerExpanded, forKey: "calendarPickerExpanded") }
+    }
+
+    @Published var windowSettingsExpanded: Bool {
+        didSet { defaults.set(windowSettingsExpanded, forKey: "windowSettingsExpanded") }
+    }
 
     @Published var reviewIntervals: [Int] = IntervalRules.defaultIntervals {
         didSet {
@@ -144,17 +154,26 @@ class ReviewViewModel: ObservableObject {
     var isSelectedCalendarLocal: Bool { session.isSelectedCalendarLocal }
     var selectedCalendarDisplayName: String { session.selectedCalendarDisplayName }
 
-    init(calendar: CalendarService = CalendarManager.shared) {
+    init(calendar: CalendarService = CalendarManager.shared, defaults: UserDefaults = .standard) {
         self.calendar = calendar
-        let history = HistoryStore()
-        let weekly = WeeklyReviewViewModel()
+        self.defaults = defaults
+        selectedCalendarIdentifier = defaults.string(forKey: "selectedCalendarIdentifier") ?? ""
+        hasShownFirstRunGuide = defaults.bool(forKey: "hasShownFirstRunGuide")
+        calendarPickerExpanded = defaults.bool(forKey: "calendarPickerExpanded")
+        windowSettingsExpanded = defaults.bool(forKey: "windowSettingsExpanded")
+        let storedTheme = defaults.string(forKey: "themeName") ?? Theme.light.rawValue
+        currentTheme = Theme(rawValue: storedTheme) ?? .light
+        windowFloating = defaults.object(forKey: "windowFloating") as? Bool ?? true
+
+        let history = HistoryStore(defaults: defaults)
+        let weekly = WeeklyReviewViewModel(defaults: defaults)
         let outcomes = CreateSuccessOutcomes(history: history, weekly: weekly)
-        let occurrenceStatuses = OccurrenceStatusStore()
+        let occurrenceStatuses = OccurrenceStatusStore(defaults: defaults)
         self.historyStore = history
         self.weeklyReviewViewModel = weekly
         self.outcomes = outcomes
 
-        let storedCalendarId = UserDefaults.standard.string(forKey: "selectedCalendarIdentifier") ?? ""
+        let storedCalendarId = defaults.string(forKey: "selectedCalendarIdentifier") ?? ""
         let session = ReviewSession(
             calendar: calendar,
             outcomes: outcomes,
@@ -802,8 +821,8 @@ class ReviewViewModel: ObservableObject {
         session.hasDuplicatePresetName(name)
     }
 
-    @Published var windowFloating: Bool = UserDefaults.standard.object(forKey: "windowFloating") as? Bool ?? true {
-        didSet { UserDefaults.standard.set(windowFloating, forKey: "windowFloating") }
+    @Published var windowFloating: Bool {
+        didSet { defaults.set(windowFloating, forKey: "windowFloating") }
     }
 
     func applyWindowLevel() {
@@ -837,7 +856,7 @@ class ReviewViewModel: ObservableObject {
         withAnimation(.easeInOut(duration: 0.3)) {
             currentTheme = theme
         }
-        UserDefaults.standard.set(theme.rawValue, forKey: "themeName")
+        defaults.set(theme.rawValue, forKey: "themeName")
     }
 
     func performSearch() {
