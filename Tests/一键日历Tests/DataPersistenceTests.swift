@@ -2,7 +2,7 @@ import XCTest
 @testable import 一键日历
 
 @MainActor
-final class HistoryStoreCorruptionAuditTests: XCTestCase {
+final class HistoryStoreCorruptionTests: XCTestCase {
     private func suite(_ label: String) -> (UserDefaults, String) {
         let name = "audit-\(label)-\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: name)!
@@ -100,7 +100,7 @@ final class HistoryStoreCorruptionAuditTests: XCTestCase {
 }
 
 @MainActor
-final class HistoryStoreCapAuditTests: XCTestCase {
+final class HistoryStoreCapTests: XCTestCase {
     private func suite(_ label: String) -> (UserDefaults, String) {
         let name = "audit-cap-\(label)-\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: name)!
@@ -160,7 +160,7 @@ final class HistoryStoreCapAuditTests: XCTestCase {
 }
 
 @MainActor
-final class OccurrenceStatusReassignmentAuditTests: XCTestCase {
+final class OccurrenceStatusReassignmentTests: XCTestCase {
     func testDoneMarkSurvivesIdentifierReassignment() async throws {
         let name = "audit-status-reassign-\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: name)!
@@ -253,7 +253,7 @@ final class OccurrenceStatusReassignmentAuditTests: XCTestCase {
 }
 
 @MainActor
-final class UndoAndPruneIdMismatchAuditTests: XCTestCase {
+final class UndoAndPruneIdMismatchTests: XCTestCase {
     private func suite(_ label: String) -> (UserDefaults, String) {
         let name = "audit-undo-\(label)-\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: name)!
@@ -343,7 +343,7 @@ final class UndoAndPruneIdMismatchAuditTests: XCTestCase {
 }
 
 @MainActor
-final class PersistenceSwallowAuditTests: XCTestCase {
+final class PersistenceSwallowTests: XCTestCase {
     private func suite(_ label: String) -> (UserDefaults, String) {
         let name = "audit-swallow-\(label)-\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: name)!
@@ -513,7 +513,7 @@ final class GatedCalendarService: CalendarService {
 }
 
 @MainActor
-final class CreateInFlightMutationAuditTests: XCTestCase {
+final class CreateInFlightMutationTests: XCTestCase {
     private func day(_ offset: Int) -> Date {
         Calendar.current.startOfDay(for: Date().addingTimeInterval(86_400 * Double(offset)))
     }
@@ -565,7 +565,7 @@ final class CreateInFlightMutationAuditTests: XCTestCase {
 }
 
 @MainActor
-final class SecondaryPersistenceLossAuditTests: XCTestCase {
+final class SecondaryPersistenceLossTests: XCTestCase {
     private func suite(_ label: String) -> (UserDefaults, String) {
         let name = "audit-secondary-\(label)-\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: name)!
@@ -631,7 +631,7 @@ final class SecondaryPersistenceLossAuditTests: XCTestCase {
 }
 
 @MainActor
-final class StaleSnapshotOverwriteAuditTests: XCTestCase {
+final class StaleSnapshotOverwriteTests: XCTestCase {
     func testCalendarChoiceMadeDuringCreateIsRevertedByStaleChromeSnapshot() async {
         let name = "audit-stale-chrome-\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: name)!
@@ -666,7 +666,7 @@ final class StaleSnapshotOverwriteAuditTests: XCTestCase {
 }
 
 @MainActor
-final class DuplicateDayHistoryAuditTests: XCTestCase {
+final class DuplicateDayHistoryTests: XCTestCase {
     func testDuplicateDayEntryKeepsStaleIdentifierForUnrecordedDay() async throws {
         let name = "audit-duplicate-\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: name)!
@@ -703,7 +703,7 @@ final class DuplicateDayHistoryAuditTests: XCTestCase {
 }
 
 @MainActor
-final class DuplicateWarningUndoAuditTests: XCTestCase {
+final class DuplicateWarningUndoTests: XCTestCase {
     func testUndoAfterDuplicateWarningDeletesPreviousBatchEvent() async {
         let name = "audit-dup-undo-\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: name)!
@@ -745,7 +745,7 @@ final class DuplicateWarningUndoAuditTests: XCTestCase {
 }
 
 @MainActor
-final class CreateInFlightTitleAuditTests: XCTestCase {
+final class CreateInFlightTitleTests: XCTestCase {
     func testTitleChangeDuringCreateRecordsWrongTitleAndLosesSeriesLink() async throws {
         let name = "audit-title-\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: name)!
@@ -818,7 +818,7 @@ final class CreateInFlightTitleAuditTests: XCTestCase {
 }
 
 @MainActor
-final class TypingLostToStaleChromeAuditTests: XCTestCase {
+final class TypingLostToStaleChromeTests: XCTestCase {
     func testTitleTypedDuringCreateIsErasedByStaleSnapshot() async {
         let name = "audit-typing-\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: name)!
@@ -857,7 +857,7 @@ final class TypingLostToStaleChromeAuditTests: XCTestCase {
 }
 
 @MainActor
-final class WeekendMigrationMarkerAuditTests: XCTestCase {
+final class WeekendMigrationMarkerTests: XCTestCase {
     func testWeekendMigrationMarkerIsNotBurnedWhenWeeklyPayloadIsCorrupt() {
         let name = "audit-weekend-\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: name)!
@@ -876,7 +876,7 @@ final class WeekendMigrationMarkerAuditTests: XCTestCase {
 }
 
 @MainActor
-final class HistoryCapOrphanAuditTests: XCTestCase {
+final class HistoryCapOrphanTests: XCTestCase {
     func testDroppedHistoryEntryLeavesOrphanWeeklyEntryAndStatus() {
         let name = "audit-cap-orphan-\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: name)!
@@ -921,7 +921,7 @@ final class HistoryCapOrphanAuditTests: XCTestCase {
 }
 
 @MainActor
-final class CalendarSelectionBeforeAccessAuditTests: XCTestCase {
+final class CalendarSelectionBeforeAccessTests: XCTestCase {
     func testStoredCalendarChoiceIsNotSilentlyDroppedBeforeAccessIsGranted() {
         let name = "audit-selection-\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: name)!

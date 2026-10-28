@@ -14,7 +14,7 @@ struct IntervalSettingsSection: View {
     @State private var showSavePresetAlert: Bool = false
     @State private var newPresetName: String = ""
     @State private var presetAlertError: String? = nil
-    @AppStorage("savedIntervalsSnapshot") private var savedSnapshotJSON: String = ""
+    private static let snapshotKey = "savedIntervalsSnapshot"
     @State private var showDeletePresetConfirm: Bool = false
     @State private var presetToDelete: CustomPreset? = nil
     @AppStorage("intervalSettingsExpanded") private var isExpanded: Bool = false
@@ -25,18 +25,11 @@ struct IntervalSettingsSection: View {
     private var expanded: Bool { forceExpanded || isExpanded }
 
     private var savedSnapshot: [Int] {
-        guard let data = savedSnapshotJSON.data(using: .utf8),
-              let arr = try? JSONDecoder().decode([Int].self, from: data) else {
-            return []
-        }
-        return arr
+        PersistentArray<Int>(key: Self.snapshotKey, defaults: .standard).load()
     }
 
     private func saveSnapshot(_ intervals: [Int]) {
-        if let data = try? JSONEncoder().encode(intervals),
-           let str = String(data: data, encoding: .utf8) {
-            savedSnapshotJSON = str
-        }
+        PersistentArray<Int>(key: Self.snapshotKey, defaults: .standard).save(intervals)
     }
 
     private var activeCustomPreset: CustomPreset? {

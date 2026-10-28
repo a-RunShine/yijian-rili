@@ -48,9 +48,34 @@ else
 fi
 
 echo
+echo "── 持久化写路径"
+
+decode_total=0
+decode_swallow_out=$(grep -rn --include='*.swift' -E 'try\? JSONDecoder\(\)\.decode' Sources 2>/dev/null \
+  | grep -v 'PersistentPayload.swift' \
+  | grep -v 'DataPersistence' || true)
+
+decode_swallow_count=0
+[ -n "$decode_swallow_out" ] && decode_swallow_count=$(printf '%s\n' "$decode_swallow_out" | wc -l | tr -d ' ')
+
+if [ "$decode_swallow_count" -gt 0 ]; then
+  echo "绕过 PersistentPayload 直接解码：$decode_swallow_count 处"
+  printf '%s\n' "$decode_swallow_out"
+  decode_total=$decode_swallow_count
+else
+  echo "持久化解码: 0 处"
+fi
+
+echo
 failed=0
 if [ "$total" -gt 0 ]; then
   echo "✗ 共 ${total} 处注释违规。AGENTS.md 硬约束：代码里禁止 /// 、// 、/* */ 、// MARK:"
+  failed=1
+fi
+if [ "$decode_total" -gt 0 ]; then
+  echo "✗ 共 ${decode_total} 处绕过 PersistentPayload 直接解码。这样的失败会被当成「空数据」"
+  echo "  覆盖写回，历史/完成态/周回顾会永久清零。走 PersistentArray / PersistentDictionary /"
+  echo "  PersistentValue，它们区分「空」与「损坏」，损坏时从备份恢复。见 docs/wiki/data-reliability.md"
   failed=1
 fi
 if [ "$isolation_total" -gt 0 ]; then
@@ -59,5 +84,5 @@ if [ "$isolation_total" -gt 0 ]; then
   failed=1
 fi
 
-[ "$failed" -eq 0 ] && echo "✓ 未发现注释违规，测试隔离完整"
+[ "$failed" -eq 0 ] && echo "✓ 未发现注释违规，测试隔离完整，持久化解码集中"
 exit "$failed"

@@ -218,10 +218,7 @@ final class ReviewSession {
     }
 
     func persistIntervals() {
-        if let data = try? JSONEncoder().encode(reviewIntervals),
-           let string = String(data: data, encoding: .utf8) {
-            defaults.set(string, forKey: "reviewIntervalsData")
-        }
+        PersistentArray<Int>(key: "reviewIntervalsData", defaults: defaults).save(reviewIntervals)
     }
 
     func persistCustomPresets() {
@@ -665,10 +662,9 @@ final class ReviewSession {
     }
 
     private static func loadIntervals(from defaults: UserDefaults) -> [Int] {
-        let raw = defaults.string(forKey: "reviewIntervalsData") ?? "[3,7,30]"
-        guard let data = raw.data(using: .utf8),
-              let intervals = try? JSONDecoder().decode([Int].self, from: data),
-              IntervalRules.validate(intervals) else {
+        let intervals = PersistentArray<Int>(key: "reviewIntervalsData", defaults: defaults)
+            .load()
+        guard IntervalRules.validate(intervals) else {
             return IntervalRules.defaultIntervals
         }
         return intervals
