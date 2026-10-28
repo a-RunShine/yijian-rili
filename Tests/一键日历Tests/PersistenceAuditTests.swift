@@ -886,7 +886,11 @@ final class HistoryCapOrphanAuditTests: XCTestCase {
         let history = HistoryStore(defaults: defaults)
         let weekly = WeeklyReviewViewModel(defaults: defaults)
         let statuses = OccurrenceStatusStore(defaults: defaults)
-        let outcomes = CreateSuccessOutcomes(history: history, weekly: weekly)
+        let outcomes = CreateSuccessOutcomes(
+            history: history,
+            weekly: weekly,
+            occurrenceStatuses: statuses
+        )
 
         var firstBatchID: UUID?
         for index in 0..<22 {
@@ -905,13 +909,13 @@ final class HistoryCapOrphanAuditTests: XCTestCase {
 
         let dropped = try! XCTUnwrap(firstBatchID)
         XCTAssertFalse(history.load().contains(where: { $0.id == dropped }))
-        XCTAssertTrue(
+        XCTAssertFalse(
             weekly.weeklyEntries.contains(where: { $0.id == dropped }),
-            "历史被裁掉的批次仍留在周回顾里，两处数据不一致"
+            "历史被裁掉时周回顾里对应条目应一并清掉，避免两处数据不一致"
         )
-        XCTAssertTrue(
+        XCTAssertFalse(
             statuses.markedEntries().keys.contains("evt-0"),
-            "历史被裁掉后其完成标记永远无法清理"
+            "历史被裁掉后其完成标记应一并清理，避免永久孤儿"
         )
     }
 }

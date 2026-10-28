@@ -5,6 +5,7 @@ final class HistoryStore {
     static let maxEntries = 20
 
     private let store: PersistentArray<HistoryEntry>
+    private var pendingEvictions: [HistoryEntry] = []
 
     var lastHealth: PayloadHealth { store.lastHealth }
 
@@ -24,13 +25,20 @@ final class HistoryStore {
 
     @discardableResult
     func add(_ entry: HistoryEntry) -> HistoryEntry {
+        pendingEvictions.removeAll()
         store.mutate { list in
             list.insert(entry, at: 0)
             if list.count > Self.maxEntries {
+                pendingEvictions = Array(list.suffix(list.count - Self.maxEntries))
                 list.removeLast(list.count - Self.maxEntries)
             }
         }
         return entry
+    }
+
+    func drainEvictedEntries() -> [HistoryEntry] {
+        defer { pendingEvictions.removeAll() }
+        return pendingEvictions
     }
 
     func remove(id: UUID) {

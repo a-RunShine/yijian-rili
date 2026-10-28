@@ -167,8 +167,12 @@ class ReviewViewModel: ObservableObject {
 
         let history = HistoryStore(defaults: defaults)
         let weekly = WeeklyReviewViewModel(defaults: defaults)
-        let outcomes = CreateSuccessOutcomes(history: history, weekly: weekly)
         let occurrenceStatuses = OccurrenceStatusStore(defaults: defaults)
+        let outcomes = CreateSuccessOutcomes(
+            history: history,
+            weekly: weekly,
+            occurrenceStatuses: occurrenceStatuses
+        )
         self.historyStore = history
         self.weeklyReviewViewModel = weekly
         self.outcomes = outcomes

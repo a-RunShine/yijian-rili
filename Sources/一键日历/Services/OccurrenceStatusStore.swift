@@ -35,6 +35,20 @@ final class OccurrenceStatusStore {
         }
     }
 
+    func clearSeries(entryID: UUID) {
+        let prefix = "series:\(entryID.uuidString):"
+        store.mutate { map in
+            for key in map.keys where key.hasPrefix(prefix) {
+                map.removeValue(forKey: key)
+            }
+        }
+    }
+
+    func clearLegacy(ids: [String]) {
+        guard !ids.isEmpty else { return }
+        clear(ids: ids + ids.map { HistorySeriesLookup.legacyKey(for: $0) })
+    }
+
     func markedEntries() -> [String: OccurrenceStatus] {
         store.load().filter { $0.value != .unmarked }
     }
