@@ -194,3 +194,36 @@ hit = false
 ### 换来的教训
 
 **「查不到」不等于「不存在」**，这是第一个 bug；**「id 相同」不等于「是同一个东西」**，这是第二个。两者都是把不可靠的推断当成了事实。
+
+## 2026-10-28：修完之后的用户数据状态
+
+三个 bug 修完并合入（`6718248`）之后，本机 `~/Library/Preferences/com.yijianrili.app.plist` 的状态：
+
+| 时期 | 条目 | 状态 |
+|---|---|---|
+| 修复后创建的 | 3 条（`test-时间`、`test-14:19`、`39. 组合总和`） | 各 3 个 id，可标记、可删除弹列表 |
+| 修复前被剪坏的 | 8 条 | `createdEventIdentifiers` 为空，**不会自愈** |
+| 修复前创建失败的 | 1 条（`17.电话号码数字组合`） | 日历里有事件，历史里**完全没有条目** |
+
+**判断某条能不能用的标准**：看 `createdEventIdentifiers` 是否非空。空的就等于失去系列身份，只能重建。
+
+### 为什么空 id 不会自愈
+
+属性匹配（标题 + 复习日 + 备注键）能让「有 id 但 id 过期」的条目重新可用，但 `createdEventIdentifiers` 为空时连匹配的锚点都没有——`reconcile` 里 `guard !identifiers.isEmpty else { continue }` 会直接跳过。修复只保证不再产生新的空条目。
+
+### 创建时历史没写入的那条
+
+`17.电话号码数字组合` 在日历里可见但历史无记录。最可能是修复前那轮反复重装期间创建的：写日历成功，历史写入撞上了正在被清空的窗口。修复后未再观察到同类现象，但没有专门测试覆盖「创建过程中历史写入失败」这条路径。
+
+### 如果以后又遇到
+
+先跑这一条看 id 是否非空：
+
+```bash
+python3 -c "
+import json,plistlib,os
+d=plistlib.load(open(os.path.expanduser('~/Library/Preferences/com.yijianrili.app.plist'),'rb'))
+h=json.loads(d['historyEntriesData'])
+for e in h: print(len(e.get('createdEventIdentifiers') or []), e.get('title')[:30])
+"
+```
