@@ -167,8 +167,12 @@ class ReviewViewModel: ObservableObject {
 
         let history = HistoryStore(defaults: defaults)
         let weekly = WeeklyReviewViewModel(defaults: defaults)
-        let outcomes = CreateSuccessOutcomes(history: history, weekly: weekly)
         let occurrenceStatuses = OccurrenceStatusStore(defaults: defaults)
+        let outcomes = CreateSuccessOutcomes(
+            history: history,
+            weekly: weekly,
+            occurrenceStatuses: occurrenceStatuses
+        )
         self.historyStore = history
         self.weeklyReviewViewModel = weekly
         self.outcomes = outcomes
@@ -278,7 +282,7 @@ class ReviewViewModel: ObservableObject {
         }
     }
 
-    private func pullSessionChrome() {
+    private func pullSessionChrome(includeInputs: Bool = true) {
         authorizationStatus = session.authorizationStatus
         availableCalendars = session.availableCalendars
         hasCloudCalendar = session.hasCloudCalendar
@@ -288,6 +292,7 @@ class ReviewViewModel: ObservableObject {
         canUndo = session.canUndo
         canRecreate = session.canRecreate
         reviewDates = session.reviewDates
+        guard includeInputs else { return }
         title = session.title
         detail = session.detail
         baseDate = session.baseDate
@@ -471,8 +476,12 @@ class ReviewViewModel: ObservableObject {
             return
         }
         pushInputsToSession()
+        let submittedTitle = title
+        let submittedDetail = detail
         await session.create()
-        pullSessionChrome()
+        pullSessionChrome(includeInputs: false)
+        if title == submittedTitle { title = session.title }
+        if detail == submittedDetail { detail = session.detail }
         if session.consumeHapticFlag() {
             NSHapticFeedbackManager.defaultPerformer.perform(.generic, performanceTime: .now)
         }
@@ -783,9 +792,88 @@ class ReviewViewModel: ObservableObject {
         refreshHistoryProjection()
     }
 
-    func deleteHistoryEntry(_ entry: HistoryEntry) {
-        outcomes.removeHistory(id: entry.id)
+    func hit(forHistoryEntry entry: HistoryEntry) -> SearchHit {
+        let members = resolvedMembers(of: entry)
+        guard !members.isEmpty else {
+            return SearchHit(id: entry.id.uuidString, kind: .single, title: entry.title, members: [])
+        }
+        guard entry.type == .review, members.count > 1 else {
+            return SearchHit(
+                id: members[0].id,
+                kind: .single,
+                title: entry.title,
+                members: members
+            )
+        }
+        return SearchHit(
+            id: members[0].id,
+            kind: .series(historyEntryID: entry.id),
+            title: entry.title,
+            members: members
+        )
+    }
+
+    private func resolvedMembers(of entry: HistoryEntry) -> [CalendarEventInfo] {
+        let byId = entry.createdEventIdentifiers.compactMap { calendar.event(withId: $0) }
+        if !byId.isEmpty { return byId.sorted { $0.start < $1.start } }
+        var found: [CalendarEventInfo] = []
+        for day in entry.reviewDates {
+            let start = Calendar.current.startOfDay(for: day)
+            guard let end = Calendar.current.date(byAdding: .day, value: 1, to: start) else { continue }
+            guard let match = calendar.fetchEvents(from: start, to: end)
+                .first(where: { $0.title == entry.title }) else { continue }
+            found.append(match)
+        }
+        return found.sorted { $0.start < $1.start }
+    }
+
+    func deleteHistoryEntry(_ entry: HistoryEntry, members ids: [String]) {
+        let report = DeletionPlan(calendar: calendar).execute(ids: ids)
+        settleDeletion(report: report, entry: entry)
+    }
+
+    private func settleDeletion(report: DeletionPlan.Report, entry: HistoryEntry?) {
+        if let entry {
+            if report.failed.isEmpty {
+                session.discardRecordedEntry(id: entry.id)
+                outcomes.removeHistory(id: entry.id)
+                weeklyReviewViewModel.removeWeeklyEntries(id: entry.id)
+            } else {
+                outcomes.replaceCreatedEventIdentifiers(
+                    id: entry.id,
+                    identifiers: entry.createdEventIdentifiers.filter { report.failed.contains($0) }
+                )
+            }
+        }
+
+        refreshAllProjections()
+        if !report.failed.isEmpty {
+            presentDeletionFailure(report)
+        }
+    }
+
+    private func presentDeletionFailure(_ report: DeletionPlan.Report) {
+        let message = report.deleted.isEmpty
+            ? NSLocalizedString("delete_failed_all", comment: "")
+            : String(
+                format: NSLocalizedString("delete_failed_partial", comment: ""),
+                "\(report.deleted.count)",
+                "\(report.failed.count)"
+            )
+        resultMessage = message
+        resultType = .warning
+        session.resultMessage = message
+        session.resultType = .warning
+        scheduleResultDismissal()
+    }
+
+    private func refreshAllProjections() {
         refreshHistoryProjection()
+        loadVisibleWindow()
+        loadDisplayedDayEvents()
+        rebuildSearchHits()
+        rebuildDisplayedDayHits()
+        weeklyReviewViewModel.refreshOccurrenceMaterials()
     }
 
     func deleteHistoryEntry(at offsets: IndexSet) {
@@ -903,29 +991,35 @@ class ReviewViewModel: ObservableObject {
 
     @discardableResult
     func deleteSearchHit(_ hit: SearchHit) -> Bool {
-        guard !hit.needsSelectiveDelete else { return false }
         guard let event = hit.members.first else { return false }
-        let success = browse.deleteSearchResult(event)
+        let report = DeletionPlan(calendar: calendar).execute(ids: [event.id])
+        browse.reloadAfterExternalDeletion(deletedIDs: report.deleted)
         searchResults = browse.searchResults
         selectedSearchResult = browse.selectedSearchResult
         displayedEvents = browse.displayedEvents
-        if success {
-            applyDeletedEvents(ids: [event.id])
+        if !report.deleted.isEmpty {
+            session.removeEventsFromRecorded(ids: report.deleted, reason: .userDeletedOccurrence)
+            refreshAllProjections()
             if selectedSearchHit?.id == hit.id {
                 selectedSearchHit = nil
             }
         }
-        return success
+        if !report.failed.isEmpty {
+            presentDeletionFailure(report)
+        }
+        return report.failed.isEmpty && !report.deleted.isEmpty
     }
 
     @discardableResult
     func deleteSearchHitMembers(ids: [String]) -> (deletedCount: Int, missingCount: Int) {
-        let outcome = browse.deleteEvents(ids: ids)
+        let report = DeletionPlan(calendar: calendar).execute(ids: ids)
+        browse.reloadAfterExternalDeletion(deletedIDs: report.deleted)
         searchResults = browse.searchResults
         selectedSearchResult = browse.selectedSearchResult
         displayedEvents = browse.displayedEvents
-        if outcome.deletedCount > 0 {
-            applyDeletedEvents(ids: ids)
+        if !report.deleted.isEmpty {
+            session.removeEventsFromRecorded(ids: report.deleted, reason: .userDeletedOccurrence)
+            refreshAllProjections()
             if let selected = selectedSearchHit,
                selected.members.contains(where: { ids.contains($0.id) }) {
                 selectedSearchHit = searchHits.first(where: { $0.id == selected.id })
@@ -933,7 +1027,10 @@ class ReviewViewModel: ObservableObject {
             }
         }
         seriesPendingDelete = nil
-        return outcome
+        if !report.failed.isEmpty {
+            presentDeletionFailure(report)
+        }
+        return (report.deleted.count, report.failed.count)
     }
 
     private func applyDeletedEvents(ids: [String]) {

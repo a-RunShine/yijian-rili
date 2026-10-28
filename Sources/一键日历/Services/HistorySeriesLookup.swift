@@ -56,6 +56,31 @@ enum HistorySeriesLookup {
         entry.reviewDates.map { calendar.startOfDay(for: $0) }
     }
 
+    static func stableKey(for event: CalendarEventInfo, in history: [HistoryEntry], calendar: Calendar = .current) -> String {
+        guard let entry = entry(matching: event, in: history),
+              entry.type == .review,
+              let index = indexOfReviewDay(for: event, in: entry, calendar: calendar) else {
+            return legacyKey(for: event.id)
+        }
+        return seriesKey(entryID: entry.id, index: index)
+    }
+
+    static func seriesKey(entryID: UUID, index: Int) -> String {
+        "series:\(entryID.uuidString):\(index)"
+    }
+
+    static func legacyKey(for eventId: String) -> String {
+        "event:\(eventId)"
+    }
+
+    static func reviewIndex(
+        of event: CalendarEventInfo,
+        in entry: HistoryEntry,
+        calendar: Calendar = .current
+    ) -> Int? {
+        indexOfReviewDay(for: event, in: entry, calendar: calendar)
+    }
+
     private static func indexOfReviewDay(
         for event: CalendarEventInfo,
         in entry: HistoryEntry,

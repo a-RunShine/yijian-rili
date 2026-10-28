@@ -16,4 +16,5 @@ protocol CalendarEventStore: AnyObject {
 struct CalendarWriteOutcome: Sendable {
     var result: CreateEventsResult
     var createdEventIds: [String]
+    var createdPairs: [(date: Date, id: String)] { zip(result.created, createdEventIds).map { ($0, $1) } }
 }

@@ -22,21 +22,15 @@ final class WeeklyReviewViewModel: ObservableObject, WeeklyEntryAppending {
     @Published private(set) var revision: Int = 0
 
     private let defaults: UserDefaults
-    private var weeklyEntriesJSON: String {
-        get { defaults.string(forKey: WeeklyReviewViewModel.weeklyEntriesKey) ?? "[]" }
-        set { defaults.set(newValue, forKey: WeeklyReviewViewModel.weeklyEntriesKey) }
-    }
-    private var reviewedJSON: String {
-        get { defaults.string(forKey: WeeklyReviewViewModel.weeklyReviewStateKey) ?? "[]" }
-        set { defaults.set(newValue, forKey: WeeklyReviewViewModel.weeklyReviewStateKey) }
-    }
-    private var notesJSON: String {
-        get { defaults.string(forKey: WeeklyReviewViewModel.weeklyNotesKey) ?? "{\"byWeek\":{}}" }
-        set { defaults.set(newValue, forKey: WeeklyReviewViewModel.weeklyNotesKey) }
-    }
+    private let entryStore: PersistentArray<WeeklyEntry>
+    private let reviewedStore: PersistentArray<UUID>
+    private let notesStore: PersistentValue<WeeklyNotes>
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
+        self.entryStore = PersistentArray(key: WeeklyReviewViewModel.weeklyEntriesKey, defaults: defaults)
+        self.reviewedStore = PersistentArray(key: WeeklyReviewViewModel.weeklyReviewStateKey, defaults: defaults)
+        self.notesStore = PersistentValue(key: WeeklyReviewViewModel.weeklyNotesKey, defaults: defaults)
         self.currentWeekStart = WeekCalculator.weekStart(for: Date())
         self.themeProvider = ThemeProvider()
         performHistoryMigrationIfNeeded()
@@ -54,20 +48,12 @@ final class WeeklyReviewViewModel: ObservableObject, WeeklyEntryAppending {
 
     var weeklyEntries: [WeeklyEntry] {
         _ = revision
-        guard let data = weeklyEntriesJSON.data(using: .utf8),
-              let entries = try? JSONDecoder().decode([WeeklyEntry].self, from: data) else {
-            return []
-        }
-        return entries
+        return entryStore.load()
     }
 
     var reviewedIds: Set<UUID> {
         _ = revision
-        guard let data = reviewedJSON.data(using: .utf8),
-              let ids = try? JSONDecoder().decode([UUID].self, from: data) else {
-            return []
-        }
-        return Set(ids)
+        return Set(reviewedStore.load())
     }
 
     var currentWeekNote: String {
@@ -184,11 +170,7 @@ final class WeeklyReviewViewModel: ObservableObject, WeeklyEntryAppending {
     }
 
     private func persistReviewed(_ set: Set<UUID>) {
-        let array = Array(set)
-        if let data = try? JSONEncoder().encode(array),
-           let string = String(data: data, encoding: .utf8) {
-            reviewedJSON = string
-        }
+        reviewedStore.save(Array(set))
     }
 
     func appendWeeklyEntry(from historyEntry: HistoryEntry) {
@@ -247,10 +229,7 @@ final class WeeklyReviewViewModel: ObservableObject, WeeklyEntryAppending {
     }
 
     func persistWeeklyEntries(_ entries: [WeeklyEntry]) {
-        if let data = try? JSONEncoder().encode(entries),
-           let string = String(data: data, encoding: .utf8) {
-            weeklyEntriesJSON = string
-        }
+        entryStore.save(entries)
     }
 
     func performHistoryMigrationIfNeeded() {
@@ -262,8 +241,8 @@ final class WeeklyReviewViewModel: ObservableObject, WeeklyEntryAppending {
         let legacyEntries: [HistoryEntry]
         if legacyRaw.isEmpty {
             legacyEntries = []
-        } else if let data = legacyRaw.data(using: .utf8) {
-            legacyEntries = (try? JSONDecoder().decode([HistoryEntry].self, from: data)) ?? []
+        } else if let salvaged = PersistentPayload.salvageArray(HistoryEntry.self, raw: legacyRaw) {
+            legacyEntries = salvaged.values
         } else {
             legacyEntries = []
         }
@@ -297,6 +276,7 @@ final class WeeklyReviewViewModel: ObservableObject, WeeklyEntryAppending {
 
         let entries = weeklyEntries
         guard !entries.isEmpty else {
+            if entryStore.lastHealth.isDamaged { return }
             defaults.set(true, forKey: WeeklyReviewViewModel.weekendMigrationKey)
             return
         }
@@ -338,21 +318,17 @@ final class WeeklyReviewViewModel: ObservableObject, WeeklyEntryAppending {
     }
 
     private func decodeNotes() -> WeeklyNotes {
-        guard let data = notesJSON.data(using: .utf8) else { return WeeklyNotes(byWeek: [:]) }
-        return (try? JSONDecoder().decode(WeeklyNotes.self, from: data)) ?? WeeklyNotes(byWeek: [:])
+        notesStore.load(fallback: WeeklyNotes(byWeek: [:]))
     }
 
     private func writeNotes(_ notes: WeeklyNotes) {
-        if let data = try? JSONEncoder().encode(notes),
-           let string = String(data: data, encoding: .utf8) {
-            notesJSON = string
-        }
+        notesStore.save(notes)
     }
 
     func resetForTest() {
-        weeklyEntriesJSON = "[]"
-        reviewedJSON = "[]"
-        notesJSON = "{\"byWeek\":{}}"
+        entryStore.save([])
+        reviewedStore.save([])
+        notesStore.save(WeeklyNotes(byWeek: [:]))
         noteDraft = ""
         currentWeekStart = WeekCalculator.weekStart(for: Date())
         defaults.removeObject(forKey: WeeklyReviewViewModel.historyMigrationKey)

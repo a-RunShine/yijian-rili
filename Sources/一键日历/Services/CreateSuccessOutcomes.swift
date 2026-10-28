@@ -4,15 +4,26 @@ import Foundation
 final class CreateSuccessOutcomes {
     private let history: HistoryStore
     private let weekly: WeeklyEntryAppending
+    private let occurrenceStatuses: OccurrenceStatusStore?
 
-    init(history: HistoryStore, weekly: WeeklyEntryAppending) {
+    init(
+        history: HistoryStore,
+        weekly: WeeklyEntryAppending,
+        occurrenceStatuses: OccurrenceStatusStore? = nil
+    ) {
         self.history = history
         self.weekly = weekly
+        self.occurrenceStatuses = occurrenceStatuses
     }
 
     func record(_ entry: HistoryEntry) {
         history.add(entry)
         weekly.appendWeeklyEntry(from: entry)
+        for entry in history.drainEvictedEntries() {
+            weekly.removeWeeklyEntries(id: entry.id)
+            occurrenceStatuses?.clearSeries(entryID: entry.id)
+            occurrenceStatuses?.clearLegacy(ids: entry.createdEventIdentifiers)
+        }
     }
 
     func clearHistory() {
@@ -57,6 +68,11 @@ final class CreateSuccessOutcomes {
         }
         history.replace(entry.withCreatedEventIdentifiers(remaining))
         return .updated(id: entry.id, remainingIdentifiers: remaining)
+    }
+
+    func replaceCreatedEventIdentifiers(id: UUID, identifiers: [String]) {
+        guard let existing = history.load().first(where: { $0.id == id }) else { return }
+        history.replace(existing.withCreatedEventIdentifiers(identifiers))
     }
 
     func updateSharedDetail(id: UUID, sharedDetail: String?) {

@@ -13,6 +13,7 @@ final class CalendarManager: ObservableObject, CalendarService, CalendarEventSto
     @Published private(set) var availableCalendars: [CalendarInfo] = []
     @Published private(set) var hasCloudCalendar: Bool = false
     private(set) var lastCreatedEventIdentifiers: [String] = []
+    private(set) var lastCreatedPairs: [(date: Date, id: String)] = []
 
     private init() {
         authorizationStatus = Self.mapAccess(EKEventStore.authorizationStatus(for: .event))
@@ -75,6 +76,7 @@ final class CalendarManager: ObservableObject, CalendarService, CalendarEventSto
         )
         if !outcome.createdEventIds.isEmpty {
             lastCreatedEventIdentifiers = outcome.createdEventIds
+            lastCreatedPairs = outcome.createdPairs
         }
         return outcome.result
     }
@@ -95,6 +97,7 @@ final class CalendarManager: ObservableObject, CalendarService, CalendarEventSto
         )
         if !outcome.createdEventIds.isEmpty {
             lastCreatedEventIdentifiers = outcome.createdEventIds
+            lastCreatedPairs = outcome.createdPairs
         }
         return outcome.result
     }
@@ -139,6 +142,7 @@ final class CalendarManager: ObservableObject, CalendarService, CalendarEventSto
         }
 
         try eventStore.save(event, span: .thisEvent)
+        try eventStore.commit()
         logger.info("Created event for \(day.formattedChinese()) in calendar \(targetCalendar.title)")
         return event.eventIdentifier ?? UUID().uuidString
     }
@@ -151,6 +155,7 @@ final class CalendarManager: ObservableObject, CalendarService, CalendarEventSto
             if let event = eventStore.event(withIdentifier: identifier) {
                 do {
                     try eventStore.remove(event, span: .thisEvent)
+                    try eventStore.commit()
                     deletedCount += 1
                     logger.info("Undo: deleted event with identifier \(identifier)")
                 } catch {
@@ -163,6 +168,7 @@ final class CalendarManager: ObservableObject, CalendarService, CalendarEventSto
         }
 
         lastCreatedEventIdentifiers = []
+        lastCreatedPairs = []
         return UndoResult(
             success: deletedCount > 0,
             deletedCount: deletedCount,
@@ -199,24 +205,52 @@ final class CalendarManager: ObservableObject, CalendarService, CalendarEventSto
     }
 
     func event(withId id: String) -> CalendarEventInfo? {
-        guard let event = eventStore.event(withIdentifier: id) else { return nil }
+        guard let event = resolveEvent(id: id) else { return nil }
         return Self.mapEvent(event)
     }
 
     @discardableResult
     func deleteEvent(id: String) -> Bool {
-        guard let event = eventStore.event(withIdentifier: id) else {
-            logger.warning("deleteEvent: event \(id) not found")
+        guard let event = resolveEvent(id: id) else {
+            logger.warning("deleteEvent: event \(id) not found after refresh")
             return false
         }
         do {
             try eventStore.remove(event, span: .thisEvent)
+            try eventStore.commit()
             logger.info("Deleted event \(id) for \(event.startDate.formattedChinese())")
             return true
         } catch {
             logger.error("Failed to delete event: \(error.localizedDescription)")
             return false
         }
+    }
+
+    private func resolveEvent(id: String) -> EKEvent? {
+        if let direct = eventStore.event(withIdentifier: id) {
+            return direct
+        }
+        if let bare = Self.strippingSourcePrefix(id), let found = eventStore.event(withIdentifier: bare) {
+            return found
+        }
+        eventStore.refreshSourcesIfNecessary()
+        if let refreshed = eventStore.event(withIdentifier: id) {
+            return refreshed
+        }
+        if let bare = Self.strippingSourcePrefix(id), let found = eventStore.event(withIdentifier: bare) {
+            return found
+        }
+        let start = Date().addingTimeInterval(-60 * 86_400 * 365)
+        let end = Date().addingTimeInterval(60 * 86_400 * 365)
+        let predicate = eventStore.predicateForEvents(withStart: start, end: end, calendars: nil)
+        let candidates = Set([id, Self.strippingSourcePrefix(id)].compactMap { $0 })
+        return eventStore.events(matching: predicate)
+            .first { candidates.contains($0.eventIdentifier) }
+    }
+
+    private static func strippingSourcePrefix(_ id: String) -> String? {
+        guard let colon = id.firstIndex(of: ":") else { return nil }
+        return String(id[id.index(after: colon)...])
     }
 
     func eventNotes(id: String) -> String? {
@@ -233,6 +267,7 @@ final class CalendarManager: ObservableObject, CalendarService, CalendarEventSto
         event.notes = notes
         do {
             try eventStore.save(event, span: .thisEvent)
+            try eventStore.commit()
             logger.info("Updated notes for event \(id)")
             return true
         } catch {
@@ -250,6 +285,7 @@ final class CalendarManager: ObservableObject, CalendarService, CalendarEventSto
         event.title = title
         do {
             try eventStore.save(event, span: .thisEvent)
+            try eventStore.commit()
             logger.info("Updated title for event \(id)")
             return true
         } catch {

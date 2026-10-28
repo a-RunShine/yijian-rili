@@ -68,6 +68,16 @@ struct SeriesDeleteSheet: View {
         .frame(width: 340, height: 360)
     }
 
+    var selectedIDsForTesting: Set<String> { selectedIDs }
+
+    func toggleForTesting(id: String, on: Bool) {
+        if on {
+            selectedIDs.insert(id)
+        } else {
+            selectedIDs.remove(id)
+        }
+    }
+
     private func binding(for id: String) -> Binding<Bool> {
         Binding(
             get: { selectedIDs.contains(id) },

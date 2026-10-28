@@ -82,7 +82,8 @@ final class ReviewSession {
         self.selectedCalendarIdentifier = selectedCalendarIdentifier
         authorizationStatus = calendar.checkAuthorizationStatus()
         syncCalendarStateFromSeam()
-        if !self.selectedCalendarIdentifier.isEmpty,
+        if authorizationStatus == .fullAccess,
+           !self.selectedCalendarIdentifier.isEmpty,
            calendar.calendar(withIdentifier: self.selectedCalendarIdentifier) == nil {
             self.selectedCalendarIdentifier = ""
         }
@@ -90,12 +91,39 @@ final class ReviewSession {
     }
 
     func occurrenceStatus(for eventId: String) -> OccurrenceStatus {
-        occurrenceStatuses.status(for: eventId)
+        let key = statusKey(for: eventId)
+        let direct = occurrenceStatuses.status(for: key)
+        if direct != .unmarked { return direct }
+        let legacy = occurrenceStatuses.status(for: HistorySeriesLookup.legacyKey(for: eventId))
+        if legacy != .unmarked { return legacy }
+        return occurrenceStatuses.status(for: eventId)
     }
 
     func setOccurrenceStatus(eventId: String, status: OccurrenceStatus) {
         guard isReviewSeriesEvent(eventId) else { return }
-        occurrenceStatuses.setStatus(status, for: eventId)
+        occurrenceStatuses.setStatus(status, for: statusKey(for: eventId))
+    }
+
+    private func statusKeys(for entry: HistoryEntry, eventIds: [String] = []) -> [String] {
+        let series = entry.reviewDates.indices.map {
+            HistorySeriesLookup.seriesKey(entryID: entry.id, index: $0)
+        }
+        let legacy = (eventIds + entry.createdEventIdentifiers)
+            .filter { !$0.isEmpty }
+            .map { HistorySeriesLookup.legacyKey(for: $0) }
+        return series + legacy
+    }
+
+    func statusKey(for eventId: String) -> String {
+        if let event = calendar.event(withId: eventId) {
+            return HistorySeriesLookup.stableKey(for: event, in: outcomes.recordedEntries())
+        }
+        for entry in outcomes.recordedEntries() where entry.type == .review {
+            guard let index = entry.createdEventIdentifiers.firstIndex(of: eventId) else { continue }
+            guard index < entry.reviewDates.count else { continue }
+            return HistorySeriesLookup.seriesKey(entryID: entry.id, index: index)
+        }
+        return HistorySeriesLookup.legacyKey(for: eventId)
     }
 
     func canMarkOccurrence(eventId: String) -> Bool {
@@ -105,25 +133,39 @@ final class ReviewSession {
     func occurrenceMaterials(weekStart: Date, weekEnd: Date) -> [OccurrenceReviewMaterial] {
         let marked = occurrenceStatuses.markedEntries()
         guard !marked.isEmpty else { return [] }
-        let reviewEventIds = reviewSeriesEventIds()
+        let start = Calendar.current.startOfDay(for: weekStart)
+        let end = Calendar.current.startOfDay(for: weekEnd)
         var materials: [OccurrenceReviewMaterial] = []
-        for (eventId, status) in marked {
-            guard reviewEventIds.contains(eventId) else { continue }
-            guard let event = calendar.event(withId: eventId) else { continue }
-            let day = Calendar.current.startOfDay(for: event.start)
-            let start = Calendar.current.startOfDay(for: weekStart)
-            let end = Calendar.current.startOfDay(for: weekEnd)
-            guard day >= start && day <= end else { continue }
-            materials.append(
-                OccurrenceReviewMaterial(
-                    eventId: eventId,
-                    title: event.title,
-                    occurrenceDate: event.start,
-                    status: status
+        for entry in outcomes.recordedEntries() where entry.type == .review {
+            for (index, day) in entry.reviewDates.enumerated() {
+                let key = HistorySeriesLookup.seriesKey(entryID: entry.id, index: index)
+                guard let status = marked[key] else { continue }
+                let target = Calendar.current.startOfDay(for: day)
+                guard target >= start && target <= end else { continue }
+                guard let event = resolvedEvent(for: entry, index: index) else { continue }
+                materials.append(
+                    OccurrenceReviewMaterial(
+                        eventId: event.id,
+                        title: entry.title,
+                        occurrenceDate: event.start,
+                        status: status
+                    )
                 )
-            )
+            }
         }
         return materials.sorted { $0.occurrenceDate > $1.occurrenceDate }
+    }
+
+    private func resolvedEvent(for entry: HistoryEntry, index: Int) -> CalendarEventInfo? {
+        guard index < entry.reviewDates.count else { return nil }
+        let day = entry.reviewDates[index]
+        if index < entry.createdEventIdentifiers.count,
+           let exact = calendar.event(withId: entry.createdEventIdentifiers[index]) {
+            return exact
+        }
+        let start = Calendar.current.startOfDay(for: day)
+        guard let end = Calendar.current.date(byAdding: .day, value: 1, to: start) else { return nil }
+        return calendar.fetchEvents(from: start, to: end).first { $0.title == entry.title }
     }
 
     private func isReviewSeriesEvent(_ eventId: String) -> Bool {
@@ -176,17 +218,11 @@ final class ReviewSession {
     }
 
     func persistIntervals() {
-        if let data = try? JSONEncoder().encode(reviewIntervals),
-           let string = String(data: data, encoding: .utf8) {
-            defaults.set(string, forKey: "reviewIntervalsData")
-        }
+        PersistentArray<Int>(key: "reviewIntervalsData", defaults: defaults).save(reviewIntervals)
     }
 
     func persistCustomPresets() {
-        if let data = try? JSONEncoder().encode(customPresets),
-           let string = String(data: data, encoding: .utf8) {
-            defaults.set(string, forKey: "customPresetsData")
-        }
+        PersistentArray<CustomPreset>(key: "customPresetsData", defaults: defaults).save(customPresets)
     }
 
     func persistSelectedCalendar() {
@@ -221,9 +257,15 @@ final class ReviewSession {
     func saveCustomPreset(name: String) {
         let trimmed = name.trimmingCharacters(in: .whitespaces)
         guard !trimmed.isEmpty else { return }
-        guard !customPresets.contains(where: { $0.name == trimmed }) else { return }
-        customPresets.append(CustomPreset(name: trimmed, intervals: reviewIntervals))
-        persistCustomPresets()
+        let store = PersistentArray<CustomPreset>(key: "customPresetsData", defaults: defaults)
+        let existing = store.load()
+        guard !existing.contains(where: { $0.name == trimmed }),
+              !customPresets.contains(where: { $0.name == trimmed }) else {
+            customPresets = existing
+            return
+        }
+        customPresets = existing + [CustomPreset(name: trimmed, intervals: reviewIntervals)]
+        store.save(customPresets)
     }
 
     func applyCustomPreset(_ preset: CustomPreset) {
@@ -233,7 +275,8 @@ final class ReviewSession {
     }
 
     func deleteCustomPreset(id: UUID) {
-        customPresets = customPresets.filter { $0.id != id }
+        let store = PersistentArray<CustomPreset>(key: "customPresetsData", defaults: defaults)
+        customPresets = store.load().filter { $0.id != id }
         persistCustomPresets()
     }
 
@@ -261,15 +304,22 @@ final class ReviewSession {
     }
 
     @discardableResult
+    func discardRecordedEntry(id: UUID) {
+        if let entry = outcomes.recordedEntries().first(where: { $0.id == id }) {
+            occurrenceStatuses.clear(ids: statusKeys(for: entry))
+        }
+        outcomes.discardRecorded(id: id)
+    }
+
     func discardRecordedContainingEvent(id: String) -> UUID? {
         let entry = outcomes.recordedEntries().first(where: {
             $0.createdEventIdentifiers.contains(id)
         })
         let result = outcomes.discardRecordedContainingEvent(id: id)
         if let entry, result != nil {
-            occurrenceStatuses.clear(ids: entry.createdEventIdentifiers)
+            occurrenceStatuses.clear(ids: statusKeys(for: entry, eventIds: [id]))
         } else {
-            occurrenceStatuses.clear(ids: [id])
+            occurrenceStatuses.clear(ids: [statusKey(for: id)])
         }
         return result
     }
@@ -282,7 +332,7 @@ final class ReviewSession {
         let outcome = outcomes.removeEventsFromRecorded(ids: ids, reason: reason)
         switch outcome {
         case .updated, .discarded:
-            occurrenceStatuses.clear(ids: ids)
+            occurrenceStatuses.clear(ids: ids.map { statusKey(for: $0) })
         case .noMatch, .refusedNoAuthority:
             break
         }
@@ -294,6 +344,7 @@ final class ReviewSession {
         guard CalendarLookupAuthority.verified(authorizationStatus) != nil else {
             return .skippedNoAccess
         }
+        migrateLegacyStatusKeys()
         var unmatched = 0
         for entry in outcomes.recordedEntries() {
             let identifiers = entry.createdEventIdentifiers
@@ -301,6 +352,27 @@ final class ReviewSession {
             unmatched += identifiers.filter { calendar.event(withId: $0) == nil }.count
         }
         return unmatched > 0 ? .unmatched(count: unmatched) : .unchanged
+    }
+
+    private func migrateLegacyStatusKeys() {
+        let marked = occurrenceStatuses.markedEntries()
+        let legacy = marked.filter { !$0.key.hasPrefix("series:") }
+        guard !legacy.isEmpty else { return }
+        var relocated: [String: OccurrenceStatus] = [:]
+        var consumed: [String] = []
+        for (key, status) in legacy {
+            let eventId = key.hasPrefix("event:") ? String(key.dropFirst("event:".count)) : key
+            guard let event = calendar.event(withId: eventId) else { continue }
+            let stable = HistorySeriesLookup.stableKey(for: event, in: outcomes.recordedEntries())
+            guard stable.hasPrefix("series:") else { continue }
+            relocated[stable] = status
+            consumed.append(key)
+        }
+        guard !consumed.isEmpty else { return }
+        for (key, status) in relocated {
+            occurrenceStatuses.setStatus(status, for: key)
+        }
+        occurrenceStatuses.clear(ids: consumed)
     }
 
     @discardableResult
@@ -415,6 +487,9 @@ final class ReviewSession {
 
         let trimmedTitle = title.trimmingCharacters(in: .whitespaces)
         let detailForWrite = Self.optionalDetail(from: detail)
+        let frozenBaseDate = baseDate
+        let frozenMode = scheduleMode
+        let frozenIntervals = reviewIntervals
 
         guard !trimmedTitle.isEmpty else {
             resultMessage = NSLocalizedString("empty_title_error", comment: "")
@@ -458,19 +533,19 @@ final class ReviewSession {
 
             let calendarId = targetCalendar?.identifier
             let createResult: CreateEventsResult
-            switch scheduleMode {
+            switch frozenMode {
             case .review:
                 createResult = try await calendar.createReviewEvents(
                     title: trimmedTitle,
-                    baseDate: baseDate,
-                    intervals: reviewIntervals,
+                    baseDate: frozenBaseDate,
+                    intervals: frozenIntervals,
                     calendarId: calendarId,
                     detail: detailForWrite
                 )
             case .single:
                 createResult = try await calendar.createSingleEvent(
                     title: trimmedTitle,
-                    date: baseDate,
+                    date: frozenBaseDate,
                     calendarId: calendarId,
                     detail: detailForWrite
                 )
@@ -489,7 +564,9 @@ final class ReviewSession {
                     onCreateSuccess(
                         trimmed: trimmedTitle,
                         created: written,
-                        sharedDetail: detailForWrite
+                        sharedDetail: detailForWrite,
+                        baseDate: frozenBaseDate,
+                        mode: frozenMode
                     )
                 }
             } else {
@@ -501,7 +578,9 @@ final class ReviewSession {
                 onCreateSuccess(
                     trimmed: trimmedTitle,
                     created: createResult.created,
-                    sharedDetail: detailForWrite
+                    sharedDetail: detailForWrite,
+                    baseDate: frozenBaseDate,
+                    mode: frozenMode
                 )
             }
         } catch {
@@ -525,30 +604,39 @@ final class ReviewSession {
             resultType = .warning
         }
 
-        if let recordedID {
+        if let recordedID, undo.deletedCount > 0 || undo.success {
             if let entry = outcomes.recordedEntries().first(where: { $0.id == recordedID }) {
-                occurrenceStatuses.clear(ids: entry.createdEventIdentifiers)
+                occurrenceStatuses.clear(ids: statusKeys(for: entry))
             }
             outcomes.discardRecorded(id: recordedID)
+            lastRecordedHistoryEntryID = nil
+            canUndo = false
+            canRecreate = false
         }
-        lastRecordedHistoryEntryID = nil
-        canUndo = false
-        canRecreate = false
     }
 
-    private func onCreateSuccess(trimmed: String, created: [Date], sharedDetail: String?) {
+    private func onCreateSuccess(
+        trimmed: String,
+        created: [Date],
+        sharedDetail: String?,
+        baseDate writtenBaseDate: Date,
+        mode writtenMode: ScheduleMode
+    ) {
         shouldPlayHaptic = true
         lastCreatedTitle = trimmed
-        lastCreatedBaseDate = baseDate
+        lastCreatedBaseDate = writtenBaseDate
         canRecreate = true
         canUndo = true
         let entry = HistoryEntry(
             title: trimmed,
-            baseDate: baseDate,
+            baseDate: writtenBaseDate,
             reviewDates: created,
             creationDate: Date(),
-            type: scheduleMode == .single ? .single : .review,
-            createdEventIdentifiers: calendar.lastCreatedEventIdentifiers,
+            type: writtenMode == .single ? .single : .review,
+            createdEventIdentifiers: Self.effectiveIdentifiers(
+                created: created,
+                calendar: calendar
+            ),
             sharedDetail: sharedDetail
         )
         outcomes.record(entry)
@@ -556,6 +644,17 @@ final class ReviewSession {
         title = ""
         detail = ""
         updateReviewDates()
+    }
+
+    private static func effectiveIdentifiers(
+        created: [Date],
+        calendar: CalendarService
+    ) -> [String] {
+        let pairs = calendar.lastCreatedPairs
+        guard !pairs.isEmpty else { return calendar.lastCreatedEventIdentifiers }
+        return created.compactMap { day in
+            pairs.first { Calendar.current.isDate($0.date, inSameDayAs: day) }?.id
+        }
     }
 
     private static func datesWrittenDespiteDuplicates(_ result: CreateEventsResult) -> [Date] {
@@ -570,21 +669,15 @@ final class ReviewSession {
     }
 
     private static func loadIntervals(from defaults: UserDefaults) -> [Int] {
-        let raw = defaults.string(forKey: "reviewIntervalsData") ?? "[3,7,30]"
-        guard let data = raw.data(using: .utf8),
-              let intervals = try? JSONDecoder().decode([Int].self, from: data),
-              IntervalRules.validate(intervals) else {
+        let intervals = PersistentArray<Int>(key: "reviewIntervalsData", defaults: defaults)
+            .load()
+        guard IntervalRules.validate(intervals) else {
             return IntervalRules.defaultIntervals
         }
         return intervals
     }
 
     private static func loadCustomPresets(from defaults: UserDefaults) -> [CustomPreset] {
-        let raw = defaults.string(forKey: "customPresetsData") ?? "[]"
-        guard let data = raw.data(using: .utf8),
-              let presets = try? JSONDecoder().decode([CustomPreset].self, from: data) else {
-            return []
-        }
-        return presets
+        PersistentArray<CustomPreset>(key: "customPresetsData", defaults: defaults).load()
     }
 }
