@@ -1173,4 +1173,61 @@ final class OccurrenceStatusTests: XCTestCase {
 
         defaults.removePersistentDomain(forName: suiteName)
     }
+
+    func testDirectPruneWithoutAccessIsRefusedEvenWhenCallerClaimsCalendarMissing() async throws {
+        let suiteName = "prune-guard-\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defaults.removePersistentDomain(forName: suiteName)
+
+        let calendar = InMemoryCalendarService(grantAccessByDefault: true)
+        let history = HistoryStore(defaults: defaults)
+        let weekly = WeeklyReviewViewModel(defaults: defaults)
+        let outcomes = CreateSuccessOutcomes(history: history, weekly: weekly)
+        let session = ReviewSession(calendar: calendar, outcomes: outcomes)
+
+        session.title = "直调修剪"
+        session.baseDate = Date()
+        session.scheduleMode = .review
+        session.reviewIntervals = [3, 7, 30]
+        session.updateReviewDates()
+        await session.create()
+
+        let ids = try XCTUnwrap(history.load().first?.createdEventIdentifiers)
+
+        session.authorizationStatus = .denied
+        let outcome = session.removeEventsFromRecorded(ids: ids, reason: .calendarConfirmedMissing)
+
+        XCTAssertEqual(outcome, .noMatch)
+        XCTAssertEqual(history.load().first?.createdEventIdentifiers, ids)
+
+        defaults.removePersistentDomain(forName: suiteName)
+    }
+
+    func testDirectPruneByUserStillWorksWithoutAccess() async throws {
+        let suiteName = "prune-user-\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defaults.removePersistentDomain(forName: suiteName)
+
+        let calendar = InMemoryCalendarService(grantAccessByDefault: true)
+        let history = HistoryStore(defaults: defaults)
+        let weekly = WeeklyReviewViewModel(defaults: defaults)
+        let outcomes = CreateSuccessOutcomes(history: history, weekly: weekly)
+        let session = ReviewSession(calendar: calendar, outcomes: outcomes)
+
+        session.title = "用户删除"
+        session.baseDate = Date()
+        session.scheduleMode = .review
+        session.reviewIntervals = [3, 7, 30]
+        session.updateReviewDates()
+        await session.create()
+
+        let ids = try XCTUnwrap(history.load().first?.createdEventIdentifiers)
+
+        session.authorizationStatus = .denied
+        let outcome = session.removeEventsFromRecorded(ids: [ids[0]], reason: .userDeletedOccurrence)
+
+        XCTAssertEqual(outcome, .updated(id: history.load().first!.id, remainingIdentifiers: Array(ids.dropFirst())))
+
+        defaults.removePersistentDomain(forName: suiteName)
+    }
 }

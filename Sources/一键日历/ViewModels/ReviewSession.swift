@@ -284,6 +284,9 @@ final class ReviewSession {
         ids: [String],
         reason: RecordedPruneReason
     ) -> RemoveEventsFromRecordedOutcome {
+        if reason == .calendarConfirmedMissing, !canTrustCalendarLookups {
+            return .noMatch
+        }
         let outcome = outcomes.removeEventsFromRecorded(ids: ids, reason: reason)
         switch outcome {
         case .updated, .discarded:
