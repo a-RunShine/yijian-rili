@@ -25,6 +25,7 @@
 | 页面 | 摘要 |
 |---|---|
 | [verification.md](verification.md) | 测试与 CI 的演变，以及四个真实 bug 的诊断过程（含「没有栈就不要猜」与反馈循环先行） |
+| [data-reliability.md](data-reliability.md) | 「用户数据不可静默丢失」这条主线：缺陷的共同形状、合格写入路径的四条判据、待验证的候选路径 |
 | [constraints.md](constraints.md) | AGENTS.md 硬约束的落地状态与机器强制方式 |
 | [branch-lineage.md](branch-lineage.md) | 双画布那批残留分支的对照结论与删除记录 |
 

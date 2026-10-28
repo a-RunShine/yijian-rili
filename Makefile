@@ -11,7 +11,7 @@ BUILD_DIR   := .build/release
 BUILD_APP   := $(BUILD_DIR)/$(APP)
 APP_CONTENTS := $(BUILD_APP)/Contents
 
-.PHONY: build bundle test lint check run open clean all install uninstall verify-install
+.PHONY: build bundle test lint check run open clean all install uninstall verify-install inspect-data backup-data
 
 all: bundle
 
@@ -75,3 +75,20 @@ uninstall:
 	@test -d "$(INSTALL_DIR)/$(APP)" || { echo "未安装，跳过"; exit 0; }
 	@rm -rf "$(INSTALL_DIR)/$(APP)"
 	@echo "✅ 已卸载 $(INSTALL_DIR)/$(APP)"
+
+# 用户数据只有一份，且损坏后不可自愈（见 docs/wiki/data-reliability.md）。
+# 任何涉及写入路径的改动，先在真实数据上跑 inspect-data 确认状态，再动手。
+PREF_PLIST := $(HOME)/Library/Preferences/com.yijianrili.app.plist
+BACKUP_DIR := $(HOME)/Library/Application Support/yijian-rili-backups
+
+inspect-data:
+	@./scripts/inspect-data.py
+
+backup-data:
+	@test -f "$(PREF_PLIST)" || { echo "❌ 找不到 $(PREF_PLIST)"; exit 1; }
+	@mkdir -p "$(BACKUP_DIR)"
+	@stamp=$$(date +%Y%m%d-%H%M%S); \
+	dest="$(BACKUP_DIR)/com.yijianrili.app-$$stamp.plist"; \
+	cp "$(PREF_PLIST)" "$$dest"; \
+	echo "✅ 已备份 → $$dest"; \
+	./scripts/inspect-data.py "$$dest" | head -5
