@@ -2,9 +2,6 @@ using YijianRili.Domain.Models;
 
 namespace YijianRili.Domain.Services;
 
-/// <summary>
-/// 周末总结领域服务（对齐 WeeklyReviewViewModel 持久化与周规则，不含 UI）。
-/// </summary>
 public sealed class WeeklyReviewService
 {
     public const string WeeklyEntriesKey = "weeklyEntriesData";
@@ -13,7 +10,6 @@ public sealed class WeeklyReviewService
     public const string HistoryMigrationKey = "weeklyEntriesHistoryMigrationDone";
     public const string WeekendMigrationKey = "weeklyEntriesWeekendMigrationDone";
 
-    /// <summary>反序列化安全上限（周末总结永久保存，但仍防止异常膨胀）。</summary>
     public const int MaxEntries = 10_000;
 
     private readonly ISettingsStore _settings;
@@ -145,7 +141,6 @@ public sealed class WeeklyReviewService
         _settings.SetString(WeeklyReviewStateKey, JsonSettings.Serialize(set.ToList()));
     }
 
-    /// <summary>追加 weekly entry；周末复习计划写入下一周预占位副本。</summary>
     public void AppendWeeklyEntry(HistoryEntry historyEntry)
     {
         var entries = LoadEntries().ToList();

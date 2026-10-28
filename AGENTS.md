@@ -19,7 +19,8 @@ Agent 操作契约（always-loaded）。发版、CalDAV 同步、Windows 细节�
 
 日常命令与发版步骤：[`docs/agents/release.md`](docs/agents/release.md)。
 
-- macOS：`make test` / `make open`（不要用 `make run`）
+- macOS：`make test` / `make lint` / `make open`（不要用 `make run`）
+- CI：`.github/workflows/macos-ci.yml` 跑 `swift build` + `swift test`；`make lint` 在 ubuntu 上单跑
 - Cloud Linux：见下方；完整 SwiftUI/EventKit 构建不可用
 
 ## 文档指针
@@ -31,7 +32,8 @@ Agent 操作契约（always-loaded）。发版、CalDAV 同步、Windows 细节�
 | Windows 移植 | [`windows/README.md`](windows/README.md) |
 | Issues / `gh` | [`docs/agents/issue-tracker.md`](docs/agents/issue-tracker.md) |
 | Triage 标签 | [`docs/agents/triage-labels.md`](docs/agents/triage-labels.md) |
-| 术语与 ADR | [`docs/agents/domain.md`](docs/agents/domain.md) → `GLOSSARY.md` + `docs/adr/` |
+| 术语与 ADR | [`docs/agents/domain.md`](docs/agents/domain.md) → `GLOSSARY.md` + [`docs/adr/`](docs/adr/README.md) |
+| 跨会话的决策与踩坑 | [`docs/wiki/index.md`](docs/wiki/index.md) |
 
 ## Cursor Cloud
 

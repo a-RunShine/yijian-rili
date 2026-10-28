@@ -3,16 +3,12 @@ using YijianRili.Domain.Services;
 
 namespace YijianRili.Domain.Calendar;
 
-/// <summary>写入日历编排产出。</summary>
 public sealed class CalendarWriteOutcome
 {
     public CreateEventsResult Result { get; init; } = new();
     public IReadOnlyList<string> CreatedEventIds { get; init; } = Array.Empty<string>();
 }
 
-/// <summary>
-/// 写入日历编排：校验间隔 → 算日 → 备注键 → 重复检测 → 经 store 写入。
-/// </summary>
 public static class CalendarWriteOrchestrator
 {
     public static async Task<CalendarWriteOutcome> WriteReviewAsync(

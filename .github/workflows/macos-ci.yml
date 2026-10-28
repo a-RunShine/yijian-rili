@@ -1,0 +1,69 @@
+name: macOS CI
+
+on:
+  push:
+    branches:
+      - master
+    paths:
+      - 'Sources/**'
+      - 'Tests/**'
+      - 'Package.swift'
+      - 'scripts/**'
+      - 'Makefile'
+      - '.github/workflows/macos-ci.yml'
+  pull_request:
+    paths:
+      - 'Sources/**'
+      - 'Tests/**'
+      - 'Package.swift'
+      - 'scripts/**'
+      - 'Makefile'
+      - '.github/workflows/macos-ci.yml'
+
+jobs:
+  build-and-test:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select latest Xcode
+        run: |
+          LATEST=$(ls -d /Applications/Xcode_*.app 2>/dev/null | sort -V | tail -1)
+          if [ -n "$LATEST" ]; then
+            sudo xcode-select -s "$LATEST/Contents/Developer"
+          fi
+          xcodebuild -version
+
+      - name: Show Swift version
+        run: swift --version
+
+      - name: Build
+        run: swift build
+
+      - name: Test
+        run: |
+          set -o pipefail
+          SWIFT_BACKTRACE=enable=yes,threads=all swift test 2>&1 | tee /tmp/test.log
+
+      - name: Show assertion details on failure
+        if: failure()
+        run: |
+          grep -nE 'Fatal error|precondition|assertion|Illegal|Signal' /tmp/test.log || true
+
+      - name: Dump crash reports on failure
+        if: failure()
+        run: |
+          ls -la ~/Library/Logs/DiagnosticReports/ 2>/dev/null || true
+          for f in ~/Library/Logs/DiagnosticReports/*.ips; do
+            [ -e "$f" ] || continue
+            echo "===== $f"
+            head -c 40000 "$f"
+          done
+
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Lint comments
+        run: make lint

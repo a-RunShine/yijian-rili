@@ -17,10 +17,6 @@ public enum ScheduleMode
     Single
 }
 
-/// <summary>
-/// 无 UI 依赖的复习创建会话编排（对齐 ReviewViewModel 核心流程）。
-/// WinUI ViewModel 可薄包装本类。
-/// </summary>
 public sealed class ReviewSession
 {
     public const string IntervalsKey = "reviewIntervalsData";

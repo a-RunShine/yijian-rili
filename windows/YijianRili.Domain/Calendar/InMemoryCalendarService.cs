@@ -3,7 +3,6 @@ using YijianRili.Domain.Services;
 
 namespace YijianRili.Domain.Calendar;
 
-/// <summary>进程内日历，供单测与无权限环境验证流程。create* 委托写入日历编排。</summary>
 public sealed class InMemoryCalendarService : ICalendarService, ICalendarEventStore
 {
     private readonly List<CalendarInfo> _calendars;
@@ -54,7 +53,9 @@ public sealed class InMemoryCalendarService : ICalendarService, ICalendarEventSt
         return Task.FromResult(true);
     }
 
-    public void RefreshAvailableCalendars() { /* no-op */ }
+    public void RefreshAvailableCalendars()
+    {
+    }
 
     public CalendarInfo? GetCalendar(string identifier)
         => AvailableCalendars.FirstOrDefault(c => c.Id == identifier);

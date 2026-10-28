@@ -2,7 +2,6 @@ using YijianRili.Domain.Services;
 
 namespace YijianRili.Domain.Models;
 
-/// <summary>复习事件模型；日期计算与 macOS ReviewEvent.calculateReviewDates 对齐。</summary>
 public sealed class ReviewEvent
 {
     public Guid Id { get; }
@@ -21,9 +20,6 @@ public sealed class ReviewEvent
         Notes = dates.Select((_, index) => ReviewNoteText.ForIndex(index)).ToArray();
     }
 
-    /// <summary>
-    /// 按间隔天数从基准日推算复习日期。失败的间隔安全跳过（与 Swift 一致）。
-    /// </summary>
     public static IReadOnlyList<DateTime> CalculateReviewDates(
         DateTime baseDate,
         IReadOnlyList<int>? intervals = null)
@@ -39,7 +35,6 @@ public sealed class ReviewEvent
             }
             catch (ArgumentOutOfRangeException)
             {
-                // 与 Swift Logger.warning + skip 行为一致：不抛出
             }
         }
 
@@ -47,7 +42,6 @@ public sealed class ReviewEvent
     }
 }
 
-/// <summary>复习备注文案（「第N次复习」）。</summary>
 public static class ReviewNoteText
 {
     public static string ForIndex(int zeroBasedIndex)

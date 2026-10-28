@@ -3,14 +3,6 @@ using YijianRili.Domain.Calendar;
 
 namespace YijianRili.Calendar;
 
-/// <summary>
-/// Windows.ApplicationModel.Appointments 实现，行为对齐 macOS CalendarManager。
-/// </summary>
-/// <remarks>
-/// 提醒：WinRT 只支持「相对开始时间」的 Reminder。全天事件 Start 为当天 00:00，
-/// 无法用 Reminder 精确表达「当天 09:00」。本实现采用全天事件，并在 Details
-/// 中写入提醒建议；可靠响铃可后续改为 09:00 定时事件。
-/// </remarks>
 public sealed class WinRtCalendarService : ICalendarService
 {
     private AppointmentStore? _store;
@@ -288,7 +280,6 @@ public sealed class WinRtCalendarService : ICalendarService
         };
     }
 
-    /// <summary>将 WinRT AppointmentStore 适配为窄 ICalendarEventStore。</summary>
     private sealed class WinRtEventStoreBridge : ICalendarEventStore
     {
         private readonly AppointmentStore _store;

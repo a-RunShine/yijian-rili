@@ -11,6 +11,7 @@ make open           # bundle 后 open 该 .app（调试用这个，不要 make r
 make install        # bundle + ditto 到 /Applications 并重新签名
 make verify-install # 校验 /Applications 里安装包的签名
 make test           # swift test（需 macOS）
+make lint           # 扫 Sources/ Tests/ windows/ 的注释违规（零依赖）
 make clean          # swift package clean（会清掉 .build/）
 ```
 

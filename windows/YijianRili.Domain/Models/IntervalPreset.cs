@@ -2,7 +2,6 @@ using YijianRili.Domain.Services;
 
 namespace YijianRili.Domain.Models;
 
-/// <summary>内置间隔预设（对齐 macOS IntervalPreset）。</summary>
 public enum IntervalPreset
 {
     Classic,
