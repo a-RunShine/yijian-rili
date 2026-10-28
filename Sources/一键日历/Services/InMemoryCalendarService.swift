@@ -9,6 +9,7 @@ final class InMemoryCalendarService: CalendarService, CalendarEventStore {
 
     private(set) var authorizationStatus: CalendarAccessStatus
     var eventsUnreadable = false
+    var deleteShouldFailForTest: Set<String> = []
 
     func setAuthorizationStatusForTesting(_ status: CalendarAccessStatus) {
         authorizationStatus = status
@@ -221,6 +222,8 @@ final class InMemoryCalendarService: CalendarService, CalendarEventStore {
 
     @discardableResult
     func deleteEvent(id: String) -> Bool {
+        if eventsUnreadable { return false }
+        if deleteShouldFailForTest.contains(id) { return false }
         let before = events.count
         events.removeAll { $0.id == id }
         return events.count < before

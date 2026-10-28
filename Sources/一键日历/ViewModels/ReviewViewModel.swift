@@ -973,12 +973,12 @@ class ReviewViewModel: ObservableObject {
 
     @discardableResult
     func deleteSearchHitMembers(ids: [String]) -> (deletedCount: Int, missingCount: Int) {
-        let outcome = browse.deleteEvents(ids: ids)
+        let outcome = browse.deleteEventsDetail(ids: ids)
         searchResults = browse.searchResults
         selectedSearchResult = browse.selectedSearchResult
         displayedEvents = browse.displayedEvents
-        if outcome.deletedCount > 0 {
-            applyDeletedEvents(ids: ids)
+        if !outcome.deletedIDs.isEmpty {
+            applyDeletedEvents(ids: outcome.deletedIDs)
             if let selected = selectedSearchHit,
                selected.members.contains(where: { ids.contains($0.id) }) {
                 selectedSearchHit = searchHits.first(where: { $0.id == selected.id })
@@ -986,7 +986,7 @@ class ReviewViewModel: ObservableObject {
             }
         }
         seriesPendingDelete = nil
-        return outcome
+        return (outcome.deletedIDs.count, outcome.failedIDs.count)
     }
 
     private func applyDeletedEvents(ids: [String]) {
