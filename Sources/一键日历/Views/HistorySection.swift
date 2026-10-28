@@ -3,6 +3,7 @@ import SwiftUI
 struct HistorySection: View {
     @ObservedObject var viewModel: ReviewViewModel
     var showsHeader: Bool = true
+    @ObservedObject var deleteFlow: SearchHitDeleteFlow
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -140,6 +141,6 @@ struct HistorySection: View {
     }
 
     private func deleteEntry(_ entry: HistoryEntry) {
-        viewModel.requestHistoryDelete(entry)
+        deleteFlow.requestDeletingHistory(entry, in: viewModel)
     }
 }

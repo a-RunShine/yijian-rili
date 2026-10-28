@@ -674,9 +674,6 @@ private struct CalendarShellPresentations: ViewModifier {
             .sheet(item: $viewModel.seriesPendingDelete) { hit in
                 SeriesDeleteSheet(viewModel: viewModel, hit: hit)
             }
-            .sheet(item: $viewModel.historyPendingDelete) { entry in
-                HistoryDeleteSheet(viewModel: viewModel, entry: entry)
-            }
             .onAppear {
                 viewModel.scheduleFirstRunGuideIfNeeded()
                 viewModel.applyWindowLevel()

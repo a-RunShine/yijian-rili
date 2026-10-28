@@ -5,6 +5,7 @@ struct HistoryOverlay: View {
     @ObservedObject var viewModel: ReviewViewModel
     let palette: ThemePalette
     let availableSize: CGSize
+    @StateObject private var deleteFlow = SearchHitDeleteFlow()
 
     var body: some View {
         ZStack {
@@ -33,10 +34,11 @@ struct HistoryOverlay: View {
             Rectangle()
                 .fill(palette.separator)
                 .frame(height: 1)
-            HistorySection(viewModel: viewModel, showsHeader: false)
+            HistorySection(viewModel: viewModel, showsHeader: false, deleteFlow: deleteFlow)
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         }
         .frame(width: panelWidth, height: panelHeight)
+        .searchHitDeleteAlert(deleteFlow, viewModel: viewModel)
         .background(palette.card, in: RoundedRectangle(cornerRadius: 12))
         .overlay {
             RoundedRectangle(cornerRadius: 12)

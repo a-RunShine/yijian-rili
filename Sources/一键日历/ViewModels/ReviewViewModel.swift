@@ -792,40 +792,53 @@ class ReviewViewModel: ObservableObject {
         refreshHistoryProjection()
     }
 
-    @Published var historyPendingDelete: HistoryEntry?
-
-    enum HistoryDeleteScope {
-        case recordOnly
-        case eventsToo
+    func hit(forHistoryEntry entry: HistoryEntry) -> SearchHit {
+        let members = resolvedMembers(of: entry)
+        guard !members.isEmpty else {
+            return SearchHit(id: entry.id.uuidString, kind: .single, title: entry.title, members: [])
+        }
+        guard entry.type == .review, members.count > 1 else {
+            return SearchHit(
+                id: members[0].id,
+                kind: .single,
+                title: entry.title,
+                members: members
+            )
+        }
+        return SearchHit(
+            id: members[0].id,
+            kind: .series(historyEntryID: entry.id),
+            title: entry.title,
+            members: members
+        )
     }
 
-    func requestHistoryDelete(_ entry: HistoryEntry) {
-        historyPendingDelete = entry
+    private func resolvedMembers(of entry: HistoryEntry) -> [CalendarEventInfo] {
+        let byId = entry.createdEventIdentifiers.compactMap { calendar.event(withId: $0) }
+        if !byId.isEmpty { return byId.sorted { $0.start < $1.start } }
+        var found: [CalendarEventInfo] = []
+        for day in entry.reviewDates {
+            let start = Calendar.current.startOfDay(for: day)
+            guard let end = Calendar.current.date(byAdding: .day, value: 1, to: start) else { continue }
+            guard let match = calendar.fetchEvents(from: start, to: end)
+                .first(where: { $0.title == entry.title }) else { continue }
+            found.append(match)
+        }
+        return found.sorted { $0.start < $1.start }
     }
 
-    func cancelHistoryDelete() {
-        historyPendingDelete = nil
-    }
-
-    func commitHistoryDelete(_ entry: HistoryEntry, scope: HistoryDeleteScope) {
-        if case .eventsToo = scope {
-            for id in entry.createdEventIdentifiers {
-                calendar.deleteEvent(id: id)
-            }
+    func deleteHistoryEntry(_ entry: HistoryEntry, members ids: [String]) {
+        for id in ids {
+            calendar.deleteEvent(id: id)
         }
         session.discardRecordedEntry(id: entry.id)
         outcomes.removeHistory(id: entry.id)
         weeklyReviewViewModel.removeWeeklyEntries(id: entry.id)
-        historyPendingDelete = nil
         refreshHistoryProjection()
         loadVisibleWindow()
         loadDisplayedDayEvents()
         rebuildSearchHits()
         weeklyReviewViewModel.refreshOccurrenceMaterials()
-    }
-
-    func deleteHistoryEntry(_ entry: HistoryEntry) {
-        commitHistoryDelete(entry, scope: .recordOnly)
     }
 
     func deleteHistoryEntry(at offsets: IndexSet) {

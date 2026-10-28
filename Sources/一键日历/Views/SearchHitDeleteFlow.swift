@@ -3,6 +3,7 @@ import SwiftUI
 @MainActor
 final class SearchHitDeleteFlow: ObservableObject {
     @Published private(set) var hitPendingDelete: SearchHit?
+    private var historyEntryPendingDelete: HistoryEntry?
 
     func request(_ hit: SearchHit, in viewModel: ReviewViewModel) {
         guard !hit.needsSelectiveDelete else {
@@ -12,13 +13,29 @@ final class SearchHitDeleteFlow: ObservableObject {
         hitPendingDelete = hit
     }
 
+    func requestDeletingHistory(_ entry: HistoryEntry, in viewModel: ReviewViewModel) {
+        historyEntryPendingDelete = entry
+        let hit = viewModel.hit(forHistoryEntry: entry)
+        guard !hit.needsSelectiveDelete else {
+            viewModel.beginSeriesDelete(hit)
+            return
+        }
+        hitPendingDelete = hit
+    }
+
     func cancel() {
         hitPendingDelete = nil
+        historyEntryPendingDelete = nil
     }
 
     func confirm(in viewModel: ReviewViewModel) {
         guard let hit = hitPendingDelete else { return }
         hitPendingDelete = nil
+        if let entry = historyEntryPendingDelete {
+            historyEntryPendingDelete = nil
+            viewModel.deleteHistoryEntry(entry, members: hit.members.map(\.id))
+            return
+        }
         let deleted = viewModel.deleteSearchHit(hit)
         guard deleted, viewModel.selectedSearchHit?.id == hit.id else { return }
         withAnimation(.spring(response: 0.4, dampingFraction: 0.85)) {
