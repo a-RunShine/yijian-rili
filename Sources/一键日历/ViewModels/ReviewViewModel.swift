@@ -986,6 +986,20 @@ class ReviewViewModel: ObservableObject {
             }
         }
         seriesPendingDelete = nil
+        if !outcome.failedIDs.isEmpty {
+            let message = outcome.deletedIDs.isEmpty
+                ? NSLocalizedString("delete_failed_all", comment: "")
+                : String(
+                    format: NSLocalizedString("delete_failed_partial", comment: ""),
+                    "\(outcome.deletedIDs.count)",
+                    "\(outcome.failedIDs.count)"
+                )
+            resultMessage = message
+            resultType = .warning
+            session.resultMessage = message
+            session.resultType = .warning
+            scheduleResultDismissal()
+        }
         return (outcome.deletedIDs.count, outcome.failedIDs.count)
     }
 

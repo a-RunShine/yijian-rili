@@ -227,13 +227,27 @@ final class CalendarManager: ObservableObject, CalendarService, CalendarEventSto
         if let direct = eventStore.event(withIdentifier: id) {
             return direct
         }
+        if let bare = Self.strippingSourcePrefix(id), let found = eventStore.event(withIdentifier: bare) {
+            return found
+        }
         eventStore.refreshSourcesIfNecessary()
         if let refreshed = eventStore.event(withIdentifier: id) {
             return refreshed
         }
+        if let bare = Self.strippingSourcePrefix(id), let found = eventStore.event(withIdentifier: bare) {
+            return found
+        }
+        let start = Date().addingTimeInterval(-60 * 86_400 * 365)
+        let end = Date().addingTimeInterval(60 * 86_400 * 365)
+        let predicate = eventStore.predicateForEvents(withStart: start, end: end, calendars: nil)
+        let candidates = Set([id, Self.strippingSourcePrefix(id)].compactMap { $0 })
+        return eventStore.events(matching: predicate)
+            .first { candidates.contains($0.eventIdentifier) }
+    }
+
+    private static func strippingSourcePrefix(_ id: String) -> String? {
         guard let colon = id.firstIndex(of: ":") else { return nil }
-        let bare = String(id[id.index(after: colon)...])
-        return eventStore.event(withIdentifier: bare)
+        return String(id[id.index(after: colon)...])
     }
 
     func eventNotes(id: String) -> String? {
