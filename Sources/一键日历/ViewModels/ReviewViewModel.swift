@@ -178,7 +178,8 @@ class ReviewViewModel: ObservableObject {
             calendar: calendar,
             outcomes: outcomes,
             occurrenceStatuses: occurrenceStatuses,
-            selectedCalendarIdentifier: storedCalendarId
+            selectedCalendarIdentifier: storedCalendarId,
+            defaults: defaults
         )
         self.session = session
         weekly.occurrenceMaterialProvider = { start, end in

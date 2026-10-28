@@ -1128,7 +1128,8 @@ final class ReviewViewModelCalendarInjectionTests: XCTestCase {
             colorHex: nil
         )
         let viewModel = ReviewViewModel(
-            calendar: InMemoryCalendarService(grantAccessByDefault: true, events: [holiday])
+            calendar: InMemoryCalendarService(grantAccessByDefault: true, events: [holiday]),
+            defaults: freshDefaults()
         )
         viewModel.selectDay(date(2026, 10, 1))
 

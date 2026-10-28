@@ -23,6 +23,7 @@ final class ReviewSession {
     }
 
     private let calendar: CalendarService
+    private let defaults: UserDefaults
     private let outcomes: CreateSuccessOutcomes
     private let occurrenceStatuses: OccurrenceStatusStore
 
@@ -69,13 +70,15 @@ final class ReviewSession {
         occurrenceStatuses: OccurrenceStatusStore = OccurrenceStatusStore(),
         reviewIntervals: [Int]? = nil,
         customPresets: [CustomPreset]? = nil,
-        selectedCalendarIdentifier: String = ""
+        selectedCalendarIdentifier: String = "",
+        defaults: UserDefaults = .standard
     ) {
         self.calendar = calendar
+        self.defaults = defaults
         self.outcomes = outcomes
         self.occurrenceStatuses = occurrenceStatuses
-        self.reviewIntervals = reviewIntervals ?? Self.loadIntervals()
-        self.customPresets = customPresets ?? Self.loadCustomPresets()
+        self.reviewIntervals = reviewIntervals ?? Self.loadIntervals(from: defaults)
+        self.customPresets = customPresets ?? Self.loadCustomPresets(from: defaults)
         self.selectedCalendarIdentifier = selectedCalendarIdentifier
         authorizationStatus = calendar.checkAuthorizationStatus()
         syncCalendarStateFromSeam()
@@ -176,19 +179,19 @@ final class ReviewSession {
     func persistIntervals() {
         if let data = try? JSONEncoder().encode(reviewIntervals),
            let string = String(data: data, encoding: .utf8) {
-            UserDefaults.standard.set(string, forKey: "reviewIntervalsData")
+            defaults.set(string, forKey: "reviewIntervalsData")
         }
     }
 
     func persistCustomPresets() {
         if let data = try? JSONEncoder().encode(customPresets),
            let string = String(data: data, encoding: .utf8) {
-            UserDefaults.standard.set(string, forKey: "customPresetsData")
+            defaults.set(string, forKey: "customPresetsData")
         }
     }
 
     func persistSelectedCalendar() {
-        UserDefaults.standard.set(selectedCalendarIdentifier, forKey: "selectedCalendarIdentifier")
+        defaults.set(selectedCalendarIdentifier, forKey: "selectedCalendarIdentifier")
     }
 
     func applyPreset(_ preset: IntervalPreset) {
@@ -568,8 +571,8 @@ final class ReviewSession {
         return trimmed.isEmpty ? nil : trimmed
     }
 
-    private static func loadIntervals() -> [Int] {
-        let raw = UserDefaults.standard.string(forKey: "reviewIntervalsData") ?? "[3,7,30]"
+    private static func loadIntervals(from defaults: UserDefaults) -> [Int] {
+        let raw = defaults.string(forKey: "reviewIntervalsData") ?? "[3,7,30]"
         guard let data = raw.data(using: .utf8),
               let intervals = try? JSONDecoder().decode([Int].self, from: data),
               IntervalRules.validate(intervals) else {
@@ -578,8 +581,8 @@ final class ReviewSession {
         return intervals
     }
 
-    private static func loadCustomPresets() -> [CustomPreset] {
-        let raw = UserDefaults.standard.string(forKey: "customPresetsData") ?? "[]"
+    private static func loadCustomPresets(from defaults: UserDefaults) -> [CustomPreset] {
+        let raw = defaults.string(forKey: "customPresetsData") ?? "[]"
         guard let data = raw.data(using: .utf8),
               let presets = try? JSONDecoder().decode([CustomPreset].self, from: data) else {
             return []

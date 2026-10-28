@@ -182,7 +182,6 @@ final class 一键日历Tests: XCTestCase {
 
     @MainActor
     func testCustomPresetSaveAndApply() {
-        UserDefaults.standard.set("[]", forKey: "customPresetsData")
         let viewModel = ReviewViewModel(defaults: freshDefaults())
 
         XCTAssertEqual(viewModel.customPresets.count, 0)
@@ -201,12 +200,10 @@ final class 一键日历Tests: XCTestCase {
         viewModel.deleteCustomPreset(id: presetId)
         XCTAssertEqual(viewModel.customPresets.count, 0)
 
-        UserDefaults.standard.set("[]", forKey: "customPresetsData")
     }
 
     @MainActor
     func testCustomPresetDuplicateName() {
-        UserDefaults.standard.set("[]", forKey: "customPresetsData")
         let viewModel = ReviewViewModel(defaults: freshDefaults())
 
         viewModel.reviewIntervals = [1, 3, 7]
@@ -221,7 +218,6 @@ final class 一键日历Tests: XCTestCase {
         XCTAssertTrue(viewModel.hasDuplicatePresetName("测试"))
         XCTAssertFalse(viewModel.hasDuplicatePresetName("其他"))
 
-        UserDefaults.standard.set("[]", forKey: "customPresetsData")
     }
 
     func testCustomPresetCoding() throws {

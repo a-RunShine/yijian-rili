@@ -9,7 +9,7 @@ final class ReviewBoardTests: XCTestCase {
         return isolated.defaults
     }
     func testSelectingADayNormalizesBaseDateAndShowsTheFirstOfThatMonth() {
-        let viewModel = ReviewViewModel(calendar: InMemoryCalendarService(grantAccessByDefault: true))
+        let viewModel = ReviewViewModel(calendar: InMemoryCalendarService(grantAccessByDefault: true), defaults: freshDefaults())
 
         viewModel.selectDay(dateTime(2026, 10, 20, 15, 30))
 
@@ -18,7 +18,7 @@ final class ReviewBoardTests: XCTestCase {
     }
 
     func testDailyIntervalsFromOctober20PreviewTheFirstThreeReviews() {
-        let viewModel = ReviewViewModel(calendar: InMemoryCalendarService(grantAccessByDefault: true))
+        let viewModel = ReviewViewModel(calendar: InMemoryCalendarService(grantAccessByDefault: true), defaults: freshDefaults())
         viewModel.selectDay(date(2026, 1, 31))
         viewModel.applyPreset(.daily)
 
@@ -32,7 +32,7 @@ final class ReviewBoardTests: XCTestCase {
     }
 
     func testSingleSchedulePreviewIsOnlyTheBaseDate() {
-        let viewModel = ReviewViewModel(calendar: InMemoryCalendarService(grantAccessByDefault: true))
+        let viewModel = ReviewViewModel(calendar: InMemoryCalendarService(grantAccessByDefault: true), defaults: freshDefaults())
         viewModel.applyPreset(.daily)
         viewModel.selectDay(date(2026, 10, 20))
 
@@ -165,7 +165,7 @@ final class ReviewBoardTests: XCTestCase {
     }
 
     func testShiftingMonthDoesNotRewriteTheBaseDateWhenTheDayNumberIsMissing() {
-        let viewModel = ReviewViewModel(calendar: InMemoryCalendarService(grantAccessByDefault: true))
+        let viewModel = ReviewViewModel(calendar: InMemoryCalendarService(grantAccessByDefault: true), defaults: freshDefaults())
 
         viewModel.selectDay(date(2026, 1, 31))
         viewModel.shiftVisibleMonth(by: 1)
@@ -248,7 +248,7 @@ final class ReviewBoardTests: XCTestCase {
     }
 
     func testCustomIntervalDraftSurvivesDayMonthAndToday() {
-        let viewModel = ReviewViewModel(calendar: InMemoryCalendarService(grantAccessByDefault: true))
+        let viewModel = ReviewViewModel(calendar: InMemoryCalendarService(grantAccessByDefault: true), defaults: freshDefaults())
         viewModel.customIntervalDraft = "2, 6, 18"
 
         viewModel.selectDay(date(2026, 10, 20))
