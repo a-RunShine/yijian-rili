@@ -113,6 +113,19 @@ final class DayBrowseModel {
         return (deletedIDs, failedIDs)
     }
 
+    func reloadAfterExternalDeletion(deletedIDs: [String]) {
+        guard !deletedIDs.isEmpty else {
+            loadDisplayedDayEvents()
+            return
+        }
+        let deletedSet = Set(deletedIDs)
+        searchResults.removeAll { deletedSet.contains($0.id) }
+        if let selected = selectedSearchResult, deletedSet.contains(selected.id) {
+            selectedSearchResult = nil
+        }
+        loadDisplayedDayEvents()
+    }
+
     func resetSearch() {
         searchText = ""
         searchResults = []

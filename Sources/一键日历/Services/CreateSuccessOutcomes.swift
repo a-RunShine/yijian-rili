@@ -70,6 +70,11 @@ final class CreateSuccessOutcomes {
         return .updated(id: entry.id, remainingIdentifiers: remaining)
     }
 
+    func replaceCreatedEventIdentifiers(id: UUID, identifiers: [String]) {
+        guard let existing = history.load().first(where: { $0.id == id }) else { return }
+        history.replace(existing.withCreatedEventIdentifiers(identifiers))
+    }
+
     func updateSharedDetail(id: UUID, sharedDetail: String?) {
         guard let existing = history.load().first(where: { $0.id == id }) else { return }
         history.replace(existing.withSharedDetail(sharedDetail))

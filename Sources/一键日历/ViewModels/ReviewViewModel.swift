@@ -828,16 +828,51 @@ class ReviewViewModel: ObservableObject {
     }
 
     func deleteHistoryEntry(_ entry: HistoryEntry, members ids: [String]) {
-        for id in ids {
-            calendar.deleteEvent(id: id)
+        let report = DeletionPlan(calendar: calendar).execute(ids: ids)
+        settleDeletion(report: report, entry: entry)
+    }
+
+    private func settleDeletion(report: DeletionPlan.Report, entry: HistoryEntry?) {
+        if let entry {
+            if report.failed.isEmpty {
+                session.discardRecordedEntry(id: entry.id)
+                outcomes.removeHistory(id: entry.id)
+                weeklyReviewViewModel.removeWeeklyEntries(id: entry.id)
+            } else {
+                outcomes.replaceCreatedEventIdentifiers(
+                    id: entry.id,
+                    identifiers: entry.createdEventIdentifiers.filter { report.failed.contains($0) }
+                )
+            }
         }
-        session.discardRecordedEntry(id: entry.id)
-        outcomes.removeHistory(id: entry.id)
-        weeklyReviewViewModel.removeWeeklyEntries(id: entry.id)
+
+        refreshAllProjections()
+        if !report.failed.isEmpty {
+            presentDeletionFailure(report)
+        }
+    }
+
+    private func presentDeletionFailure(_ report: DeletionPlan.Report) {
+        let message = report.deleted.isEmpty
+            ? NSLocalizedString("delete_failed_all", comment: "")
+            : String(
+                format: NSLocalizedString("delete_failed_partial", comment: ""),
+                "\(report.deleted.count)",
+                "\(report.failed.count)"
+            )
+        resultMessage = message
+        resultType = .warning
+        session.resultMessage = message
+        session.resultType = .warning
+        scheduleResultDismissal()
+    }
+
+    private func refreshAllProjections() {
         refreshHistoryProjection()
         loadVisibleWindow()
         loadDisplayedDayEvents()
         rebuildSearchHits()
+        rebuildDisplayedDayHits()
         weeklyReviewViewModel.refreshOccurrenceMaterials()
     }
 
@@ -973,12 +1008,14 @@ class ReviewViewModel: ObservableObject {
 
     @discardableResult
     func deleteSearchHitMembers(ids: [String]) -> (deletedCount: Int, missingCount: Int) {
-        let outcome = browse.deleteEventsDetail(ids: ids)
+        let report = DeletionPlan(calendar: calendar).execute(ids: ids)
+        browse.reloadAfterExternalDeletion(deletedIDs: report.deleted)
         searchResults = browse.searchResults
         selectedSearchResult = browse.selectedSearchResult
         displayedEvents = browse.displayedEvents
-        if !outcome.deletedIDs.isEmpty {
-            applyDeletedEvents(ids: outcome.deletedIDs)
+        if !report.deleted.isEmpty {
+            session.removeEventsFromRecorded(ids: report.deleted, reason: .userDeletedOccurrence)
+            refreshAllProjections()
             if let selected = selectedSearchHit,
                selected.members.contains(where: { ids.contains($0.id) }) {
                 selectedSearchHit = searchHits.first(where: { $0.id == selected.id })
@@ -986,21 +1023,10 @@ class ReviewViewModel: ObservableObject {
             }
         }
         seriesPendingDelete = nil
-        if !outcome.failedIDs.isEmpty {
-            let message = outcome.deletedIDs.isEmpty
-                ? NSLocalizedString("delete_failed_all", comment: "")
-                : String(
-                    format: NSLocalizedString("delete_failed_partial", comment: ""),
-                    "\(outcome.deletedIDs.count)",
-                    "\(outcome.failedIDs.count)"
-                )
-            resultMessage = message
-            resultType = .warning
-            session.resultMessage = message
-            session.resultType = .warning
-            scheduleResultDismissal()
+        if !report.failed.isEmpty {
+            presentDeletionFailure(report)
         }
-        return (outcome.deletedIDs.count, outcome.failedIDs.count)
+        return (report.deleted.count, report.failed.count)
     }
 
     private func applyDeletedEvents(ids: [String]) {
