@@ -22,6 +22,8 @@
 
 脚本第一版漏了内联写法 `{ /* no-op */ }`，正则里补 `(/\*.*\*/)` 才覆盖。
 
+**2026-10-28：上述修复已合入 master**（`975b7e5`，PR `#73`）。当前 `make lint` 三个面均为 0 处，并额外检查测试隔离（`ReviewViewModel(calendar:` 必须传 `defaults:`）。`make check` = lint + test，提交前跑这一条。同一分支后来补了 pre-commit 之外的 CI 门禁：`.github/workflows/macos-ci.yml` 的 `lint` job 在 ubuntu 上单跑。
+
 跟踪：issue `#68`
 
 ## `@MainActor` 约定
