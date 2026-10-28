@@ -183,10 +183,7 @@ final class ReviewSession {
     }
 
     func persistCustomPresets() {
-        if let data = try? JSONEncoder().encode(customPresets),
-           let string = String(data: data, encoding: .utf8) {
-            defaults.set(string, forKey: "customPresetsData")
-        }
+        PersistentArray<CustomPreset>(key: "customPresetsData", defaults: defaults).save(customPresets)
     }
 
     func persistSelectedCalendar() {
@@ -221,9 +218,15 @@ final class ReviewSession {
     func saveCustomPreset(name: String) {
         let trimmed = name.trimmingCharacters(in: .whitespaces)
         guard !trimmed.isEmpty else { return }
-        guard !customPresets.contains(where: { $0.name == trimmed }) else { return }
-        customPresets.append(CustomPreset(name: trimmed, intervals: reviewIntervals))
-        persistCustomPresets()
+        let store = PersistentArray<CustomPreset>(key: "customPresetsData", defaults: defaults)
+        let existing = store.load()
+        guard !existing.contains(where: { $0.name == trimmed }),
+              !customPresets.contains(where: { $0.name == trimmed }) else {
+            customPresets = existing
+            return
+        }
+        customPresets = existing + [CustomPreset(name: trimmed, intervals: reviewIntervals)]
+        store.save(customPresets)
     }
 
     func applyCustomPreset(_ preset: CustomPreset) {
@@ -233,7 +236,8 @@ final class ReviewSession {
     }
 
     func deleteCustomPreset(id: UUID) {
-        customPresets = customPresets.filter { $0.id != id }
+        let store = PersistentArray<CustomPreset>(key: "customPresetsData", defaults: defaults)
+        customPresets = store.load().filter { $0.id != id }
         persistCustomPresets()
     }
 
@@ -580,11 +584,6 @@ final class ReviewSession {
     }
 
     private static func loadCustomPresets(from defaults: UserDefaults) -> [CustomPreset] {
-        let raw = defaults.string(forKey: "customPresetsData") ?? "[]"
-        guard let data = raw.data(using: .utf8),
-              let presets = try? JSONDecoder().decode([CustomPreset].self, from: data) else {
-            return []
-        }
-        return presets
+        PersistentArray<CustomPreset>(key: "customPresetsData", defaults: defaults).load()
     }
 }
