@@ -278,7 +278,7 @@ class ReviewViewModel: ObservableObject {
         }
     }
 
-    private func pullSessionChrome() {
+    private func pullSessionChrome(includeInputs: Bool = true) {
         authorizationStatus = session.authorizationStatus
         availableCalendars = session.availableCalendars
         hasCloudCalendar = session.hasCloudCalendar
@@ -288,6 +288,7 @@ class ReviewViewModel: ObservableObject {
         canUndo = session.canUndo
         canRecreate = session.canRecreate
         reviewDates = session.reviewDates
+        guard includeInputs else { return }
         title = session.title
         detail = session.detail
         baseDate = session.baseDate
@@ -471,8 +472,12 @@ class ReviewViewModel: ObservableObject {
             return
         }
         pushInputsToSession()
+        let submittedTitle = title
+        let submittedDetail = detail
         await session.create()
-        pullSessionChrome()
+        pullSessionChrome(includeInputs: false)
+        if title == submittedTitle { title = session.title }
+        if detail == submittedDetail { detail = session.detail }
         if session.consumeHapticFlag() {
             NSHapticFeedbackManager.defaultPerformer.perform(.generic, performanceTime: .now)
         }

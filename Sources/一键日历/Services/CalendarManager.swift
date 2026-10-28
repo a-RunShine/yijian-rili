@@ -13,6 +13,7 @@ final class CalendarManager: ObservableObject, CalendarService, CalendarEventSto
     @Published private(set) var availableCalendars: [CalendarInfo] = []
     @Published private(set) var hasCloudCalendar: Bool = false
     private(set) var lastCreatedEventIdentifiers: [String] = []
+    private(set) var lastCreatedPairs: [(date: Date, id: String)] = []
 
     private init() {
         authorizationStatus = Self.mapAccess(EKEventStore.authorizationStatus(for: .event))
@@ -75,6 +76,7 @@ final class CalendarManager: ObservableObject, CalendarService, CalendarEventSto
         )
         if !outcome.createdEventIds.isEmpty {
             lastCreatedEventIdentifiers = outcome.createdEventIds
+            lastCreatedPairs = outcome.createdPairs
         }
         return outcome.result
     }
@@ -95,6 +97,7 @@ final class CalendarManager: ObservableObject, CalendarService, CalendarEventSto
         )
         if !outcome.createdEventIds.isEmpty {
             lastCreatedEventIdentifiers = outcome.createdEventIds
+            lastCreatedPairs = outcome.createdPairs
         }
         return outcome.result
     }
@@ -163,6 +166,7 @@ final class CalendarManager: ObservableObject, CalendarService, CalendarEventSto
         }
 
         lastCreatedEventIdentifiers = []
+        lastCreatedPairs = []
         return UndoResult(
             success: deletedCount > 0,
             deletedCount: deletedCount,

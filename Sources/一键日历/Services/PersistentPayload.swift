@@ -88,6 +88,10 @@ enum PersistentPayload {
         guard let data = try? JSONEncoder().encode(value) else { return nil }
         return String(data: data, encoding: .utf8)
     }
+
+    static func clearStaleDamage(key: String, defaults: UserDefaults) {
+        defaults.removeObject(forKey: damagedKey(key))
+    }
 }
 
 final class PersistentValue<T: Codable> {

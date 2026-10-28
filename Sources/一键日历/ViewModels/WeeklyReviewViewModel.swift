@@ -276,6 +276,7 @@ final class WeeklyReviewViewModel: ObservableObject, WeeklyEntryAppending {
 
         let entries = weeklyEntries
         guard !entries.isEmpty else {
+            if entryStore.lastHealth.isDamaged { return }
             defaults.set(true, forKey: WeeklyReviewViewModel.weekendMigrationKey)
             return
         }

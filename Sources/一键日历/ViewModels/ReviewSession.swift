@@ -82,7 +82,8 @@ final class ReviewSession {
         self.selectedCalendarIdentifier = selectedCalendarIdentifier
         authorizationStatus = calendar.checkAuthorizationStatus()
         syncCalendarStateFromSeam()
-        if !self.selectedCalendarIdentifier.isEmpty,
+        if authorizationStatus == .fullAccess,
+           !self.selectedCalendarIdentifier.isEmpty,
            calendar.calendar(withIdentifier: self.selectedCalendarIdentifier) == nil {
             self.selectedCalendarIdentifier = ""
         }
@@ -482,6 +483,9 @@ final class ReviewSession {
 
         let trimmedTitle = title.trimmingCharacters(in: .whitespaces)
         let detailForWrite = Self.optionalDetail(from: detail)
+        let frozenBaseDate = baseDate
+        let frozenMode = scheduleMode
+        let frozenIntervals = reviewIntervals
 
         guard !trimmedTitle.isEmpty else {
             resultMessage = NSLocalizedString("empty_title_error", comment: "")
@@ -525,19 +529,19 @@ final class ReviewSession {
 
             let calendarId = targetCalendar?.identifier
             let createResult: CreateEventsResult
-            switch scheduleMode {
+            switch frozenMode {
             case .review:
                 createResult = try await calendar.createReviewEvents(
                     title: trimmedTitle,
-                    baseDate: baseDate,
-                    intervals: reviewIntervals,
+                    baseDate: frozenBaseDate,
+                    intervals: frozenIntervals,
                     calendarId: calendarId,
                     detail: detailForWrite
                 )
             case .single:
                 createResult = try await calendar.createSingleEvent(
                     title: trimmedTitle,
-                    date: baseDate,
+                    date: frozenBaseDate,
                     calendarId: calendarId,
                     detail: detailForWrite
                 )
@@ -556,7 +560,9 @@ final class ReviewSession {
                     onCreateSuccess(
                         trimmed: trimmedTitle,
                         created: written,
-                        sharedDetail: detailForWrite
+                        sharedDetail: detailForWrite,
+                        baseDate: frozenBaseDate,
+                        mode: frozenMode
                     )
                 }
             } else {
@@ -568,7 +574,9 @@ final class ReviewSession {
                 onCreateSuccess(
                     trimmed: trimmedTitle,
                     created: createResult.created,
-                    sharedDetail: detailForWrite
+                    sharedDetail: detailForWrite,
+                    baseDate: frozenBaseDate,
+                    mode: frozenMode
                 )
             }
         } catch {
@@ -592,30 +600,39 @@ final class ReviewSession {
             resultType = .warning
         }
 
-        if let recordedID {
+        if let recordedID, undo.deletedCount > 0 || undo.success {
             if let entry = outcomes.recordedEntries().first(where: { $0.id == recordedID }) {
                 occurrenceStatuses.clear(ids: statusKeys(for: entry))
             }
             outcomes.discardRecorded(id: recordedID)
+            lastRecordedHistoryEntryID = nil
+            canUndo = false
+            canRecreate = false
         }
-        lastRecordedHistoryEntryID = nil
-        canUndo = false
-        canRecreate = false
     }
 
-    private func onCreateSuccess(trimmed: String, created: [Date], sharedDetail: String?) {
+    private func onCreateSuccess(
+        trimmed: String,
+        created: [Date],
+        sharedDetail: String?,
+        baseDate writtenBaseDate: Date,
+        mode writtenMode: ScheduleMode
+    ) {
         shouldPlayHaptic = true
         lastCreatedTitle = trimmed
-        lastCreatedBaseDate = baseDate
+        lastCreatedBaseDate = writtenBaseDate
         canRecreate = true
         canUndo = true
         let entry = HistoryEntry(
             title: trimmed,
-            baseDate: baseDate,
+            baseDate: writtenBaseDate,
             reviewDates: created,
             creationDate: Date(),
-            type: scheduleMode == .single ? .single : .review,
-            createdEventIdentifiers: calendar.lastCreatedEventIdentifiers,
+            type: writtenMode == .single ? .single : .review,
+            createdEventIdentifiers: Self.effectiveIdentifiers(
+                created: created,
+                calendar: calendar
+            ),
             sharedDetail: sharedDetail
         )
         outcomes.record(entry)
@@ -623,6 +640,17 @@ final class ReviewSession {
         title = ""
         detail = ""
         updateReviewDates()
+    }
+
+    private static func effectiveIdentifiers(
+        created: [Date],
+        calendar: CalendarService
+    ) -> [String] {
+        let pairs = calendar.lastCreatedPairs
+        guard !pairs.isEmpty else { return calendar.lastCreatedEventIdentifiers }
+        return created.compactMap { day in
+            pairs.first { Calendar.current.isDate($0.date, inSameDayAs: day) }?.id
+        }
     }
 
     private static func datesWrittenDespiteDuplicates(_ result: CreateEventsResult) -> [Date] {

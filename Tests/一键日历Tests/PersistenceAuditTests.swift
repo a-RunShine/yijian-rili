@@ -307,9 +307,9 @@ final class UndoAndPruneIdMismatchAuditTests: XCTestCase {
             3,
             "重分配后撤销事件数为 0"
         )
-        XCTAssertTrue(
+        XCTAssertFalse(
             history.load().isEmpty,
-            "一个事件都没删掉时仍丢弃了历史，历史与日历从此不一致"
+            "一个事件都没删掉时不应丢弃历史，否则历史与日历从此不一致"
         )
     }
 

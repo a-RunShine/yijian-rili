@@ -2,18 +2,18 @@ import Foundation
 
 @MainActor
 protocol CalendarService: AnyObject {
+    var lastCreatedPairs: [(date: Date, id: String)] { get }
     var authorizationStatus: CalendarAccessStatus { get }
     var availableCalendars: [CalendarInfo] { get }
     var hasCloudCalendar: Bool { get }
     var lastCreatedEventIdentifiers: [String] { get }
+    func calendar(withIdentifier identifier: String) -> CalendarInfo?
+    func defaultCalendar() -> CalendarInfo?
 
     func requestAccess() async -> Bool
     func refreshAvailableCalendars()
     @discardableResult
     func checkAuthorizationStatus() -> CalendarAccessStatus
-
-    func calendar(withIdentifier identifier: String) -> CalendarInfo?
-    func defaultCalendar() -> CalendarInfo?
 
     func createReviewEvents(
         title: String,
@@ -44,4 +44,8 @@ protocol CalendarService: AnyObject {
     func updateEventNotes(id: String, notes: String) -> Bool
     @discardableResult
     func updateEventTitle(id: String, title: String) -> Bool
+}
+
+extension CalendarService {
+    var lastCreatedPairs: [(date: Date, id: String)] { [] }
 }
