@@ -241,14 +241,14 @@ final class OccurrenceStatusReassignmentAuditTests: XCTestCase {
 
         XCTAssertEqual(statuses.markedEntries().count, 1)
         XCTAssertTrue(
-            statuses.markedEntries().keys.contains(ids[0]),
-            "状态库仍持有失效 id，永远不会被清理"
+            statuses.markedEntries().keys.contains(where: { $0.hasPrefix("series:") }),
+            "状态应挂在系列身份上，events 重分配 id 后键不变"
         )
         let materials = session.occurrenceMaterials(
             weekStart: WeekCalculator.weekStart(for: Date()),
             weekEnd: WeekCalculator.weekEnd(for: WeekCalculator.weekStart(for: Date()))
         )
-        XCTAssertTrue(materials.isEmpty, "周回顾素材在重分配后消失")
+        XCTAssertEqual(materials.count, 1, "周回顾素材在重分配后应仍然可见")
     }
 }
 
