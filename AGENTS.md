@@ -12,16 +12,17 @@ Agent 操作契约（always-loaded）。发版、CalDAV 同步、Windows 细节�
 ## 硬约束
 
 - **禁止在代码里写注释**——`///`、`//`、`/* */`、`// MARK:` 都不行。意图靠命名与结构；领域规则写进 `GLOSSARY.md` 或 `docs/*/spec.md` / `plan.md`。本文件与 `docs/` 下 Markdown 不受此限。
-- **`@MainActor`**：所有 UI / ViewModel，以及 `Services/` 下 seam protocol 与全部实现者（含测试 fake）必须标 `@MainActor`。Swift 6 下 `@MainActor` 类型不能满足 `nonisolated` 协议要求；EventKit 侧也需要固定线程约定。新增 seam 时实现与 fake 一起标。
+- **`@MainActor`**：UI / ViewModel，以及 `Services/` 下**承载副作用的 seam**（protocol 与实现，含测试 fake）必须标 `@MainActor`。纯函数模块（`IntervalRules`、`WriteRules`、`MonthGrid` 这类无状态的 enum/struct）不标。Swift 6 下 `@MainActor` 类型不能满足 `nonisolated` 协议要求；EventKit 侧也需要固定线程约定。新增 seam 时实现与 fake 一起标。
 - **Issue 与 PR 的标题、描述尽可能用中文。**
 
 ## 构建与验证
 
 日常命令与发版步骤：[`docs/agents/release.md`](docs/agents/release.md)。
 
-- macOS：`make test` / `make lint` / `make open`（不要用 `make run`）
-- CI：`.github/workflows/macos-ci.yml` 跑 `swift build` + `swift test`；`make lint` 在 ubuntu 上单跑
-- Cloud Linux：见下方；完整 SwiftUI/EventKit 构建不可用
+- 提交前：`make check`（= `make lint` + `make test`）；调试用 `make open`
+- **Swift 版本两边不同**：本地通常 6.4，CI 是 6.2.4 / Xcode 26.3 / macOS 15 SDK。本地全绿不等于 CI 绿——遇到过本地永远复现不出的 `@MainActor deinit` 崩溃
+- **等 CI 用 `gh pr checks --watch`**，不要 `sleep` 轮询。改动只落在 `docs/**` 时 CI 根本不会触发（触发路径见 workflow 的 `paths`）
+- Cloud Linux：见 [`docs/agents/cursor-cloud.md`](docs/agents/cursor-cloud.md)
 
 ## 文档指针
 
@@ -37,16 +38,4 @@ Agent 操作契约（always-loaded）。发版、CalDAV 同步、Windows 细节�
 
 ## Cursor Cloud
 
-跑在 Ubuntu：无 SwiftUI / AppKit / EventKit / OSLog，故 `make build` / `make test` / `swift build` / `swift test` 会在对应 `import` 失败。完整测试在 macOS。
-
-- 工具链：`/opt/swift`（`swift --version` ≈ 6.4）；`/usr/local/bin` 仅暴露 `swift*` / `sourcekit-lsp`，避免盖住系统 clang
-- **不要** `apt install swift`（Ubuntu 上是 OpenStack 对象存储）
-- Linux smoke：用 `swiftc` 编译下列文件 + 本地 `OSLog` 桩（`Logger.init(subsystem:category:)` 与 `warning(_: String)`）
-
-  - `Sources/一键日历/Models/ReviewEvent.swift`
-  - `Sources/一键日历/Models/HistoryEntry.swift`
-  - `Sources/一键日历/Models/WeeklyEntry.swift`
-  - `Sources/一键日历/Utils/DateFormatter+Extension.swift`
-  - `Sources/一键日历/Utils/WeekCalculator.swift`
-
-  无资源包时 `NSLocalizedString` 退回 key `review_count`。基准 `2026-01-31`、间隔 `[3, 7, 30]` → 复习日 `2026-02-03`、`2026-02-07`、`2026-03-02`。
+见 [`docs/agents/cursor-cloud.md`](docs/agents/cursor-cloud.md)：Ubuntu 上的工具链、Linux smoke 编译清单、以及为什么 `make test` 在那里跑不了。
