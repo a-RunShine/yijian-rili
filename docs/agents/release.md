@@ -10,8 +10,9 @@ make bundle         # 组装 .app + codesign 自签名 → .build/release/一键
 make open           # bundle 后 open 该 .app（调试用这个，不要 make run）
 make install        # bundle + ditto 到 /Applications 并重新签名
 make verify-install # 校验 /Applications 里安装包的签名
-make test           # swift test（需 macOS）
-make lint           # 扫 Sources/ Tests/ windows/ 的注释违规（零依赖）
+make test           # swift test（需 macOS，带 SWIFT_BACKTRACE）
+make lint           # 注释违规 + 测试隔离检查（零依赖）
+make check          # = lint + test，提交前跑这个
 make clean          # swift package clean（会清掉 .build/）
 ```
 
