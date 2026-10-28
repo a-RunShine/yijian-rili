@@ -18,6 +18,36 @@ make clean          # swift package clean（会清掉 .build/）
 
 `make run` 会故意失败：裸 `swift run` 没有 app bundle，`Info.plist` 里的日历权限与 `LSUIElement` 不生效。请用 `make open`。
 
+## 确认装上去的是不是新代码
+
+怀疑「改了代码但行为没变」时，**先确认跑的是哪份二进制**，再怀疑代码。两个常见误判：
+
+**1. 用 `strings | grep 类型名` 判断，会被优化骗。** Release 构建会裁掉类型名，但保留字符串字面量：
+
+```
+$ strings .build/release/一键日历 | grep -c CalendarLookupAuthority
+0                                    ← 类型名被优化掉了，不代表是旧代码
+$ strings .build/release/一键日历 | grep -c refusedNoAuthority
+1                                    ← 字面量还在，代码是新的
+```
+
+要验证新代码在不在，挑一个**字符串字面量**（日志文案、localized key、枚举原始值），不要用类型名或函数名。
+
+**2. 用哈希对比签名前后的二进制，会被签名骗。** `codesign` 会重写 Mach-O，大小和哈希都会变：
+
+```
+签名前  4798672 字节  b14d3357...
+签名后  4770912 字节  85d638a5...   ← 正常行为，不是安装失败
+```
+
+要比哈希，就在**同一阶段**比（都是签名前，或都是签名后）。
+
+### 正确的判据
+
+- 看产物 mtime：`ls -la .build/out/Products/Release/一键日历`（`.build/release` 是符号链接，指向它）
+- 或比**同一阶段**的哈希
+- 构建耗时 0.4 秒且源码未变时，产物不变是**正确行为**；源码变了仍 0.4 秒且哈希不变，才可疑
+
 ## 发布流程
 
 1. 改源码 → 在 macOS 上 `swift build` + `swift test`（或 `make test`）
