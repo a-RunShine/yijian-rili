@@ -33,7 +33,7 @@ final class CreateSuccessOutcomes {
         switch removeEventsFromRecorded(ids: [id], reason: .userDeletedOccurrence) {
         case .discarded(let entryID):
             return entryID
-        case .updated, .noMatch:
+        case .updated, .noMatch, .refusedNoAuthority:
             return nil
         }
     }

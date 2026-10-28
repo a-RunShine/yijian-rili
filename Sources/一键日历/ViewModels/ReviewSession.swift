@@ -36,10 +36,6 @@ final class ReviewSession {
     var customPresets: [CustomPreset]
     var selectedCalendarIdentifier: String
     var authorizationStatus: CalendarAccessStatus = .notDetermined
-
-    var canTrustCalendarLookups: Bool {
-        authorizationStatus == .fullAccess
-    }
     var availableCalendars: [CalendarInfo] = []
     var hasCloudCalendar: Bool = false
     var isLoading: Bool = false
@@ -284,36 +280,38 @@ final class ReviewSession {
         ids: [String],
         reason: RecordedPruneReason
     ) -> RemoveEventsFromRecordedOutcome {
-        if reason == .calendarConfirmedMissing, !canTrustCalendarLookups {
-            return .noMatch
-        }
         let outcome = outcomes.removeEventsFromRecorded(ids: ids, reason: reason)
         switch outcome {
         case .updated, .discarded:
             occurrenceStatuses.clear(ids: ids)
-        case .noMatch:
+        case .noMatch, .refusedNoAuthority:
             break
         }
         return outcome
     }
 
     @discardableResult
-    func reconcileRecordedWithCalendar() -> Bool {
-        guard canTrustCalendarLookups else { return false }
-        var didChange = false
+    func reconcileRecordedWithCalendar() -> ReconcileOutcome {
+        guard let authority = CalendarLookupAuthority.verified(authorizationStatus) else {
+            return .skippedNoAccess
+        }
+        var pruned = 0
         for entry in outcomes.recordedEntries() {
             let identifiers = entry.createdEventIdentifiers
             guard !identifiers.isEmpty else { continue }
             let missing = identifiers.filter { calendar.event(withId: $0) == nil }
             guard !missing.isEmpty else { continue }
-            switch removeEventsFromRecorded(ids: missing, reason: .calendarConfirmedMissing) {
+            switch removeEventsFromRecorded(
+                ids: missing,
+                reason: .calendarConfirmedMissing(authority)
+            ) {
             case .updated, .discarded:
-                didChange = true
-            case .noMatch:
+                pruned += missing.count
+            case .noMatch, .refusedNoAuthority:
                 break
             }
         }
-        return didChange
+        return pruned > 0 ? .pruned(count: pruned) : .unchanged
     }
 
     @discardableResult
