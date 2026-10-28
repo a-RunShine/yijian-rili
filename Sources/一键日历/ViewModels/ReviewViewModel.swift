@@ -673,7 +673,7 @@ class ReviewViewModel: ObservableObject {
         if showHistory {
             showHistory = false
         }
-        if let entry = HistorySeriesLookup.entry(containingEventId: event.id, in: historyEntries) {
+        if let entry = HistorySeriesLookup.entry(matching: event, in: historyEntries) {
             browseSharedDetailUnavailableEvent = nil
             editingSharedDetailEntryID = entry.id
             seriesTitleDraft = entry.title

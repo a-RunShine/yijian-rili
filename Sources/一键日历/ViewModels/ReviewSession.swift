@@ -127,13 +127,12 @@ final class ReviewSession {
     }
 
     private func isReviewSeriesEvent(_ eventId: String) -> Bool {
-        guard let entry = HistorySeriesLookup.entry(
-            containingEventId: eventId,
-            in: outcomes.recordedEntries()
-        ) else {
-            return false
+        let history = outcomes.recordedEntries()
+        if let entry = HistorySeriesLookup.entry(containingEventId: eventId, in: history) {
+            return entry.type == .review
         }
-        return entry.type == .review
+        guard let event = calendar.event(withId: eventId) else { return false }
+        return HistorySeriesLookup.entry(matching: event, in: history) != nil
     }
 
     private func reviewSeriesEventIds() -> Set<String> {

@@ -13,6 +13,27 @@ final class InMemoryCalendarService: CalendarService, CalendarEventStore {
     func setAuthorizationStatusForTesting(_ status: CalendarAccessStatus) {
         authorizationStatus = status
     }
+
+    func reassignAllEventIdentifiersForTesting() -> [String: String] {
+        var mapping: [String: String] = [:]
+        events = events.map { event in
+            let fresh = "\(event.calendarId ?? "cal"):\(UUID().uuidString)"
+            mapping[event.id] = fresh
+            return CalendarEventInfo(
+                id: fresh,
+                title: event.title,
+                start: event.start,
+                end: event.end,
+                isAllDay: event.isAllDay,
+                notes: event.notes,
+                calendarId: event.calendarId,
+                calendarTitle: event.calendarTitle,
+                calendarSourceTitle: event.calendarSourceTitle,
+                colorHex: event.colorHex
+            )
+        }
+        return mapping
+    }
     private(set) var lastCreatedEventIdentifiers: [String] = []
 
     var availableCalendars: [CalendarInfo] {

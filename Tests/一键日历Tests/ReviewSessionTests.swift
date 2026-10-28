@@ -68,6 +68,35 @@ enum CreateSuccessTestSupport {
         var c = DateComponents(); c.year = y; c.month = m; c.day = d
         return Calendar.current.date(from: c)!
     }
+
+    static func makeSessionWithRealWeekly(
+        calendar: CalendarService = InMemoryCalendarService(grantAccessByDefault: true)
+    ) -> (ReviewSession, HistoryStore, WeeklyReviewViewModel, UserDefaults) {
+        let suiteName = "reconcile-test-\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defaults.removePersistentDomain(forName: suiteName)
+        let history = HistoryStore(defaults: defaults)
+        let weekly = WeeklyReviewViewModel(defaults: defaults)
+        let outcomes = CreateSuccessOutcomes(history: history, weekly: weekly)
+        let session = ReviewSession(calendar: calendar, outcomes: outcomes)
+        return (session, history, weekly, defaults)
+    }
+
+    static func seedReviewBatch(
+        _ session: ReviewSession,
+        title: String,
+        on defaults: UserDefaults
+    ) async throws -> ([String], UUID) {
+        session.title = title
+        session.baseDate = Date()
+        session.scheduleMode = .review
+        session.reviewIntervals = [3, 7, 30]
+        session.updateReviewDates()
+        await session.create()
+        let history = HistoryStore(defaults: defaults)
+        let entry = try XCTUnwrap(history.load().first)
+        return (entry.createdEventIdentifiers, entry.id)
+    }
 }
 
 @MainActor
@@ -1206,5 +1235,32 @@ final class OccurrenceStatusTests: XCTestCase {
         XCTAssertEqual(outcome, .updated(id: history.load().first!.id, remainingIdentifiers: Array(ids.dropFirst())))
 
         defaults.removePersistentDomain(forName: suiteName)
+    }
+
+    func testSeriesStaysEditableAfterCalendarReassignsEveryIdentifier() async throws {
+        let calendar = InMemoryCalendarService(grantAccessByDefault: true)
+        let (session, history, _, defaults) = CreateSuccessTestSupport.makeSessionWithRealWeekly(calendar: calendar)
+        let (ids, batchID) = try await CreateSuccessTestSupport.seedReviewBatch(
+            session,
+            title: "CalDAV 重分配",
+            on: defaults
+        )
+        XCTAssertEqual(ids.count, 3)
+        XCTAssertTrue(session.canMarkOccurrence(eventId: ids[0]))
+
+        let remapped = calendar.reassignAllEventIdentifiersForTesting()
+        let freshIds = ids.compactMap { remapped[$0] }
+        XCTAssertEqual(freshIds.count, 3)
+
+        session.reconcileRecordedWithCalendar()
+
+        XCTAssertTrue(
+            session.canMarkOccurrence(eventId: freshIds[0]),
+            "CalDAV 重新分配 id 后，系列仍应可标记完成"
+        )
+        XCTAssertTrue(
+            history.load().contains(where: { $0.id == batchID })
+        )
+
     }
 }

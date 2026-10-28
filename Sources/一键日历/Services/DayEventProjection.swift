@@ -7,7 +7,7 @@ enum DayEventProjection {
         eventById: (String) -> CalendarEventInfo?
     ) -> [SearchHit] {
         dayEvents.map { event in
-            guard let entry = HistorySeriesLookup.entry(containingEventId: event.id, in: history),
+            guard let entry = HistorySeriesLookup.entry(matching: event, in: history),
                   entry.type == .review,
                   !entry.createdEventIdentifiers.isEmpty else {
                 return SearchHit(
