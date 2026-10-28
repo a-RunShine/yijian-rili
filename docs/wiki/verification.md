@@ -73,3 +73,39 @@ CI 第一次真正跑起来（Swift 6.2.4 / macOS 15 SDK）时，`build-and-test
 已在 issue `#74` 立项。修复应该给 `ReviewViewModel` 补上同形状的 `defaults` 注入点，而不是在测试里用 `removePersistentDomain` 清全局域——那样只是把顺序依赖藏得更深。
 
 一个方法论上的提醒：**不要用 CI 当调试循环**。macOS runner 排队可能十几分钟，而本地 `swift test --parallel` 一秒就能暴露同一个根因。先在本地复现，再让 CI 确认。
+
+## 2026-10-28：那个 SIGABRT 的真正根因（不是测试污染）
+
+前一轮把它归因为「测试通过 `UserDefaults.standard` 互相污染」。**这个归因是错的**，或者说不完整：污染是真问题（已修，见下），但不是崩溃的原因。
+
+真正的崩溃栈（`SWIFT_BACKTRACE=enable=yes,threads=all`）：
+
+```
+Thread 0 crashed:
+  __pthread_kill + 8                              libsystem_kernel.dylib
+  swift_task_deinitOnExecutorMainActorBackDeploy  + 456
+  ReviewViewModel.__deallocating_deinit           + 124   ReviewViewModel.swift
+  ReviewBoardTests.testChoosing...()              + 3176  ReviewBoardTests.swift:248
+```
+
+崩溃在**对象释放**时，所有断言都通过了。`@MainActor deinit` 在 Swift 6.2 上需要跳回 MainActor executor 才能析构；XCTest 在非 MainActor 线程释放被测对象，就触发 runtime 断言。Swift 6.4 修掉了这个行为，**所以本地永远复现不出来**——这是「本地全绿、CI 崩溃」的结构性原因，不是环境配置差异。
+
+修法：`deinit` 改 `nonisolated`（里面只做 `NotificationCenter.removeObserver`，本身线程安全，不需要 MainActor），token 标 `nonisolated(unsafe)`。
+
+### 教训：没有栈就不要猜
+
+这轮在拿到栈之前，连续归因过三次，全是错的：
+
+1. 「CI 缺用户偏好域」→ 用干净 HOME 本地跑，202 通过，推翻
+2. 「测试并行顺序撞上共享状态」→ 修完后 CI 照旧崩在同一测试
+3. 「macOS runner 容量不足」→ 是用户手动取消的
+
+`swift test` 只报退出码，崩溃细节不在 stdout。**第一步就该开 `SWIFT_BACKTRACE`**，而不是从退出码反推。Swift 运行时自带这个开关，零成本。
+
+另外一条：`swift runtime: backtrace-on-crash is not supported for privileged executables.` 这句仍会打印，但栈已经有了——不要被它误导以为没抓到。
+
+### 顺带修掉的真问题
+
+测试隔离确实有缺陷（`ReviewSession` / `ReviewViewModel` 硬编码 `UserDefaults.standard`），已补 `defaults` 注入并清理了全部全局清场。这部分**不是崩溃的成因**，但它让 `swift test --parallel` 从 49/37/60 个错误降到稳定 0，值得单独保留。
+
+判断某次修复是否真的解决了问题时，要问：**修复后 CI 的那个具体测试还崩吗？** 而不是「本地测试变绿了」。前者是证据，后者只是必要条件。
