@@ -914,7 +914,7 @@ class ReviewViewModel: ObservableObject {
     }
 
     private func applyDeletedEvents(ids: [String]) {
-        session.removeEventsFromRecorded(ids: ids)
+        session.removeEventsFromRecorded(ids: ids, reason: .userDeletedOccurrence)
         refreshHistoryProjection()
         rebuildSearchHits()
         rebuildDisplayedDayHits()

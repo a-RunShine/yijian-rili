@@ -30,7 +30,7 @@ final class CreateSuccessOutcomes {
 
     @discardableResult
     func discardRecordedContainingEvent(id: String) -> UUID? {
-        switch removeEventsFromRecorded(ids: [id]) {
+        switch removeEventsFromRecorded(ids: [id], reason: .userDeletedOccurrence) {
         case .discarded(let entryID):
             return entryID
         case .updated, .noMatch:
@@ -39,7 +39,10 @@ final class CreateSuccessOutcomes {
     }
 
     @discardableResult
-    func removeEventsFromRecorded(ids: [String]) -> RemoveEventsFromRecordedOutcome {
+    func removeEventsFromRecorded(
+        ids: [String],
+        reason: RecordedPruneReason
+    ) -> RemoveEventsFromRecordedOutcome {
         let idSet = Set(ids)
         guard !idSet.isEmpty else { return .noMatch }
         guard let entry = history.load().first(where: {

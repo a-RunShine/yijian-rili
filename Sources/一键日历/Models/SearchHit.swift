@@ -30,3 +30,8 @@ enum RemoveEventsFromRecordedOutcome: Equatable {
     case updated(id: UUID, remainingIdentifiers: [String])
     case discarded(id: UUID)
 }
+
+enum RecordedPruneReason {
+    case calendarConfirmedMissing
+    case userDeletedOccurrence
+}

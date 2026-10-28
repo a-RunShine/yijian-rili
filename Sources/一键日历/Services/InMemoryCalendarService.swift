@@ -8,6 +8,11 @@ final class InMemoryCalendarService: CalendarService, CalendarEventStore {
     private var seq = 0
 
     private(set) var authorizationStatus: CalendarAccessStatus
+    var hideAllEventsFromLookup = false
+
+    func setAuthorizationStatusForTesting(_ status: CalendarAccessStatus) {
+        authorizationStatus = status
+    }
     private(set) var lastCreatedEventIdentifiers: [String] = []
 
     var availableCalendars: [CalendarInfo] {
@@ -185,7 +190,8 @@ final class InMemoryCalendarService: CalendarService, CalendarEventStore {
     }
 
     func event(withId id: String) -> CalendarEventInfo? {
-        events.first(where: { $0.id == id })
+        if hideAllEventsFromLookup { return nil }
+        return events.first(where: { $0.id == id })
     }
 
     @discardableResult

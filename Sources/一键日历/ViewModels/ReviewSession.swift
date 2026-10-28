@@ -36,6 +36,10 @@ final class ReviewSession {
     var customPresets: [CustomPreset]
     var selectedCalendarIdentifier: String
     var authorizationStatus: CalendarAccessStatus = .notDetermined
+
+    var canTrustCalendarLookups: Bool {
+        authorizationStatus == .fullAccess
+    }
     var availableCalendars: [CalendarInfo] = []
     var hasCloudCalendar: Bool = false
     var isLoading: Bool = false
@@ -276,8 +280,11 @@ final class ReviewSession {
     }
 
     @discardableResult
-    func removeEventsFromRecorded(ids: [String]) -> RemoveEventsFromRecordedOutcome {
-        let outcome = outcomes.removeEventsFromRecorded(ids: ids)
+    func removeEventsFromRecorded(
+        ids: [String],
+        reason: RecordedPruneReason
+    ) -> RemoveEventsFromRecordedOutcome {
+        let outcome = outcomes.removeEventsFromRecorded(ids: ids, reason: reason)
         switch outcome {
         case .updated, .discarded:
             occurrenceStatuses.clear(ids: ids)
@@ -289,13 +296,14 @@ final class ReviewSession {
 
     @discardableResult
     func reconcileRecordedWithCalendar() -> Bool {
+        guard canTrustCalendarLookups else { return false }
         var didChange = false
         for entry in outcomes.recordedEntries() {
             let identifiers = entry.createdEventIdentifiers
             guard !identifiers.isEmpty else { continue }
             let missing = identifiers.filter { calendar.event(withId: $0) == nil }
             guard !missing.isEmpty else { continue }
-            switch removeEventsFromRecorded(ids: missing) {
+            switch removeEventsFromRecorded(ids: missing, reason: .calendarConfirmedMissing) {
             case .updated, .discarded:
                 didChange = true
             case .noMatch:
