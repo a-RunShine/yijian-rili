@@ -328,8 +328,31 @@ class ReviewViewModel: ObservableObject {
         DayEventProjection.project(
             dayEvents: dayEvents,
             history: historyStore.load(),
+            candidates: loadedCandidates,
             eventById: { [calendar] id in calendar.event(withId: id) }
         )
+    }
+
+    private var loadedCandidates: [CalendarEventInfo] {
+        let loaded = eventsByDay.values.flatMap { $0 }
+        var seen = Set(loaded.map(\.id))
+        var all = loaded
+        for entry in historyStore.load() {
+            for id in entry.createdEventIdentifiers where !seen.contains(id) {
+                guard let event = calendar.event(withId: id) else { continue }
+                seen.insert(id)
+                all.append(event)
+            }
+            for day in entry.reviewDates {
+                let start = Calendar.current.startOfDay(for: day)
+                guard let end = Calendar.current.date(byAdding: .day, value: 1, to: start) else { continue }
+                for event in calendar.fetchEvents(from: start, to: end) where !seen.contains(event.id) {
+                    seen.insert(event.id)
+                    all.append(event)
+                }
+            }
+        }
+        return all
     }
 
     func projectedHit(forEventId eventId: String, on day: Date) -> SearchHit? {

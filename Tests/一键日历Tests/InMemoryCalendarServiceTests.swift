@@ -820,6 +820,30 @@ final class ReviewViewModelCalendarInjectionTests: XCTestCase {
         XCTAssertEqual(viewModel.resultType, .warning)
     }
 
+    func testSeriesKeepsAllMembersAfterIdentifiersAreReassigned() async throws {
+        let calendar = InMemoryCalendarService(grantAccessByDefault: true)
+        let viewModel = ReviewViewModel(calendar: calendar, defaults: freshDefaults())
+        let marker = "reassigned-\(UUID().uuidString.prefix(8))"
+        let base = Calendar.current.date(byAdding: .day, value: -3, to: Date())!
+        viewModel.title = marker
+        viewModel.baseDate = base
+        viewModel.scheduleMode = .review
+        viewModel.reviewIntervals = [3, 7, 30]
+        viewModel.updateReviewDates()
+        await viewModel.createReviewSchedule()
+
+        let batch = try XCTUnwrap(viewModel.historyEntries.first(where: { $0.title == marker }))
+        XCTAssertEqual(batch.createdEventIdentifiers.count, 3)
+
+        _ = calendar.reassignAllEventIdentifiersForTesting()
+
+        viewModel.selectDayType(.today)
+        let row = try XCTUnwrap(viewModel.displayedDayHits.first(where: { $0.title == marker }))
+        XCTAssertTrue(row.isSeries, "id 变化后仍应识别为系列")
+        XCTAssertEqual(row.members.count, 3, "系列应展开全部成员")
+        XCTAssertTrue(row.needsSelectiveDelete, "多成员时应弹选择性删除列表")
+    }
+
     func testDayLoadProjectsReviewMemberAsSeriesAwareRow() async throws {
         let calendar = InMemoryCalendarService(grantAccessByDefault: true)
         let viewModel = ReviewViewModel(calendar: calendar, defaults: freshDefaults())

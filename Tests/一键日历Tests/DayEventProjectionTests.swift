@@ -26,6 +26,7 @@ final class DayEventProjectionTests: XCTestCase {
         let rows = DayEventProjection.project(
             dayEvents: [e1],
             history: history,
+            candidates: [],
             eventById: { catalog[$0] }
         )
 
@@ -44,6 +45,7 @@ final class DayEventProjectionTests: XCTestCase {
         let rows = DayEventProjection.project(
             dayEvents: [holiday],
             history: [],
+            candidates: [],
             eventById: { _ in nil }
         )
 
@@ -72,6 +74,7 @@ final class DayEventProjectionTests: XCTestCase {
         let rows = DayEventProjection.project(
             dayEvents: [single],
             history: history,
+            candidates: [],
             eventById: { $0 == "s1" ? single : nil }
         )
 
@@ -113,6 +116,7 @@ final class DayEventProjectionTests: XCTestCase {
         let rows = DayEventProjection.project(
             dayEvents: [morning, evening],
             history: history,
+            candidates: [],
             eventById: { catalog[$0] }
         )
 
@@ -144,6 +148,7 @@ final class DayEventProjectionTests: XCTestCase {
         let rows = DayEventProjection.project(
             dayEvents: [e1],
             history: history,
+            candidates: [],
             eventById: { catalog[$0] }
         )
 

@@ -13,33 +13,65 @@ enum HistorySeriesLookup {
         if let exact = entry(containingEventId: event.id, in: history) {
             return exact
         }
-        let day = calendar.startOfDay(for: event.start)
-        let noteKey = NormalizeNotes.normalize(event.notes)
         return history.first { entry in
-            guard entry.type == .review else { return false }
-            guard entry.title == event.title else { return false }
-            guard dayMatches(entry: entry, day: day, noteKey: noteKey, calendar: calendar) else {
-                return false
-            }
-            return true
+            guard entry.type == .review, entry.title == event.title else { return false }
+            return indexOfReviewDay(for: event, in: entry, calendar: calendar) != nil
         }
     }
 
-    private static func dayMatches(
-        entry: HistoryEntry,
-        day: Date,
-        noteKey: String,
+    static func members(
+        of entry: HistoryEntry,
+        among candidates: [CalendarEventInfo],
+        calendar: Calendar = .current
+    ) -> [CalendarEventInfo] {
+        let byId = Dictionary(candidates.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+        let byIdentifier = entry.createdEventIdentifiers.compactMap { byId[$0] }
+        if byIdentifier.count == entry.createdEventIdentifiers.count, !byIdentifier.isEmpty {
+            return byIdentifier.sorted { $0.start < $1.start }
+        }
+        return resolvedByAttributes(entry, among: candidates, calendar: calendar)
+    }
+
+    static func resolvedByAttributes(
+        _ entry: HistoryEntry,
+        among candidates: [CalendarEventInfo],
+        calendar: Calendar = .current
+    ) -> [CalendarEventInfo] {
+        var usedDays = Set<Date>()
+        var resolved: [CalendarEventInfo] = []
+        for day in entry.reviewDates {
+            let target = calendar.startOfDay(for: day)
+            guard !usedDays.contains(target) else { continue }
+            guard let match = candidates.first(where: { candidate in
+                candidate.title == entry.title
+                    && calendar.isDate(candidate.start, inSameDayAs: target)
+            }) else { continue }
+            usedDays.insert(target)
+            resolved.append(match)
+        }
+        return resolved.sorted { $0.start < $1.start }
+    }
+
+    static func missingReviewDays(of entry: HistoryEntry, calendar: Calendar = .current) -> [Date] {
+        entry.reviewDates.map { calendar.startOfDay(for: $0) }
+    }
+
+    private static func indexOfReviewDay(
+        for event: CalendarEventInfo,
+        in entry: HistoryEntry,
         calendar: Calendar
-    ) -> Bool {
-        guard let index = reviewIndex(from: noteKey) else {
-            return entry.reviewDates.contains { calendar.isDate($0, inSameDayAs: day) }
-        }
+    ) -> Int? {
+        let day = calendar.startOfDay(for: event.start)
         let reviewDays = entry.reviewDates.map { calendar.startOfDay(for: $0) }
-        guard index < reviewDays.count else { return false }
-        return calendar.isDate(reviewDays[index], inSameDayAs: day)
+        guard let position = reviewDays.firstIndex(where: { calendar.isDate($0, inSameDayAs: day) }) else {
+            return nil
+        }
+        let noteKey = NormalizeNotes.normalize(event.notes)
+        guard let claimed = declaredIndex(from: noteKey) else { return position }
+        return claimed == position ? position : nil
     }
 
-    private static func reviewIndex(from noteKey: String) -> Int? {
+    private static func declaredIndex(from noteKey: String) -> Int? {
         guard noteKey.hasPrefix("第"), noteKey.hasSuffix("次复习") else { return nil }
         let digits = noteKey.dropFirst().dropLast("次复习".count)
         guard let value = Int(digits), value > 0 else { return nil }
