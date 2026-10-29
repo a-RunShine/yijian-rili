@@ -1,0 +1,862 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>原型：删除日程时的定位方式</title>
+<style>
+  :root {
+    --ink: #1c1c1e;
+    --muted: #6b6b70;
+    --line: #e5e1da;
+    --paper: #faf9f6;
+    --card: #ffffff;
+    --accent: #4f46e5;
+    --accent-soft: #eef0ff;
+    --ok: #15803d;
+    --ok-soft: #eaf7ee;
+    --warn: #a16207;
+    --warn-soft: #fdf6e3;
+    --bad: #b91c1c;
+    --bad-soft: #fdecec;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--paper);
+    color: var(--ink);
+    font: 15px/1.65 -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB", sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 1080px; margin: 0 auto; padding: 40px 24px 96px; }
+  h1 { font-size: 24px; margin: 0 0 8px; letter-spacing: -0.01em; }
+  h2 { font-size: 15px; margin: 0 0 12px; font-weight: 600; }
+  p { margin: 0 0 12px; }
+  .lede { color: var(--muted); max-width: 720px; }
+  .lede strong { color: var(--ink); font-weight: 600; }
+  .tag {
+    display: inline-block; font-size: 11px; letter-spacing: .08em; text-transform: uppercase;
+    color: var(--accent); background: var(--accent-soft); padding: 3px 8px; border-radius: 4px;
+    margin-bottom: 14px;
+  }
+  .card {
+    background: var(--card); border: 1px solid var(--line); border-radius: 12px;
+    padding: 18px 20px; margin-bottom: 16px;
+  }
+  .strategy {
+    display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px;
+    background: var(--card); border: 1px solid var(--line); border-radius: 12px;
+    padding: 14px; margin-bottom: 16px;
+  }
+  .strategy > span {
+    grid-column: 1 / -1; font-size: 12px; color: var(--muted);
+  }
+  @media (max-width: 720px) { .strategy { grid-template-columns: 1fr; } }
+  .strategy button { text-align: left; padding: 9px 12px; }
+  button {
+    font: inherit; font-size: 13px; cursor: pointer;
+    background: #fff; color: var(--ink);
+    border: 1px solid var(--line); border-radius: 8px;
+    padding: 7px 12px; transition: background .12s, border-color .12s;
+  }
+  button:hover:not(:disabled) { border-color: #c9c3b8; background: #fbfaf8; }
+  button:disabled { opacity: .38; cursor: not-allowed; }
+  button.on {
+    background: var(--accent); border-color: var(--accent); color: #fff;
+  }
+  button.on small, button.primary small { color: rgba(255,255,255,.72); }
+  button small { display: block; font-size: 11px; line-height: 1.5; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  button.primary:hover { filter: brightness(1.08); background: var(--accent); }
+  button.destructive { color: var(--bad); border-color: #f0cdcd; }
+  button.destructive:hover:not(:disabled) { background: var(--bad-soft); border-color: #e5b4b4; }
+  .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  @media (max-width: 820px) { .cols { grid-template-columns: 1fr; } }
+  .row {
+    display: flex; gap: 10px; align-items: baseline; padding: 7px 0;
+    border-bottom: 1px solid #f2efe9; font-size: 13px;
+  }
+  .row:last-child { border-bottom: 0; }
+  .row .k { color: var(--muted); min-width: 92px; flex: none; font-size: 12px; }
+  .row .v { flex: 1; }
+  .mono { font-family: "SF Mono", ui-monospace, Menlo, monospace; font-size: 12px; }
+  .dim { color: var(--muted); }
+  .empty { color: var(--muted); font-size: 13px; font-style: italic; }
+  .chip {
+    display: inline-block; font-size: 11px; padding: 1px 7px; border-radius: 999px;
+    border: 1px solid var(--line); margin-right: 4px; background: #fbfaf8; color: var(--muted);
+  }
+  .chip.stale { border-color: #f0cdcd; background: var(--bad-soft); color: var(--bad); }
+  .chip.live { border-color: #cfe6d6; background: var(--ok-soft); color: var(--ok); }
+  .chip.locked { border-color: #ecd9a8; background: var(--warn-soft); color: var(--warn); }
+  .verdict { font-size: 14px; font-weight: 600; margin-bottom: 12px; }
+  .verdict.ok { color: var(--ok); }
+  .verdict.warn { color: var(--warn); }
+  .verdict.bad { color: var(--bad); }
+  .group { margin-bottom: 12px; }
+  .group:last-child { margin-bottom: 0; }
+  .group h3 { font-size: 12px; font-weight: 600; margin: 0 0 6px; letter-spacing: .02em; }
+  .group.ok h3 { color: var(--ok); }
+  .group.warn h3 { color: var(--warn); }
+  .group.bad h3 { color: var(--bad); }
+  .item { padding: 7px 10px; border-radius: 8px; margin-bottom: 6px; font-size: 13px; }
+  .item.ok { background: var(--ok-soft); }
+  .item.warn { background: var(--warn-soft); }
+  .item.bad { background: var(--bad-soft); }
+  .item .why { display: block; color: var(--muted); font-size: 12px; margin-top: 2px; }
+  .log { max-height: 190px; overflow: auto; font-size: 12px; }
+  .log div { padding: 2px 0; color: var(--muted); }
+  .log div.bad { color: var(--bad); }
+  .log div.ok { color: var(--ok); }
+  .log .n { display: inline-block; width: 22px; color: #bdb8ae; }
+  .freeplay { display: flex; flex-wrap: wrap; gap: 8px; }
+  .freeplay .sep { width: 100%; height: 1px; background: var(--line); margin: 6px 0; }
+  .tabs { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 14px; }
+  .tabs button { font-size: 13px; }
+  .steps { display: flex; flex-direction: column; gap: 8px; margin-top: 4px; }
+  .step {
+    display: flex; gap: 10px; align-items: flex-start;
+  }
+  .step .num {
+    flex: none; width: 22px; height: 22px; border-radius: 50%;
+    border: 1px solid var(--line); color: var(--muted);
+    font-size: 11px; display: flex; align-items: center; justify-content: center;
+    margin-top: 5px;
+  }
+  .step.active .num { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
+  .step.done .num { border-color: var(--ok); color: #fff; background: var(--ok); }
+  .step button { text-align: left; flex: 1; }
+  .step button.hint { border-color: var(--accent); background: var(--accent-soft); }
+  table.cmp { width: 100%; border-collapse: collapse; font-size: 13px; }
+  table.cmp th, table.cmp td { text-align: left; padding: 8px 10px; border-bottom: 1px solid #f2efe9; }
+  table.cmp th { font-size: 12px; color: var(--muted); font-weight: 600; }
+  table.cmp td.c { text-align: center; width: 108px; }
+  table.cmp tr:last-child td { border-bottom: 0; }
+  .note {
+    font-size: 12px; color: var(--muted); border-left: 2px solid var(--line);
+    padding-left: 10px; margin-top: 12px;
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="tag">原型 · 一次性代码</div>
+  <h1>删除日程时，怎么找到那条日程</h1>
+  <p class="lede">
+    这个原型只回答一个问题：<strong>「删不掉」到底该算失败，还是该算「本来就不在了」？</strong>
+    把定位方式从「事件 id」换成「系列 + 第几次复习 + 日期 + 标题 + 备注」之后，
+    用户看到的那条假失败会不会消失。
+  </p>
+  <p class="lede">
+    下面右侧的「记录」是应用自己存的历史，左侧是系统日历里真实存在的日程。
+    两侧会不一致——按 id 找和按内容找，对这份不一致的反应完全不同。
+  </p>
+
+  <div class="strategy">
+    <span>定位方式</span>
+    <button data-strategy="id" class="on">按事件 id 找<br><small class="dim">主界面单删的现状</small></button>
+    <button data-strategy="freshIds">先按内容查出 id，再删<br><small class="dim">历史记录批量删的现状</small></button>
+    <button data-strategy="address">直接按内容删<br><small class="dim">提议的做法</small></button>
+  </div>
+
+  <div class="cols">
+    <div class="card">
+      <h2>系统日历</h2>
+      <div id="calendarView"></div>
+    </div>
+    <div class="card">
+      <h2>应用里存的记录</h2>
+      <div id="historyView"></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>上一次操作的结果</h2>
+    <div id="reportView"></div>
+  </div>
+
+  <div class="card">
+    <h2>操作</h2>
+    <div class="freeplay" id="freeplay"></div>
+    <div class="note">
+      说明：真实系统里，日历同步会重新分配事件 id。点「模拟日历同步」就是让这件事发生。
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>把同一串操作跑三遍，看三种定位方式各自的结论</h2>
+    <button class="primary" id="compareBtn">跑对比</button>
+    <div id="compareView" style="margin-top:14px"></div>
+  </div>
+
+  <div class="card">
+    <h2>分步走一遍</h2>
+    <div class="tabs" id="tabs"></div>
+    <div id="scenarioView"></div>
+  </div>
+
+  <div class="card">
+    <h2>操作记录</h2>
+    <div class="log" id="logView"></div>
+  </div>
+
+</div>
+
+<script>
+/* ============================================================
+   纯逻辑模块：可以整块搬进真实代码
+   状态 → 解析 → 删除 → 报告
+   ============================================================ */
+
+function addDays(iso, n) {
+  const d = new Date(iso + "T00:00:00Z");
+  d.setUTCDate(d.getUTCDate() + n);
+  return d.toISOString().slice(0, 10);
+}
+
+function hex8(n) {
+  return (n >>> 0).toString(16).toUpperCase().padStart(8, "0");
+}
+
+function reviewKey(index) {
+  return "第" + (index + 1) + "次复习";
+}
+
+function createScheduleModel(options) {
+  const strategy = (options && options.strategy) || "id";
+  let counter = 0;
+
+  const state = {
+    strategy: strategy,
+    events: [],
+    history: [],
+    clock: 0,
+    log: [],
+    report: null
+  };
+
+  function nextEventId() {
+    counter += 1;
+    return hex8(0x3F6BEED6 + counter * 7919) + ":" + hex8(0x78294099 + counter * 104729);
+  }
+
+  function log(text, kind) {
+    state.clock += 1;
+    state.log.unshift({ t: state.clock, text: text, kind: kind || "info" });
+  }
+
+  function createReviewSeries(title, baseDay, intervals) {
+    const days = intervals.map(function (n) { return addDays(baseDay, n); });
+    const members = days.map(function (day, i) {
+      const event = {
+        id: nextEventId(),
+        day: day,
+        title: title,
+        key: reviewKey(i),
+        occurrence: i,
+        calendarId: "163",
+        locked: false
+      };
+      state.events.push(event);
+      return { occurrence: i, day: day, key: reviewKey(i), storedId: event.id };
+    });
+    const entry = {
+      id: "S" + (state.history.length + 1),
+      title: title,
+      calendarId: "163",
+      members: members
+    };
+    state.history.push(entry);
+    state.report = {
+      title: "新建复习系列",
+      items: members.map(function (member) {
+        const event = state.events.find(function (e) { return e.id === member.storedId; });
+        return {
+          kind: "created",
+          label: "「" + title + "」" + member.key + "（" + member.day + "）",
+          detail: "写进日历，拿到事件 id " + event.id.slice(0, 9) + "…，记在记录里"
+        };
+      })
+    };
+    log("新建「" + title + "」：日历里出现 " + members.length + " 条，记录里存下 " + members.length + " 个事件 id", "ok");
+    return entry;
+  }
+
+  function reassignIds() {
+    state.events.forEach(function (event) {
+      event.id = nextEventId();
+    });
+    log("模拟日历同步：系统给所有日程重新分配了 id。记录里存的旧 id 全部失效", "info");
+  }
+
+  function findMember(entry, occurrence) {
+    return entry.members.find(function (m) { return m.occurrence === occurrence; }) || null;
+  }
+
+  function byStoredId(member) {
+    return state.events.find(function (event) { return event.id === member.storedId; }) || null;
+  }
+
+  function byAttributes(entry, member) {
+    return state.events.find(function (event) {
+      return event.day === member.day
+        && event.title === entry.title
+        && event.key === member.key
+        && event.calendarId === entry.calendarId;
+    }) || null;
+  }
+
+  function resolveOne(entry, member) {
+    if (state.strategy === "address") {
+      return { event: byAttributes(entry, member), how: "日期 + 标题 + 备注" };
+    }
+    if (state.strategy === "freshIds") {
+      const direct = byStoredId(member);
+      if (direct) { return { event: direct, how: "记录里存的事件 id" }; }
+      const fallback = byAttributes(entry, member);
+      if (fallback) {
+        return { event: fallback, how: "id 失效，改用日期 + 标题 + 备注查到" };
+      }
+      return { event: null, how: "id 和内容都查不到" };
+    }
+    return { event: byStoredId(member), how: "记录里存的事件 id" };
+  }
+
+  function dropMember(entry, member) {
+    entry.members = entry.members.filter(function (m) { return m.occurrence !== member.occurrence; });
+    if (entry.members.length === 0) {
+      state.history = state.history.filter(function (h) { return h.id !== entry.id; });
+    }
+  }
+
+  function removeEvent(event) {
+    state.events = state.events.filter(function (e) { return e.id !== event.id; });
+  }
+
+  function labelOf(entry, member) {
+    return "「" + entry.title + "」" + member.key + "（" + member.day + "）";
+  }
+
+  function classify(entry, member) {
+    const hit = resolveOne(entry, member);
+    const label = labelOf(entry, member);
+
+    if (!hit.event) {
+      if (state.strategy === "id") {
+        return {
+          kind: "unknowable",
+          label: label,
+          detail: "拿记录里存的旧 id 去日历里找，找不到。无法判断它是被别处删了、还是 id 变了——现在一律报「删除没有成功」"
+        };
+      }
+      dropMember(entry, member);
+      return {
+        kind: "absent",
+        label: label,
+        detail: "用「" + hit.how + "」确认日历里本来就没有这条 → 这不是失败，把记录里这一条也去掉"
+      };
+    }
+
+    if (hit.event.locked) {
+      return {
+        kind: "blocked",
+        label: label,
+        detail: "用「" + hit.how + "」找到了，但它所在的日历是只读的，系统拒绝删除 → 这才是真的删不掉"
+      };
+    }
+
+    removeEvent(hit.event);
+    dropMember(entry, member);
+    return {
+      kind: "deleted",
+      label: label,
+      detail: "用「" + hit.how + "」找到并删除"
+    };
+  }
+
+  const KIND_TEXT = {
+    created: "已写入",
+    deleted: "已删除",
+    absent: "本来就不在",
+    unknowable: "找不到下落",
+    blocked: "系统拒绝删除"
+  };
+
+  function summarize(title, items) {
+    state.report = { title: title, items: items };
+    items.forEach(function (item) {
+      const toneText = KIND_TEXT[item.kind] || item.kind;
+      const tone = item.kind === "deleted" || item.kind === "created"
+        ? "ok"
+        : item.kind === "absent" ? "info" : "bad";
+      log(item.label + " → " + toneText, tone);
+    });
+    return state.report;
+  }
+
+  function deleteOccurrence(entryId, occurrence) {
+    const entry = state.history.find(function (h) { return h.id === entryId; });
+    if (!entry) { return null; }
+    const member = findMember(entry, occurrence);
+    if (!member) { return null; }
+    return summarize("主界面删除一条", [classify(entry, member)]);
+  }
+
+  function deleteWholeRecord(entryId) {
+    const entry = state.history.find(function (h) { return h.id === entryId; });
+    if (!entry) { return null; }
+    const members = entry.members.slice();
+    if (state.strategy === "freshIds") {
+      log("打开记录面板：当场把这条记录重新对了一遍日历，拿到" + members.length + "条现役日程", "info");
+    }
+    return summarize("从记录里一次删整条", members.map(function (member) {
+      return classify(entry, member);
+    }));
+  }
+
+  function externalDelete(entryId, occurrence) {
+    const entry = state.history.find(function (h) { return h.id === entryId; });
+    if (!entry) { return null; }
+    const member = findMember(entry, occurrence);
+    if (!member) { return null; }
+    const event = byAttributes(entry, member);
+    if (!event) { return null; }
+    removeEvent(event);
+    log("在系统的日历应用里手动删掉了" + labelOf(entry, member) + "，应用毫不知情", "info");
+  }
+
+  function lockOccurrence(entryId, occurrence) {
+    const entry = state.history.find(function (h) { return h.id === entryId; });
+    if (!entry) { return null; }
+    const member = findMember(entry, occurrence);
+    if (!member) { return null; }
+    const event = byAttributes(entry, member);
+    if (!event) { return null; }
+    event.locked = !event.locked;
+    log(labelOf(entry, member) + " 所在日历改为" + (event.locked ? "只读" : "可写"), "info");
+  }
+
+  function latestEntry() {
+    return state.history[state.history.length - 1] || null;
+  }
+
+  return {
+    state: state,
+    createReviewSeries: createReviewSeries,
+    reassignIds: reassignIds,
+    deleteOccurrence: deleteOccurrence,
+    deleteWholeRecord: deleteWholeRecord,
+    externalDelete: externalDelete,
+    lockOccurrence: lockOccurrence,
+    latestEntry: latestEntry
+  };
+}
+
+/* ============================================================
+   页面外壳：只负责把状态画出来、把点击转给模块
+   ============================================================ */
+
+const model = createScheduleModel({ strategy: "id" });
+
+const BASE_DAY = "2026-10-20";
+const INTERVALS = [3, 7, 30];
+
+const STRATEGY_LABEL = {
+  id: "按事件 id 找",
+  freshIds: "先查出 id 再删",
+  address: "按内容删"
+};
+
+function el(tag, cls, text) {
+  const node = document.createElement(tag);
+  if (cls) { node.className = cls; }
+  if (text !== undefined && text !== null) { node.textContent = text; }
+  return node;
+}
+
+function renderCalendar() {
+  const root = document.getElementById("calendarView");
+  root.innerHTML = "";
+  if (model.state.events.length === 0) {
+    root.appendChild(el("div", "empty", "日历里没有日程"));
+    return;
+  }
+  model.state.events.forEach(function (event) {
+    const row = el("div", "row");
+    row.appendChild(el("span", "k mono dim", event.id.slice(0, 9) + "…"));
+    const v = el("div", "v");
+    v.appendChild(el("div", null, event.day + " · " + event.title));
+    const key = el("span", "chip", event.key);
+    v.appendChild(key);
+    if (event.locked) { v.appendChild(el("span", "chip locked", "只读日历")); }
+    row.appendChild(v);
+    root.appendChild(row);
+  });
+}
+
+function renderHistory() {
+  const root = document.getElementById("historyView");
+  root.innerHTML = "";
+  if (model.state.history.length === 0) {
+    root.appendChild(el("div", "empty", "没有记录了"));
+    return;
+  }
+  const liveIds = new Set(model.state.events.map(function (e) { return e.id; }));
+  model.state.history.forEach(function (entry) {
+    const row = el("div", "row");
+    row.appendChild(el("span", "k dim", entry.id));
+    const v = el("div", "v");
+    v.appendChild(el("div", null, entry.title + " · 第 " + entry.members.length + " 条记录"));
+    const chips = el("div", null, "");
+    entry.members.forEach(function (member) {
+      const alive = liveIds.has(member.storedId);
+      const chip = el("span", "chip " + (alive ? "live" : "stale"), member.key + (alive ? " ✓" : " ✗"));
+      chip.title = member.storedId;
+      chips.appendChild(chip);
+    });
+    const dangling = entry.members.filter(function (m) { return !liveIds.has(m.storedId); }).length;
+    if (dangling > 0) {
+      chips.appendChild(el("span", "chip stale", "有 " + dangling + " 个 id 对不上日历"));
+    }
+    v.appendChild(chips);
+    row.appendChild(v);
+    root.appendChild(row);
+  });
+}
+
+function renderReport() {
+  const root = document.getElementById("reportView");
+  root.innerHTML = "";
+  const report = model.state.report;
+  if (!report) {
+    root.appendChild(el("div", "empty", "还没有操作过"));
+    return;
+  }
+  const created = report.items.filter(function (i) { return i.kind === "created"; });
+  const deleted = report.items.filter(function (i) { return i.kind === "deleted"; });
+  const absent = report.items.filter(function (i) { return i.kind === "absent"; });
+  const unknowable = report.items.filter(function (i) { return i.kind === "unknowable"; });
+  const blocked = report.items.filter(function (i) { return i.kind === "blocked"; });
+
+  const bad = unknowable.length + blocked.length;
+  const verdict = el("div", "verdict");
+  if (created.length > 0 && bad === 0) {
+    verdict.className = "verdict ok";
+    verdict.textContent = report.title + "：日历里写入了 " + created.length + " 条";
+  } else if (bad > 0) {
+    verdict.className = "verdict bad";
+    const parts = [];
+    if (unknowable.length) { parts.push(unknowable.length + " 条找不到下落"); }
+    if (blocked.length) { parts.push(blocked.length + " 条系统拒绝删除"); }
+    verdict.textContent = "失败：" + parts.join("，")
+      + (deleted.length ? "（另有 " + deleted.length + " 条已删）" : "");
+  } else if (absent.length > 0) {
+    verdict.className = "verdict ok";
+    verdict.textContent = "完成：已删 " + deleted.length + " 条，" + absent.length + " 条本来就不在了";
+  } else {
+    verdict.className = "verdict ok";
+    verdict.textContent = "完成：已删 " + deleted.length + " 条";
+  }
+  root.appendChild(verdict);
+
+  function group(cls, title, items) {
+    if (items.length === 0) { return; }
+    const box = el("div", "group " + cls);
+    box.appendChild(el("h3", null, title));
+    items.forEach(function (item) {
+      const node = el("div", "item " + cls);
+      node.appendChild(el("div", null, item.label));
+      node.appendChild(el("span", "why", item.detail));
+      box.appendChild(node);
+    });
+    root.appendChild(box);
+  }
+
+  group("ok", "已写入日历", created);
+  group("ok", "已删除", deleted);
+  group("warn", "视为已删除（日历里本来就没有）", absent);
+  group("bad", "找不到下落（现在被报成失败）", unknowable);
+  group("bad", "系统拒绝删除（真失败）", blocked);
+}
+
+function renderLog() {
+  const root = document.getElementById("logView");
+  root.innerHTML = "";
+  if (model.state.log.length === 0) {
+    root.appendChild(el("div", "empty", "还没有操作"));
+    return;
+  }
+  model.state.log.forEach(function (line) {
+    const node = el("div", line.kind === "bad" ? "bad" : line.kind === "ok" ? "ok" : "");
+    node.appendChild(el("span", "n", String(line.t)));
+    node.appendChild(document.createTextNode(line.text));
+    root.appendChild(node);
+  });
+}
+
+function renderStrategy() {
+  document.querySelectorAll("[data-strategy]").forEach(function (btn) {
+    btn.classList.toggle("on", btn.dataset.strategy === model.state.strategy);
+  });
+}
+
+function renderFreeplay() {
+  const root = document.getElementById("freeplay");
+  root.innerHTML = "";
+  const entry = model.latestEntry();
+
+  function add(label, fn, cls, disabled) {
+    const btn = el("button", cls || "", label);
+    btn.addEventListener("click", function () { fn(); renderAll(); });
+    if (disabled) { btn.disabled = true; }
+    root.appendChild(btn);
+  }
+
+  add("新建「英语单词」（复习 3/7/30 天）", function () {
+    model.createReviewSeries("英语单词", BASE_DAY, INTERVALS);
+  }, "primary");
+
+  root.appendChild(el("div", "sep"));
+
+  if (entry) {
+    [0, 1, 2].forEach(function (i) {
+      const member = entry.members.find(function (m) { return m.occurrence === i; });
+      add("删第 " + (i + 1) + " 次复习", function () {
+        model.deleteOccurrence(entry.id, i);
+      }, "destructive", !member);
+    });
+    add("从记录里一次删整条", function () {
+      model.deleteWholeRecord(entry.id);
+    }, "", entry.members.length === 0);
+    root.appendChild(el("div", "sep"));
+    add("模拟日历同步（重新分配 id）", function () { model.reassignIds(); });
+    add("在日历应用里手动删掉第 2 次", function () {
+      model.externalDelete(entry.id, 1);
+    }, "", !entry.members.find(function (m) { return m.occurrence === 1; }));
+    add("把第 2 次所在日历改成只读", function () {
+      model.lockOccurrence(entry.id, 1);
+    }, "", !entry.members.find(function (m) { return m.occurrence === 1; }));
+  }
+}
+
+function renderAll() {
+  renderStrategy();
+  renderCalendar();
+  renderHistory();
+  renderReport();
+  renderLog();
+  renderFreeplay();
+  renderScenario();
+}
+
+/* ---------------- 对比 ---------------- */
+
+function runComparison() {
+  const steps = [
+    {
+      name: "新建复习系列（3 条）",
+      run: function (m) { m.createReviewSeries("英语单词", BASE_DAY, INTERVALS); return "ok"; }
+    },
+    {
+      name: "删掉第 1 次复习",
+      run: function (m) { return kindOf(m.deleteOccurrence(m.latestEntry().id, 0)); }
+    },
+    {
+      name: "系统重新分配事件 id",
+      run: function (m) { m.reassignIds(); return "ok"; }
+    },
+    {
+      name: "删掉第 2 次复习",
+      run: function (m) { return kindOf(m.deleteOccurrence(m.latestEntry().id, 1)); }
+    },
+    {
+      name: "删掉第 3 次复习",
+      run: function (m) { return kindOf(m.deleteOccurrence(m.latestEntry().id, 2)); }
+    }
+  ];
+
+  function kindOf(report) {
+    if (!report || report.items.length === 0) { return "none"; }
+    return report.items[0].kind;
+  }
+
+  const strategies = ["id", "freshIds", "address"];
+  const results = {};
+  strategies.forEach(function (s) {
+    const m = createScheduleModel({ strategy: s });
+    const cells = [];
+    steps.forEach(function (step) {
+      cells.push(step.run(m));
+    });
+    results[s] = { cells: cells, left: m.state.events.length, records: m.state.history.length };
+  });
+
+  const symbol = {
+    ok: "✅", created: "✅", deleted: "✅",
+    absent: "⚠️", unknowable: "❌", blocked: "❌", none: "–"
+  };
+  const word = {
+    ok: "正常", created: "写入了", deleted: "删掉了",
+    absent: "本来就不在", unknowable: "找不到→报失败", blocked: "拒绝删除"
+  };
+
+  const table = el("table", "cmp");
+  const head = el("tr");
+  head.appendChild(el("th", null, "操作"));
+  strategies.forEach(function (s) {
+    head.appendChild(el("th", "c", STRATEGY_LABEL[s]));
+  });
+  table.appendChild(head);
+
+  steps.forEach(function (step, i) {
+    const tr = el("tr");
+    tr.appendChild(el("td", null, step.name));
+    strategies.forEach(function (s) {
+      const cell = results[s].cells[i];
+      tr.appendChild(el("td", "c", symbol[cell] + " " + (word[cell] || "")));
+    });
+    table.appendChild(tr);
+  });
+
+  const tr = el("tr");
+  tr.appendChild(el("td", "dim", "结束时：日历里剩 / 记录里剩"));
+  strategies.forEach(function (s) {
+    tr.appendChild(el("td", "c dim", results[s].left + " / " + results[s].records));
+  });
+  table.appendChild(tr);
+
+  const view = document.getElementById("compareView");
+  view.innerHTML = "";
+  view.appendChild(table);
+
+  const note = el("div", "note");
+  const addressWorks = results.address.cells.indexOf("unknowable") === -1
+    && results.address.cells.indexOf("blocked") === -1;
+  const idFails = results.id.cells.indexOf("unknowable") !== -1;
+  if (idFails && addressWorks) {
+    note.textContent = "结论：同一串操作下，按 id 找会在系统重分配 id 之后报失败，按内容找不会。"
+      + "「先查出 id 再删」能成功，是因为它其实已经在按内容找了——只是没人把它当成规矩。";
+  } else {
+    note.textContent = "三种方式在这串操作下结论一致。";
+  }
+  view.appendChild(note);
+}
+
+/* ---------------- 分步场景 ---------------- */
+
+let activeScenario = 0;
+let stepState = { done: 0 };
+
+const SCENARIOS = [
+  {
+    name: "① 用户报告的那条路",
+    strategy: "id",
+    desc: "按现状走：主界面逐条删。注意第 2、3 条会发生什么，以及记录里那些 ✗ 的 id。",
+    steps: [
+      { label: "新建「英语单词」，复习日 3 / 7 / 30 天后", run: function (m) { m.createReviewSeries("英语单词", BASE_DAY, INTERVALS); } },
+      { label: "在主界面删掉第 1 次复习", run: function (m) { m.deleteOccurrence(m.latestEntry().id, 0); } },
+      { label: "日历同步一次（系统重新分配 id）", run: function (m) { m.reassignIds(); } },
+      { label: "删掉第 2 次复习", run: function (m) { m.deleteOccurrence(m.latestEntry().id, 1); } },
+      { label: "删掉第 3 次复习", run: function (m) { m.deleteOccurrence(m.latestEntry().id, 2); } }
+    ]
+  },
+  {
+    name: "② 同样的路，按内容找",
+    strategy: "address",
+    desc: "同样一串操作，只是定位方式换成「日期 + 标题 + 备注」。id 失效不再有任何影响。",
+    steps: [
+      { label: "新建「英语单词」，复习日 3 / 7 / 30 天后", run: function (m) { m.createReviewSeries("英语单词", BASE_DAY, INTERVALS); } },
+      { label: "删掉第 1 次复习", run: function (m) { m.deleteOccurrence(m.latestEntry().id, 0); } },
+      { label: "日历同步一次（系统重新分配 id）", run: function (m) { m.reassignIds(); } },
+      { label: "删掉第 2 次复习", run: function (m) { m.deleteOccurrence(m.latestEntry().id, 1); } },
+      { label: "删掉第 3 次复习", run: function (m) { m.deleteOccurrence(m.latestEntry().id, 2); } }
+    ]
+  },
+  {
+    name: "③ 为什么从记录里删就成",
+    strategy: "freshIds",
+    desc: "用户说：去历史记录里一次选两条删，一下就成功了。看它其实在做什么。",
+    steps: [
+      { label: "新建「英语单词」", run: function (m) { m.createReviewSeries("英语单词", BASE_DAY, INTERVALS); } },
+      { label: "日历同步一次（系统重新分配 id）", run: function (m) { m.reassignIds(); } },
+      { label: "从记录里一次删整条", run: function (m) { m.deleteWholeRecord(m.latestEntry().id); } }
+    ]
+  },
+  {
+    name: "④ 两种「删不掉」不是一回事",
+    strategy: "id",
+    desc: "一条是在别处被删掉了，一条是真删不掉。看现在它们会不会得到同一个提示。",
+    steps: [
+      { label: "新建「英语单词」", run: function (m) { m.createReviewSeries("英语单词", BASE_DAY, INTERVALS); } },
+      { label: "在日历应用里手动删掉第 2 次（应用不知情）", run: function (m) { m.externalDelete(m.latestEntry().id, 1); } },
+      { label: "把第 3 次所在日历改成只读", run: function (m) { m.lockOccurrence(m.latestEntry().id, 2); } },
+      { label: "删掉第 2 次（其实已经不存在了）", run: function (m) { m.deleteOccurrence(m.latestEntry().id, 1); } },
+      { label: "删掉第 3 次（真的删不掉）", run: function (m) { m.deleteOccurrence(m.latestEntry().id, 2); } }
+    ]
+  }
+];
+
+function resetToScenario(index) {
+  activeScenario = index;
+  model.state.events = [];
+  model.state.history = [];
+  model.state.log = [];
+  model.state.report = null;
+  model.state.clock = 0;
+  model.state.strategy = SCENARIOS[index].strategy;
+  stepState = { done: 0 };
+  renderAll();
+}
+
+function renderScenario() {
+  const tabs = document.getElementById("tabs");
+  tabs.innerHTML = "";
+  SCENARIOS.forEach(function (scenario, i) {
+    const btn = el("button", i === activeScenario ? "on" : "", scenario.name);
+    btn.addEventListener("click", function () { resetToScenario(i); });
+    tabs.appendChild(btn);
+  });
+
+  const view = document.getElementById("scenarioView");
+  view.innerHTML = "";
+  const scenario = SCENARIOS[activeScenario];
+
+  view.appendChild(el("p", "dim", scenario.desc + "（定位方式：" + STRATEGY_LABEL[scenario.strategy] + "）"));
+
+  const steps = el("div", "steps");
+  scenario.steps.forEach(function (step, i) {
+    const row = el("div", "step" + (i < stepState.done ? " done" : i === stepState.done ? " active" : ""));
+    row.appendChild(el("div", "num", i < stepState.done ? "✓" : String(i + 1)));
+    const btn = el("button", i === stepState.done ? "hint" : "", step.label);
+    btn.disabled = i > stepState.done;
+    btn.addEventListener("click", function () {
+      step.run(model);
+      if (i === stepState.done) { stepState.done += 1; }
+      renderAll();
+    });
+    row.appendChild(btn);
+    steps.appendChild(row);
+  });
+  view.appendChild(steps);
+
+  const restart = el("button", "", "重置这个场景");
+  restart.style.marginTop = "14px";
+  restart.addEventListener("click", function () { resetToScenario(activeScenario); });
+  view.appendChild(restart);
+}
+
+/* ---------------- 接线 ---------------- */
+
+document.querySelectorAll("[data-strategy]").forEach(function (btn) {
+  btn.addEventListener("click", function () {
+    model.state.strategy = btn.dataset.strategy;
+    renderAll();
+  });
+});
+
+document.getElementById("compareBtn").addEventListener("click", runComparison);
+
+renderAll();
+</script>
+</body>
+</html>
