@@ -409,6 +409,13 @@ final class ReviewSessionTests: XCTestCase {
 
         XCTAssertFalse(session.canUndo)
         XCTAssertEqual(session.resultType, .success)
+        XCTAssertTrue(
+            calendar.fetchEvents(
+                from: Date().addingTimeInterval(-86_400),
+                to: Date().addingTimeInterval(86_400 * 3)
+            ).isEmpty,
+            "撤销后日历里不该还剩刚写进去的事件"
+        )
         XCTAssertTrue(history.load().isEmpty, "undo must remove 今日所建 batch from history")
         XCTAssertTrue(session.todayCreatedEntries().isEmpty)
         XCTAssertFalse(

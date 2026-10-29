@@ -414,7 +414,7 @@ final class ReviewViewModelCalendarInjectionTests: XCTestCase {
         viewModel.performSearch()
         XCTAssertEqual(viewModel.searchHits.count, 1, "search must find the created event")
         let hit = viewModel.searchHits[0]
-        XCTAssertFalse(hit.needsSelectiveDelete)
+        XCTAssertFalse(hit.asksForDeleteScope)
         XCTAssertTrue(viewModel.deleteSearchHit(hit))
 
         XCTAssertTrue(calendar.fetchEvents(on: eventDay).isEmpty)
@@ -448,7 +448,7 @@ final class ReviewViewModelCalendarInjectionTests: XCTestCase {
         XCTAssertEqual(viewModel.searchHits.count, 1)
         XCTAssertTrue(viewModel.searchHits[0].isSeries)
         XCTAssertEqual(viewModel.searchHits[0].members.count, 3)
-        XCTAssertTrue(viewModel.searchHits[0].needsSelectiveDelete)
+        XCTAssertTrue(viewModel.searchHits[0].asksForDeleteScope)
     }
 
     func testSelectiveSeriesDeletePartialKeepsTodayCreatedAndWeekly() async throws {
@@ -844,7 +844,7 @@ final class ReviewViewModelCalendarInjectionTests: XCTestCase {
         let row = try XCTUnwrap(viewModel.displayedDayHits.first(where: { $0.title == marker }))
         XCTAssertTrue(row.isSeries, "id 变化后仍应识别为系列")
         XCTAssertEqual(row.members.count, 3, "系列应展开全部成员")
-        XCTAssertTrue(row.needsSelectiveDelete, "多成员时应弹选择性删除列表")
+        XCTAssertTrue(row.asksForDeleteScope, "多成员时应弹选择性删除列表")
     }
 
     func testDayLoadProjectsReviewMemberAsSeriesAwareRow() async throws {
@@ -871,8 +871,8 @@ final class ReviewViewModelCalendarInjectionTests: XCTestCase {
         XCTAssertEqual(row.kind, .series(historyEntryID: batch.id))
         XCTAssertEqual(row.title, marker)
         XCTAssertEqual(row.members.count, 3)
-        XCTAssertTrue(row.needsSelectiveDelete)
-        XCTAssertEqual(row.focusedEvent.id, row.id)
+        XCTAssertTrue(row.asksForDeleteScope)
+        XCTAssertEqual(row.focusedEvent?.id, row.id)
         XCTAssertTrue(batch.createdEventIdentifiers.contains(row.id))
     }
 
@@ -892,7 +892,7 @@ final class ReviewViewModelCalendarInjectionTests: XCTestCase {
         XCTAssertFalse(rows[0].isSeries)
         XCTAssertEqual(rows[0].kind, .single)
         XCTAssertEqual(rows[0].title, marker)
-        XCTAssertFalse(rows[0].needsSelectiveDelete)
+        XCTAssertFalse(rows[0].asksForDeleteScope)
     }
 
     func testDaySeriesRowEditAndSelectiveDeleteReuseSearchPaths() async throws {
@@ -913,7 +913,7 @@ final class ReviewViewModelCalendarInjectionTests: XCTestCase {
         let row = try XCTUnwrap(viewModel.displayedDayHits.first)
         XCTAssertTrue(row.isSeries)
 
-        viewModel.beginSharedDetailEditFromBrowse(row.focusedEvent)
+        viewModel.beginSharedDetailEditFromBrowse(try XCTUnwrap(row.focusedEvent))
         XCTAssertEqual(viewModel.editingSharedDetailEntryID, batch.id)
         XCTAssertEqual(viewModel.sharedDetailDraft, "可编辑")
         viewModel.cancelSharedDetailEdit()
@@ -955,7 +955,7 @@ final class ReviewViewModelCalendarInjectionTests: XCTestCase {
         viewModel.setOccurrenceStatus(eventId: row.id, status: .done)
         XCTAssertEqual(viewModel.occurrenceStatus(for: row.id), .done)
 
-        viewModel.beginSharedDetailEditFromBrowse(row.focusedEvent)
+        viewModel.beginSharedDetailEditFromBrowse(try XCTUnwrap(row.focusedEvent))
         XCTAssertEqual(viewModel.editingSharedDetailEntryID, batch.id)
         XCTAssertNil(viewModel.browseSharedDetailUnavailableEvent)
         XCTAssertTrue(viewModel.canEditSharedDetailForSelection)
@@ -964,7 +964,7 @@ final class ReviewViewModelCalendarInjectionTests: XCTestCase {
         viewModel.setOccurrenceStatus(eventId: row.id, status: .skipped)
         XCTAssertEqual(viewModel.occurrenceStatus(for: row.id), .skipped)
 
-        viewModel.beginSharedDetailEditFromBrowse(row.focusedEvent)
+        viewModel.beginSharedDetailEditFromBrowse(try XCTUnwrap(row.focusedEvent))
         XCTAssertEqual(viewModel.editingSharedDetailEntryID, batch.id)
         XCTAssertNil(viewModel.browseSharedDetailUnavailableEvent)
         XCTAssertTrue(viewModel.canEditSharedDetailForSelection)
@@ -1085,7 +1085,7 @@ final class ReviewViewModelCalendarInjectionTests: XCTestCase {
         XCTAssertTrue(hit.isSeries)
         XCTAssertEqual(hit.kind, .series(historyEntryID: batch.id))
         XCTAssertEqual(hit.members.count, 3)
-        XCTAssertTrue(hit.needsSelectiveDelete)
+        XCTAssertTrue(hit.asksForDeleteScope)
         XCTAssertEqual(hit.id, outsideMember.id)
     }
 
@@ -1114,7 +1114,7 @@ final class ReviewViewModelCalendarInjectionTests: XCTestCase {
         XCTAssertTrue(hit.isSeries)
         XCTAssertEqual(hit.kind, .series(historyEntryID: batch.id))
         XCTAssertEqual(hit.members.count, 3)
-        XCTAssertTrue(hit.needsSelectiveDelete)
+        XCTAssertTrue(hit.asksForDeleteScope)
     }
 
     func testProjectedHitForASingleEventStaysSingleAndDeletable() throws {
@@ -1138,7 +1138,7 @@ final class ReviewViewModelCalendarInjectionTests: XCTestCase {
         XCTAssertFalse(hit.isSeries)
         XCTAssertEqual(hit.kind, .single)
         XCTAssertEqual(hit.members.count, 1)
-        XCTAssertFalse(hit.needsSelectiveDelete)
+        XCTAssertFalse(hit.asksForDeleteScope)
     }
 
     func testProjectedHitFallsBackToSingleForAnUnrelatedEvent() throws {
@@ -1167,7 +1167,7 @@ final class ReviewViewModelCalendarInjectionTests: XCTestCase {
         XCTAssertFalse(hit.isSeries)
         XCTAssertEqual(hit.kind, .single)
         XCTAssertEqual(hit.members.map(\.id), [holiday.id])
-        XCTAssertFalse(hit.needsSelectiveDelete)
+        XCTAssertFalse(hit.asksForDeleteScope)
 
         viewModel.beginSharedDetailEditFromBrowse(holiday, on: date(2026, 10, 1))
         XCTAssertNil(viewModel.editingSharedDetailEntryID)

@@ -835,31 +835,34 @@ class ReviewViewModel: ObservableObject {
             return limit.contains(stored) || limit.contains(event.id)
         }
         let requests = RemovalTargets.requests(entry: entry, members: members)
+        let settledByReport = Set(requests.compactMap(\.storedId))
+        let unreachable = entry.createdEventIdentifiers.filter { id in
+            !id.isEmpty && limit.contains(id) && !settledByReport.contains(id)
+        }
         settle(
             DeletionPlan(calendar: calendar).execute(requests: requests),
-            entry: entry
+            entry: entry,
+            resolvingAbsent: unreachable
         )
     }
 
     private func presentDeletionFailure(_ report: DeletionPlan.Report) {
         let reasons = report.refusalReasons
-        if reasons.count == 1, let only = reasons.first {
-            let message = only.message
-            resultMessage = message
-            resultType = .warning
-            session.resultMessage = message
-            session.resultType = .warning
-            scheduleResultDismissal()
-            return
-        }
-
-        let message = report.removed.isEmpty
-            ? NSLocalizedString("delete_failed_all", comment: "")
-            : String(
+        let distinct = Set(reasons.map(\.message))
+        let message: String
+        if distinct.count == 1, let only = distinct.first {
+            message = only
+        } else if !distinct.isEmpty {
+            message = distinct.sorted().joined(separator: "\n")
+        } else if report.removed.isEmpty {
+            message = NSLocalizedString("delete_failed_all", comment: "")
+        } else {
+            message = String(
                 format: NSLocalizedString("delete_failed_partial", comment: ""),
                 "\(report.removed.count)",
                 "\(reasons.count)"
             )
+        }
         resultMessage = message
         resultType = .warning
         session.resultMessage = message
@@ -987,7 +990,7 @@ class ReviewViewModel: ObservableObject {
     }
 
     @discardableResult
-    func deleteSearchHitMembers(ids: [String]) -> (deletedCount: Int, missingCount: Int) {
+    func deleteSearchHitMembers(ids: [String]) -> (deletedCount: Int, refusedCount: Int) {
         let hit = seriesPendingDelete ?? selectedSearchHit
         let requests = removalRequests(for: hit, selectedIds: ids)
         let report = DeletionPlan(calendar: calendar).execute(requests: requests)
@@ -1016,10 +1019,8 @@ class ReviewViewModel: ObservableObject {
         selectedIds ids: [String]?
     ) -> [CalendarEventInfo] {
         guard let ids else {
-            guard let hit else { return [] }
-            let focused = hit.focusedEvent
-            if hit.isSeries { return [focused] }
-            return hit.members.isEmpty ? [focused] : [focused]
+            guard let focused = hit?.focusedEvent else { return [] }
+            return [focused]
         }
         return ids.compactMap { id in
             calendarEvent(withId: id)
@@ -1047,12 +1048,12 @@ class ReviewViewModel: ObservableObject {
         for entry in historyEntries {
             guard let index = entry.createdEventIdentifiers.firstIndex(of: id),
                   entry.reviewDates.indices.contains(index) else { continue }
-            let key = entry.type == .review ? ReviewNoteKey.forIndex(index) : ReviewNoteKey.single
-            return EventAddress(
-                day: entry.reviewDates[index],
-                title: entry.title,
-                notesKey: key,
-                calendarId: nil
+            return RemovalTargets.address(
+                forSlot: index,
+                in: entry,
+                calendarId: RemovalTargets.calendarId(of: entry) { [calendar] memberId in
+                    calendar.event(withId: memberId)
+                }
             )
         }
         return nil
@@ -1081,17 +1082,19 @@ class ReviewViewModel: ObservableObject {
     private func settle(
         _ report: DeletionPlan.Report,
         entry: HistoryEntry? = nil,
-        clearingSelectionFor hit: SearchHit? = nil
+        clearingSelectionFor hit: SearchHit? = nil,
+        resolvingAbsent absentIds: [String] = []
     ) {
-        pruneRecorded(report, entry: entry)
+        let settledIds = Array(Set(report.settledStoredIds + absentIds))
+        let owned = entry ?? entryOwning(settledIds)
+        pruneRecorded(report, entry: owned, settledIds: settledIds)
 
-        let settledIds = report.settledStoredIds
         browse.reloadAfterExternalDeletion(deletedIDs: settledIds)
         searchResults = browse.searchResults
         selectedSearchResult = browse.selectedSearchResult
         displayedEvents = browse.displayedEvents
 
-        if !settledIds.isEmpty {
+        if !settledIds.isEmpty, owned == nil {
             session.removeEventsFromRecorded(ids: settledIds, reason: .userDeletedOccurrence)
         }
         if !report.settledTargets.isEmpty || !settledIds.isEmpty {
@@ -1105,10 +1108,23 @@ class ReviewViewModel: ObservableObject {
         }
     }
 
-    private func pruneRecorded(_ report: DeletionPlan.Report, entry: HistoryEntry?) {
+    private func entryOwning(_ settledIds: [String]) -> HistoryEntry? {
+        let settled = Set(settledIds)
+        guard !settled.isEmpty else { return nil }
+        return historyEntries.first { entry in
+            entry.createdEventIdentifiers.contains(where: settled.contains)
+        }
+    }
+
+    private func pruneRecorded(
+        _ report: DeletionPlan.Report,
+        entry: HistoryEntry?,
+        settledIds: [String]
+    ) {
         guard let entry else { return }
-        let settled = Set(report.settledStoredIds)
-        let survivors = entry.liveEventIdentifiers.filter { !settled.contains($0) }
+        let settled = Set(settledIds)
+        let slots = entry.createdEventIdentifiers.map { settled.contains($0) ? "" : $0 }
+        let survivors = slots.filter { !$0.isEmpty }
 
         if survivors.isEmpty {
             session.discardRecordedEntry(id: entry.id)
@@ -1116,18 +1132,16 @@ class ReviewViewModel: ObservableObject {
             weeklyReviewViewModel.removeWeeklyEntries(id: entry.id)
             return
         }
-        let kept = entry.createdEventIdentifiers.filter { survivors.contains($0) || $0.isEmpty }
-        if kept == entry.createdEventIdentifiers { return }
-        outcomes.replaceCreatedEventIdentifiers(id: entry.id, identifiers: kept)
-    }
 
-    private func applyDeletedEvents(ids: [String]) {
-        session.removeEventsFromRecorded(ids: ids, reason: .userDeletedOccurrence)
-        refreshHistoryProjection()
-        rebuildSearchHits()
-        rebuildDisplayedDayHits()
-        loadVisibleWindow()
-        weeklyReviewViewModel.refreshOccurrenceMaterials()
+        outcomes.replaceCreatedEventIdentifiers(id: entry.id, identifiers: slots)
+        let removedSlots = entry.createdEventIdentifiers.enumerated()
+            .filter { settled.contains($0.element) }
+            .map(\.offset)
+        session.clearOccurrenceStatusesForRemovedSlots(
+            entryID: entry.id,
+            slots: removedSlots,
+            removedIds: Array(settled)
+        )
     }
 
     func beginSeriesDelete(_ hit: SearchHit) {

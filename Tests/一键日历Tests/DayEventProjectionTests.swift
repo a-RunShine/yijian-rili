@@ -36,8 +36,8 @@ final class DayEventProjectionTests: XCTestCase {
         XCTAssertEqual(rows[0].kind, .series(historyEntryID: historyID))
         XCTAssertEqual(rows[0].title, "Swift")
         XCTAssertEqual(rows[0].members.map(\.id), ["e1", "e2", "e3"])
-        XCTAssertTrue(rows[0].needsSelectiveDelete)
-        XCTAssertEqual(rows[0].focusedEvent.id, "e1")
+        XCTAssertTrue(rows[0].asksForDeleteScope)
+        XCTAssertEqual(rows[0].focusedEvent?.id, "e1")
     }
 
     func testUnmatchedAndHolidayProjectAsSingle() {
@@ -54,7 +54,7 @@ final class DayEventProjectionTests: XCTestCase {
         XCTAssertFalse(rows[0].isSeries)
         XCTAssertEqual(rows[0].kind, .single)
         XCTAssertEqual(rows[0].members.map(\.id), ["holiday-1"])
-        XCTAssertFalse(rows[0].needsSelectiveDelete)
+        XCTAssertFalse(rows[0].asksForDeleteScope)
     }
 
     func testSingleScheduleHistoryDoesNotBecomeSeries() {
@@ -125,8 +125,8 @@ final class DayEventProjectionTests: XCTestCase {
         XCTAssertTrue(rows.allSatisfy(\.isSeries))
         XCTAssertEqual(rows[0].members.map(\.id), ["m1", "m2", "m3"])
         XCTAssertEqual(rows[1].members.map(\.id), ["m1", "m2", "m3"])
-        XCTAssertEqual(rows[0].focusedEvent.id, "m1")
-        XCTAssertEqual(rows[1].focusedEvent.id, "m2")
+        XCTAssertEqual(rows[0].focusedEvent?.id, "m1")
+        XCTAssertEqual(rows[1].focusedEvent?.id, "m2")
     }
 
     func testMissingMemberIdsAreOmittedFromSeriesMembers() {
@@ -153,7 +153,7 @@ final class DayEventProjectionTests: XCTestCase {
         )
 
         XCTAssertEqual(rows[0].members.map(\.id), ["e1", "e3"])
-        XCTAssertTrue(rows[0].needsSelectiveDelete)
+        XCTAssertTrue(rows[0].asksForDeleteScope)
     }
 
     private func event(id: String, title: String, start: Date) -> CalendarEventInfo {

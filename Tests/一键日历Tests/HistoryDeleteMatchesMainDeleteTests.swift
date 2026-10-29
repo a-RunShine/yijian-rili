@@ -42,7 +42,7 @@ final class HistoryDeleteMatchesMainDeleteTests: XCTestCase {
 
         XCTAssertTrue(hit.isSeries, "多条复习日的记录应转成系列，交给同一套选择性删除流程")
         XCTAssertEqual(hit.members.count, 3)
-        XCTAssertTrue(hit.needsSelectiveDelete, "多成员时应弹选择列表")
+        XCTAssertTrue(hit.asksForDeleteScope, "多成员时应弹选择列表")
     }
 
     func testHistoryEntryOfSingleDayIsNotSelective() async throws {
@@ -60,7 +60,7 @@ final class HistoryDeleteMatchesMainDeleteTests: XCTestCase {
 
         XCTAssertFalse(hit.isSeries)
         XCTAssertEqual(hit.members.count, 1)
-        XCTAssertFalse(hit.needsSelectiveDelete, "单条日期的记录应走和主界面一样的确认弹窗")
+        XCTAssertFalse(hit.asksForDeleteScope, "单条日期的记录应走和主界面一样的确认弹窗")
     }
 
     func testDeletingWholeHistoryEntryRemovesCalendarEventsAndRecord() async throws {

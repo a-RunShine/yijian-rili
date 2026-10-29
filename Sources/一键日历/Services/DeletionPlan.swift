@@ -24,8 +24,6 @@ struct DeletionPlan {
         }
 
         var isSuccess: Bool { refused.isEmpty }
-        var isCompleteFailure: Bool { removed.isEmpty && !refused.isEmpty }
-        var isPartialFailure: Bool { !removed.isEmpty && !refused.isEmpty }
 
         static func == (lhs: Report, rhs: Report) -> Bool {
             lhs.removed == rhs.removed

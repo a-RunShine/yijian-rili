@@ -268,6 +268,10 @@ final class ReviewBoardTests: XCTestCase {
 
         XCTAssertEqual(viewModel.resultType, .error)
         XCTAssertTrue(viewModel.historyEntries.isEmpty)
+        XCTAssertTrue(
+            calendar.fetchEvents(from: date(2026, 10, 1), to: date(2026, 10, 31)).isEmpty,
+            "标题为空时不该往日历里写任何东西"
+        )
         XCTAssertEqual(viewModel.baseDate, date(2026, 10, 20))
     }
 
@@ -305,6 +309,10 @@ final class ReviewBoardTests: XCTestCase {
         XCTAssertEqual(viewModel.resultType, .error)
         XCTAssertEqual(viewModel.reviewIntervals, [3, 7, 30])
         XCTAssertTrue(viewModel.historyEntries.isEmpty)
+        XCTAssertTrue(
+            calendar.fetchEvents(from: date(2026, 10, 1), to: date(2026, 10, 31)).isEmpty,
+            "间隔草稿非法时不该往日历里写任何东西"
+        )
         XCTAssertEqual(viewModel.customIntervalDraft, "abc")
         XCTAssertEqual(viewModel.baseDate, date(2026, 10, 20))
     }
@@ -325,7 +333,7 @@ final class ReviewBoardTests: XCTestCase {
 
         let target = try XCTUnwrap(viewModel.eventsByDay[today]?.first)
         let hit = try XCTUnwrap(viewModel.projectedHit(forEventId: target.id, on: today))
-        XCTAssertFalse(hit.needsSelectiveDelete)
+        XCTAssertFalse(hit.asksForDeleteScope)
         XCTAssertTrue(viewModel.deleteSearchHit(hit))
 
         let monthStart = try XCTUnwrap(
@@ -352,7 +360,7 @@ final class ReviewBoardTests: XCTestCase {
         let firstReviewDay = date(2026, 10, 23)
         let member = try XCTUnwrap(viewModel.eventsByDay[firstReviewDay]?.first)
         let hit = try XCTUnwrap(viewModel.projectedHit(forEventId: member.id, on: firstReviewDay))
-        XCTAssertTrue(hit.needsSelectiveDelete)
+        XCTAssertTrue(hit.asksForDeleteScope)
         XCTAssertEqual(hit.members.count, 3)
 
         viewModel.beginSeriesDelete(hit)

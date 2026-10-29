@@ -69,7 +69,6 @@ struct LandedEvent: Equatable, Sendable {
 
     var wasWritten: Bool { outcome == .written }
 
-    var wasDuplicate: Bool { outcome == .duplicate }
 }
 
 enum SharedDetailUpdateOutcome: Equatable, Sendable {

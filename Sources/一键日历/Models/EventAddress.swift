@@ -24,17 +24,18 @@ struct EventAddress: Hashable, Sendable {
 
     func matches(_ event: CalendarEventInfo) -> Bool {
         guard title == event.title else { return false }
-        if let calendarId, let other = event.calendarId, calendarId != other {
-            return false
-        }
         guard Calendar.current.isDate(event.start, inSameDayAs: day) else { return false }
-        return NormalizeNotes.normalize(event.notes) == notesKey
+        guard NormalizeNotes.normalize(event.notes) == notesKey else { return false }
+        guard let calendarId else { return false }
+        guard let other = event.calendarId else { return false }
+        return calendarId == other
     }
 }
 
 enum EventRemovalRefusal: Equatable, Sendable {
     case noAccess
     case readOnlyCalendar
+    case ambiguousMatch(Int)
     case seamRefused(String)
 
     var message: String {
@@ -43,6 +44,11 @@ enum EventRemovalRefusal: Equatable, Sendable {
             return NSLocalizedString("delete_failed_no_access", comment: "")
         case .readOnlyCalendar:
             return NSLocalizedString("delete_failed_read_only", comment: "")
+        case .ambiguousMatch(let count):
+            return String(
+                format: NSLocalizedString("delete_failed_ambiguous", comment: ""),
+                "\(count)"
+            )
         case .seamRefused(let detail):
             return String(
                 format: NSLocalizedString("delete_failed_seam", comment: ""),
@@ -62,12 +68,6 @@ enum EventRemovalOutcome: Equatable, Sendable {
         return nil
     }
 
-    var didRemoveEvent: Bool { removedEventId != nil }
-
-    var isRefusal: Bool {
-        if case .refused = self { return true }
-        return false
-    }
 }
 
 struct EventRemovalRequest: Sendable {

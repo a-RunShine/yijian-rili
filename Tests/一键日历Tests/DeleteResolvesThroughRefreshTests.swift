@@ -34,7 +34,7 @@ final class DeleteResolvesThroughRefreshTests: XCTestCase {
         let outcome = viewModel.deleteSearchHitMembers(ids: [victim])
 
         XCTAssertEqual(outcome.deletedCount, 0)
-        XCTAssertEqual(outcome.missingCount, 1)
+        XCTAssertEqual(outcome.refusedCount, 1)
 
         let remaining = try XCTUnwrap(viewModel.historyEntries.first(where: { $0.title == marker }))
         XCTAssertEqual(remaining.liveEventIdentifiers, ids, "删不掉时历史必须原样保留")
@@ -63,7 +63,7 @@ final class DeleteResolvesThroughRefreshTests: XCTestCase {
         let outcome = viewModel.deleteSearchHitMembers(ids: ids)
 
         XCTAssertEqual(outcome.deletedCount, 2)
-        XCTAssertEqual(outcome.missingCount, 1)
+        XCTAssertEqual(outcome.refusedCount, 1)
 
         let remaining = try XCTUnwrap(viewModel.historyEntries.first(where: { $0.title == marker }))
         XCTAssertEqual(

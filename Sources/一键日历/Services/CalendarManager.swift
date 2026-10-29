@@ -214,29 +214,45 @@ final class CalendarManager: ObservableObject, CalendarService, CalendarEventSto
             return .refused(.noAccess)
         }
 
-        if let preferredId, let hinted = resolveEvent(id: preferredId) {
+        if let preferredId,
+           let hinted = resolveEvent(id: preferredId),
+           address.matches(Self.mapEvent(hinted)) {
             return remove(resolved: hinted, address: address)
         }
 
-        if let located = locateEvent(matching: address) {
+        switch locateEvents(matching: address) {
+        case .none:
+            return .alreadyAbsent
+        case .one(let located):
             return remove(resolved: located, address: address)
+        case .many(let matches):
+            return .refused(.ambiguousMatch(matches.count))
         }
-
-        return .alreadyAbsent
     }
 
-    private func locateEvent(matching address: EventAddress) -> EKEvent? {
+    private enum LocationResult {
+        case none
+        case one(EKEvent)
+        case many([EKEvent])
+    }
+
+    private func locateEvents(matching address: EventAddress) -> LocationResult {
         let dayStart = Calendar.current.startOfDay(for: address.day)
         guard let dayEnd = Calendar.current.date(byAdding: .day, value: 1, to: dayStart) else {
-            return nil
+            return .none
         }
         let predicate = eventStore.predicateForEvents(
             withStart: dayStart,
             end: dayEnd,
             calendars: nil
         )
-        return eventStore.events(matching: predicate)
-            .first { address.matches(Self.mapEvent($0)) }
+        let matches = eventStore.events(matching: predicate)
+            .filter { address.matches(Self.mapEvent($0)) }
+        switch matches.count {
+        case 0: return .none
+        case 1: return .one(matches[0])
+        default: return .many(matches)
+        }
     }
 
     private func remove(resolved event: EKEvent, address: EventAddress) -> EventRemovalOutcome {

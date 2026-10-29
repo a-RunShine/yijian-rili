@@ -14,14 +14,30 @@ enum RemovalTargets {
         }
     }
 
-    static func address(forSlot slot: Int, in entry: HistoryEntry) -> EventAddress? {
+    static func address(
+        forSlot slot: Int,
+        in entry: HistoryEntry,
+        calendarId: String?
+    ) -> EventAddress? {
         guard entry.reviewDates.indices.contains(slot) else { return nil }
         return EventAddress(
             day: entry.reviewDates[slot],
             title: entry.title,
             notesKey: ReviewNoteKey.key(for: slot, of: entry.type),
-            calendarId: nil
+            calendarId: calendarId
         )
+    }
+
+    static func calendarId(
+        of entry: HistoryEntry,
+        resolvedBy lookup: (String) -> CalendarEventInfo?
+    ) -> String? {
+        for id in entry.liveEventIdentifiers {
+            if let found = lookup(id), let calendarId = found.calendarId {
+                return calendarId
+            }
+        }
+        return nil
     }
 
     static func slotIndex(of address: EventAddress, in entry: HistoryEntry) -> Int? {

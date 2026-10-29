@@ -119,7 +119,7 @@ final class DeleteEntryPointParityTests: XCTestCase {
 
         let outcome = viewModel.deleteSearchHitMembers(ids: ids)
         XCTAssertEqual(outcome.deletedCount, 2, "另两条应正常删掉")
-        XCTAssertEqual(outcome.missingCount, 0, "本来就不在的那条不算失败")
+        XCTAssertEqual(outcome.refusedCount, 0, "本来就不在的那条不算失败")
         XCTAssertNotEqual(viewModel.resultType, .warning, "不该弹失败提示")
         XCTAssertTrue(events(calendar).isEmpty)
     }

@@ -329,14 +329,42 @@ final class ReviewSession {
         ids: [String],
         reason: RecordedPruneReason
     ) -> RemoveEventsFromRecordedOutcome {
+        let wanted = Set(ids)
+        let affected = outcomes.recordedEntries().first { entry in
+            entry.createdEventIdentifiers.contains(where: wanted.contains)
+        }
+        let removedKeys = affected.map {
+            removedStatusKeys(entry: $0, removedIds: ids)
+        } ?? ids.map { HistorySeriesLookup.legacyKey(for: $0) }
+
         let outcome = outcomes.removeEventsFromRecorded(ids: ids, reason: reason)
         switch outcome {
         case .updated, .discarded:
-            occurrenceStatuses.clear(ids: ids.map { statusKey(for: $0) })
+            occurrenceStatuses.clear(ids: removedKeys)
         case .noMatch, .refusedNoAuthority:
             break
         }
         return outcome
+    }
+
+    func clearOccurrenceStatusesForRemovedSlots(
+        entryID: UUID,
+        slots: [Int],
+        removedIds: [String]
+    ) {
+        var keys = slots.map { HistorySeriesLookup.seriesKey(entryID: entryID, index: $0) }
+        keys.append(contentsOf: removedIds.map { HistorySeriesLookup.legacyKey(for: $0) })
+        occurrenceStatuses.clear(ids: keys)
+    }
+
+    private func removedStatusKeys(entry: HistoryEntry, removedIds: [String]) -> [String] {
+        let removed = Set(removedIds)
+        var keys: [String] = []
+        for (index, id) in entry.createdEventIdentifiers.enumerated() where removed.contains(id) {
+            keys.append(HistorySeriesLookup.seriesKey(entryID: entry.id, index: index))
+        }
+        keys.append(contentsOf: removedIds.map { HistorySeriesLookup.legacyKey(for: $0) })
+        return keys
     }
 
     @discardableResult
@@ -564,6 +592,7 @@ final class ReviewSession {
                     onCreateSuccess(
                         trimmed: trimmedTitle,
                         landed: written,
+                        undoable: Self.undoableRequests(in: createResult),
                         sharedDetail: detailForWrite,
                         baseDate: frozenBaseDate,
                         mode: frozenMode
@@ -578,6 +607,7 @@ final class ReviewSession {
                 onCreateSuccess(
                     trimmed: trimmedTitle,
                     landed: Self.writtenEvents(in: createResult),
+                    undoable: Self.undoableRequests(in: createResult),
                     sharedDetail: detailForWrite,
                     baseDate: frozenBaseDate,
                     mode: frozenMode
@@ -653,9 +683,17 @@ final class ReviewSession {
         }
     }
 
+    private static func undoableRequests(in result: CreateEventsResult) -> [EventRemovalRequest] {
+        result.landed.compactMap { landed in
+            guard let id = landed.eventId else { return nil }
+            return EventRemovalRequest(storedId: id, address: landed.address)
+        }
+    }
+
     private func onCreateSuccess(
         trimmed: String,
         landed: [LandedEvent],
+        undoable: [EventRemovalRequest],
         sharedDetail: String?,
         baseDate writtenBaseDate: Date,
         mode writtenMode: ScheduleMode
@@ -664,10 +702,7 @@ final class ReviewSession {
         let ordered = landed.sorted { $0.address.day < $1.address.day }
         lastCreatedTitle = trimmed
         lastCreatedBaseDate = writtenBaseDate
-        lastCreatedRequests = ordered.compactMap { landed in
-            guard let id = landed.eventId else { return nil }
-            return EventRemovalRequest(storedId: id, address: landed.address)
-        }
+        lastCreatedRequests = undoable
         canRecreate = true
         canUndo = true
         let entry = HistoryEntry(

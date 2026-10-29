@@ -71,7 +71,7 @@ final class MainScreenDeleteSequenceTests: XCTestCase {
         let outcome = viewModel.deleteSearchHitMembers(ids: two)
 
         XCTAssertEqual(outcome.deletedCount, 2)
-        XCTAssertEqual(outcome.missingCount, 0)
+        XCTAssertEqual(outcome.refusedCount, 0)
         let remaining = viewModel.historyEntries.first { $0.id == batch.id }
         XCTAssertEqual(remaining?.liveEventIdentifiers, [ids[2]])
     }

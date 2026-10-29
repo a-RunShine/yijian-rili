@@ -36,7 +36,7 @@ final class PartialDeletePruneTests: XCTestCase {
         let outcome = viewModel.deleteSearchHitMembers(ids: ids)
 
         XCTAssertEqual(outcome.deletedCount, 2)
-        XCTAssertEqual(outcome.missingCount, 1)
+        XCTAssertEqual(outcome.refusedCount, 1)
 
         let remaining = try XCTUnwrap(viewModel.historyEntries.first)
         XCTAssertEqual(

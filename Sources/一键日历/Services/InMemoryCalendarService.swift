@@ -203,10 +203,20 @@ final class InMemoryCalendarService: CalendarService, CalendarEventStore {
         if authorizationStatus != .fullAccess { return .refused(.noAccess) }
         if eventsUnreadable { return .refused(.seamRefused("events unreadable")) }
 
-        let byHint = preferredId.flatMap { id in events.first { $0.id == id } }
-        guard let target = byHint ?? event(matching: address) else {
-            return .alreadyAbsent
+        let target: CalendarEventInfo
+        if let preferredId,
+           let hinted = events.first(where: { $0.id == preferredId }),
+           address.matches(hinted) {
+            target = hinted
+        } else {
+            let matches = events.filter { address.matches($0) }
+            switch matches.count {
+            case 0: return .alreadyAbsent
+            case 1: target = matches[0]
+            default: return .refused(.ambiguousMatch(matches.count))
+            }
         }
+
         if let calendarId = target.calendarId, readOnlyCalendarIds.contains(calendarId) {
             return .refused(.readOnlyCalendar)
         }

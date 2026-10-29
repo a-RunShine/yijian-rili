@@ -49,6 +49,13 @@ final class CreateSuccessOutcomes {
         }
     }
 
+    func entryID(containing ids: [String]) -> UUID? {
+        let idSet = Set(ids)
+        return history.load().first { entry in
+            entry.createdEventIdentifiers.contains(where: idSet.contains)
+        }?.id
+    }
+
     @discardableResult
     func removeEventsFromRecorded(
         ids: [String],
