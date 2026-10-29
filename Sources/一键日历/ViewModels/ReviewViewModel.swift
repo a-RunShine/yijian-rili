@@ -978,18 +978,6 @@ class ReviewViewModel: ObservableObject {
     }
 
     @discardableResult
-    func deleteSearchResult(_ event: CalendarEventInfo) -> Bool {
-        deleteSearchHit(
-            SearchHit(
-                id: event.id,
-                kind: .single,
-                title: event.title,
-                members: [event]
-            )
-        )
-    }
-
-    @discardableResult
     func deleteSearchHit(_ hit: SearchHit) -> Bool {
         guard let event = hit.members.first else { return false }
         let report = DeletionPlan(calendar: calendar).execute(ids: [event.id])

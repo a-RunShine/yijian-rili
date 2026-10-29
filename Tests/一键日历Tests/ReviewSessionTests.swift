@@ -816,7 +816,7 @@ final class ReviewSessionTests: XCTestCase {
 
 @MainActor
 final class DayBrowseModelTests: XCTestCase {
-    func testFetchSearchAndDelete() async throws {
+    func testFetchAndSearch() async throws {
         let calendar = InMemoryCalendarService()
         _ = try await calendar.createSingleEvent(title: "Browse Me", date: Date(), calendarId: nil)
         let browse = DayBrowseModel(calendar: calendar)
@@ -826,11 +826,22 @@ final class DayBrowseModelTests: XCTestCase {
         browse.searchText = "browse"
         browse.performSearch()
         XCTAssertEqual(browse.searchResults.count, 1)
+    }
 
-        let event = browse.searchResults[0]
-        XCTAssertTrue(browse.deleteSearchResult(event))
-        browse.performSearch()
-        XCTAssertTrue(browse.searchResults.isEmpty)
+    func testDeletingSoleSearchResultThroughFacadeLeavesSearchEmpty() async throws {
+        let calendar = InMemoryCalendarService()
+        _ = try await calendar.createSingleEvent(title: "Browse Delete", date: Date(), calendarId: nil)
+        let (viewModel, isolated) = makeIsolatedViewModel(calendar: calendar)
+        addTeardownBlock { isolated.cleanUp() }
+
+        viewModel.searchText = "browse delete"
+        viewModel.performSearch()
+        let hit = try XCTUnwrap(viewModel.searchHits.first)
+
+        XCTAssertTrue(viewModel.deleteSearchHit(hit))
+
+        viewModel.performSearch()
+        XCTAssertTrue(viewModel.searchHits.isEmpty)
     }
 
     func testDisplayedEventsExposeExtractableNotesDetailForEachDay() async throws {
