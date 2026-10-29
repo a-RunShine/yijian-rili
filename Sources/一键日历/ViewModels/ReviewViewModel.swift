@@ -835,29 +835,10 @@ class ReviewViewModel: ObservableObject {
             return limit.contains(stored) || limit.contains(event.id)
         }
         let requests = RemovalTargets.requests(entry: entry, members: members)
-        settle(report: DeletionPlan(calendar: calendar).execute(requests: requests), entry: entry)
-    }
-
-    private func settle(report: DeletionPlan.Report, entry: HistoryEntry?) {
-        if let entry {
-            let remaining = report.refusedStoredIds
-            let stored = entry.createdEventIdentifiers
-            if remaining.isEmpty {
-                session.discardRecordedEntry(id: entry.id)
-                outcomes.removeHistory(id: entry.id)
-                weeklyReviewViewModel.removeWeeklyEntries(id: entry.id)
-            } else {
-                outcomes.replaceCreatedEventIdentifiers(
-                    id: entry.id,
-                    identifiers: stored.filter { remaining.contains($0) }
-                )
-            }
-        }
-
-        refreshAllProjections()
-        if !report.isSuccess {
-            presentDeletionFailure(report)
-        }
+        settle(
+            DeletionPlan(calendar: calendar).execute(requests: requests),
+            entry: entry
+        )
     }
 
     private func presentDeletionFailure(_ report: DeletionPlan.Report) {
@@ -1001,7 +982,7 @@ class ReviewViewModel: ObservableObject {
         let requests = removalRequests(for: hit)
         guard !requests.isEmpty else { return false }
         let report = DeletionPlan(calendar: calendar).execute(requests: requests)
-        finishDeletion(report, clearingSelectionFor: hit)
+        settle(report, clearingSelectionFor: hit)
         return report.isSuccess && !report.settledTargets.isEmpty
     }
 
@@ -1011,7 +992,7 @@ class ReviewViewModel: ObservableObject {
         let requests = removalRequests(for: hit, selectedIds: ids)
         let report = DeletionPlan(calendar: calendar).execute(requests: requests)
         seriesPendingDelete = nil
-        finishDeletion(report, clearingSelectionFor: hit)
+        settle(report, clearingSelectionFor: hit)
         return (report.removed.count, report.refused.count)
     }
 
@@ -1097,7 +1078,13 @@ class ReviewViewModel: ObservableObject {
         return displayedEvents.first { $0.id == id }
     }
 
-    private func finishDeletion(_ report: DeletionPlan.Report, clearingSelectionFor hit: SearchHit?) {
+    private func settle(
+        _ report: DeletionPlan.Report,
+        entry: HistoryEntry? = nil,
+        clearingSelectionFor hit: SearchHit? = nil
+    ) {
+        pruneRecorded(report, entry: entry)
+
         let settledIds = report.settledStoredIds
         browse.reloadAfterExternalDeletion(deletedIDs: settledIds)
         searchResults = browse.searchResults
@@ -1118,6 +1105,22 @@ class ReviewViewModel: ObservableObject {
         }
     }
 
+    private func pruneRecorded(_ report: DeletionPlan.Report, entry: HistoryEntry?) {
+        guard let entry else { return }
+        let settled = Set(report.settledStoredIds)
+        let survivors = entry.liveEventIdentifiers.filter { !settled.contains($0) }
+
+        if survivors.isEmpty {
+            session.discardRecordedEntry(id: entry.id)
+            outcomes.removeHistory(id: entry.id)
+            weeklyReviewViewModel.removeWeeklyEntries(id: entry.id)
+            return
+        }
+        let kept = entry.createdEventIdentifiers.filter { survivors.contains($0) || $0.isEmpty }
+        if kept == entry.createdEventIdentifiers { return }
+        outcomes.replaceCreatedEventIdentifiers(id: entry.id, identifiers: kept)
+    }
+
     private func applyDeletedEvents(ids: [String]) {
         session.removeEventsFromRecorded(ids: ids, reason: .userDeletedOccurrence)
         refreshHistoryProjection()
@@ -1128,7 +1131,7 @@ class ReviewViewModel: ObservableObject {
     }
 
     func beginSeriesDelete(_ hit: SearchHit) {
-        guard hit.needsSelectiveDelete else { return }
+        guard hit.asksForDeleteScope else { return }
         seriesPendingDelete = hit
     }
 

@@ -22,7 +22,14 @@ struct SearchHit: Identifiable, Equatable {
         return false
     }
 
-    var needsSelectiveDelete: Bool { members.count > 1 }
+    var spansMultipleOccurrences: Bool {
+        if case .series = kind { return members.count > 1 }
+        return false
+    }
+
+    var asksForDeleteScope: Bool { spansMultipleOccurrences }
+
+    var needsSelectiveDelete: Bool { asksForDeleteScope }
 }
 
 enum RemoveEventsFromRecordedOutcome: Equatable {
