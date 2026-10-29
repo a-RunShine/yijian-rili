@@ -10,7 +10,7 @@ enum SearchCollapse {
         var hits: [SearchHit] = []
         var claimed = Set<String>()
 
-        for entry in history where entry.type == .review && !entry.createdEventIdentifiers.isEmpty {
+        for entry in history where entry.type == .review && entry.hasLiveEventIdentifiers {
             let overlap = remaining.contains { entry.createdEventIdentifiers.contains($0.id) }
             guard overlap else { continue }
 

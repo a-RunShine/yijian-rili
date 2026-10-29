@@ -460,7 +460,7 @@ final class ReviewViewModelCalendarInjectionTests: XCTestCase {
 
         await viewModel.createReviewSchedule()
         let batch = try XCTUnwrap(viewModel.todayCreatedEntries.first(where: { $0.title == marker }))
-        XCTAssertEqual(batch.createdEventIdentifiers.count, 3)
+        XCTAssertEqual(batch.liveEventIdentifiers.count, 3)
 
         viewModel.searchText = marker
         viewModel.performSearch()
@@ -472,7 +472,7 @@ final class ReviewViewModelCalendarInjectionTests: XCTestCase {
         XCTAssertNil(calendar.event(withId: removeID))
         let after = try XCTUnwrap(viewModel.todayCreatedEntries.first(where: { $0.title == marker }))
         XCTAssertEqual(after.id, batch.id)
-        XCTAssertEqual(after.createdEventIdentifiers.count, 2)
+        XCTAssertEqual(after.liveEventIdentifiers.count, 2)
         XCTAssertFalse(after.createdEventIdentifiers.contains(removeID))
         XCTAssertTrue(
             viewModel.weeklyReviewViewModel.weeklyEntries.contains(where: { $0.id == batch.id })
@@ -558,7 +558,7 @@ final class ReviewViewModelCalendarInjectionTests: XCTestCase {
         let listed = viewModel.todayCreatedEntries
         let after = try XCTUnwrap(listed.first(where: { $0.title == marker }))
         XCTAssertEqual(after.id, batch.id)
-        XCTAssertEqual(after.createdEventIdentifiers.count, 3)
+        XCTAssertEqual(after.liveEventIdentifiers.count, 3)
         XCTAssertTrue(after.createdEventIdentifiers.contains(ids[0]))
         XCTAssertTrue(
             viewModel.weeklyReviewViewModel.weeklyEntries.contains(where: { $0.id == batch.id })
@@ -833,7 +833,7 @@ final class ReviewViewModelCalendarInjectionTests: XCTestCase {
         await viewModel.createReviewSchedule()
 
         let batch = try XCTUnwrap(viewModel.historyEntries.first(where: { $0.title == marker }))
-        XCTAssertEqual(batch.createdEventIdentifiers.count, 3)
+        XCTAssertEqual(batch.liveEventIdentifiers.count, 3)
 
         _ = calendar.reassignAllEventIdentifiersForTesting()
 
@@ -858,7 +858,7 @@ final class ReviewViewModelCalendarInjectionTests: XCTestCase {
         await viewModel.createReviewSchedule()
 
         let batch = try XCTUnwrap(viewModel.historyEntries.first(where: { $0.title == marker }))
-        XCTAssertEqual(batch.createdEventIdentifiers.count, 3)
+        XCTAssertEqual(batch.liveEventIdentifiers.count, 3)
 
         viewModel.selectDayType(.today)
         let rows = viewModel.displayedDayHits

@@ -108,8 +108,7 @@ final class ReviewSession {
         let series = entry.reviewDates.indices.map {
             HistorySeriesLookup.seriesKey(entryID: entry.id, index: $0)
         }
-        let legacy = (eventIds + entry.createdEventIdentifiers)
-            .filter { !$0.isEmpty }
+        let legacy = (eventIds + entry.liveEventIdentifiers)
             .map { HistorySeriesLookup.legacyKey(for: $0) }
         return series + legacy
     }
@@ -159,8 +158,8 @@ final class ReviewSession {
     private func resolvedEvent(for entry: HistoryEntry, index: Int) -> CalendarEventInfo? {
         guard index < entry.reviewDates.count else { return nil }
         let day = entry.reviewDates[index]
-        if index < entry.createdEventIdentifiers.count,
-           let exact = calendar.event(withId: entry.createdEventIdentifiers[index]) {
+        if let stored = entry.eventIdentifier(forSlot: index),
+           let exact = calendar.event(withId: stored) {
             return exact
         }
         let start = Calendar.current.startOfDay(for: day)
@@ -181,7 +180,7 @@ final class ReviewSession {
         Set(
             outcomes.recordedEntries()
                 .filter { $0.type == .review }
-                .flatMap(\.createdEventIdentifiers)
+                .flatMap(\.liveEventIdentifiers)
         )
     }
 
@@ -347,7 +346,7 @@ final class ReviewSession {
         migrateLegacyStatusKeys()
         var unmatched = 0
         for entry in outcomes.recordedEntries() {
-            let identifiers = entry.createdEventIdentifiers
+            let identifiers = entry.liveEventIdentifiers
             guard !identifiers.isEmpty else { continue }
             unmatched += identifiers.filter { calendar.event(withId: $0) == nil }.count
         }
@@ -380,7 +379,7 @@ final class ReviewSession {
         resultMessage = nil
         resultType = nil
 
-        let identifiers = entry.createdEventIdentifiers
+        let identifiers = entry.liveEventIdentifiers
         guard !identifiers.isEmpty else {
             resultMessage = NSLocalizedString("shared_detail_unavailable", comment: "")
             resultType = .warning

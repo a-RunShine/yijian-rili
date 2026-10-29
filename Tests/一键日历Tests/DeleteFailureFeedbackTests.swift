@@ -55,7 +55,7 @@ final class DeleteFailureFeedbackTests: XCTestCase {
         let first = viewModel.deleteSearchHitMembers(ids: [victim])
         XCTAssertEqual(first.deletedCount, 0)
         XCTAssertEqual(
-            viewModel.historyEntries.first?.createdEventIdentifiers.count,
+            viewModel.historyEntries.first?.liveEventIdentifiers.count,
             3,
             "第一次删不掉时三条都必须留着"
         )
@@ -65,7 +65,7 @@ final class DeleteFailureFeedbackTests: XCTestCase {
 
         XCTAssertEqual(second.deletedCount, 1, "重试时日历恢复后应能删掉")
         XCTAssertEqual(
-            viewModel.historyEntries.first?.createdEventIdentifiers.count,
+            viewModel.historyEntries.first?.liveEventIdentifiers.count,
             2,
             "重试成功后只该少掉那一条"
         )
@@ -83,7 +83,7 @@ final class DeleteFailureFeedbackTests: XCTestCase {
         viewModel.deleteSearchHitMembers(ids: ids)
 
         let remaining = try XCTUnwrap(viewModel.historyEntries.first(where: { $0.title == marker }))
-        XCTAssertEqual(remaining.createdEventIdentifiers, [stuck])
+        XCTAssertEqual(remaining.liveEventIdentifiers, [stuck])
         let hit = viewModel.hit(forHistoryEntry: remaining)
         XCTAssertEqual(hit.members.count, 1, "只剩删不掉的那条还能被解析出来")
         XCTAssertEqual(hit.members.first?.id, stuck)

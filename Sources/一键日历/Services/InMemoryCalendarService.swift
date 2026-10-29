@@ -10,6 +10,7 @@ final class InMemoryCalendarService: CalendarService, CalendarEventStore {
     private(set) var authorizationStatus: CalendarAccessStatus
     var eventsUnreadable = false
     var deleteShouldFailForTest: Set<String> = []
+    var readOnlyCalendarIds: Set<String> = []
 
     func setAuthorizationStatusForTesting(_ status: CalendarAccessStatus) {
         authorizationStatus = status
@@ -227,6 +228,29 @@ final class InMemoryCalendarService: CalendarService, CalendarEventStore {
         let before = events.count
         events.removeAll { $0.id == id }
         return events.count < before
+    }
+
+    func event(matching address: EventAddress) -> CalendarEventInfo? {
+        if eventsUnreadable { return nil }
+        return events.first { address.matches($0) }
+    }
+
+    func removeEvent(at address: EventAddress, preferredId: String?) -> EventRemovalOutcome {
+        if authorizationStatus != .fullAccess { return .refused(.noAccess) }
+        if eventsUnreadable { return .refused(.seamRefused("events unreadable")) }
+
+        let byHint = preferredId.flatMap { id in events.first { $0.id == id } }
+        guard let target = byHint ?? event(matching: address) else {
+            return .alreadyAbsent
+        }
+        if let calendarId = target.calendarId, readOnlyCalendarIds.contains(calendarId) {
+            return .refused(.readOnlyCalendar)
+        }
+        if deleteShouldFailForTest.contains(target.id) {
+            return .refused(.seamRefused("injected delete failure"))
+        }
+        events.removeAll { $0.id == target.id }
+        return .removed(eventId: target.id)
     }
 
     func eventNotes(id: String) -> String? {

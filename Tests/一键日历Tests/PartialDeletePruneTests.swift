@@ -40,7 +40,7 @@ final class PartialDeletePruneTests: XCTestCase {
 
         let remaining = try XCTUnwrap(viewModel.historyEntries.first)
         XCTAssertEqual(
-            remaining.createdEventIdentifiers,
+            remaining.liveEventIdentifiers,
             [ids[1]],
             "只有真正删掉的事件才该从历史里修剪，删失败的那条必须留着，否则它就成了无法标记的孤儿"
         )

@@ -504,6 +504,10 @@ final class GatedCalendarService: CalendarService {
     func fetchEvents(from start: Date, to end: Date) -> [CalendarEventInfo] { inner.fetchEvents(from: start, to: end) }
     func event(withId id: String) -> CalendarEventInfo? { inner.event(withId: id) }
     func deleteEvent(id: String) -> Bool { inner.deleteEvent(id: id) }
+    func event(matching address: EventAddress) -> CalendarEventInfo? { inner.event(matching: address) }
+    func removeEvent(at address: EventAddress, preferredId: String?) -> EventRemovalOutcome {
+        inner.removeEvent(at: address, preferredId: preferredId)
+    }
     func searchEvents(query: String, daysAhead: Int) -> [CalendarEventInfo] {
         inner.searchEvents(query: query, daysAhead: daysAhead)
     }
@@ -695,7 +699,7 @@ final class DuplicateDayHistoryTests: XCTestCase {
 
         let entry = try XCTUnwrap(history.load().first)
         XCTAssertEqual(
-            entry.createdEventIdentifiers.count,
+            entry.liveEventIdentifiers.count,
             entry.reviewDates.count,
             "历史保存的 id 数量与记录的复习日期数量应一致"
         )

@@ -2,7 +2,7 @@ import Foundation
 
 enum HistorySeriesLookup {
     static func entry(containingEventId eventId: String, in history: [HistoryEntry]) -> HistoryEntry? {
-        history.first { !$0.createdEventIdentifiers.isEmpty && $0.createdEventIdentifiers.contains(eventId) }
+        history.first { $0.createdEventIdentifiers.contains(eventId) }
     }
 
     static func entry(
@@ -25,8 +25,9 @@ enum HistorySeriesLookup {
         calendar: Calendar = .current
     ) -> [CalendarEventInfo] {
         let byId = Dictionary(candidates.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
-        let byIdentifier = entry.createdEventIdentifiers.compactMap { byId[$0] }
-        if byIdentifier.count == entry.createdEventIdentifiers.count, !byIdentifier.isEmpty {
+        let known = entry.liveEventIdentifiers
+        let byIdentifier = known.compactMap { byId[$0] }
+        if byIdentifier.count == known.count, !byIdentifier.isEmpty {
             return byIdentifier.sorted { $0.start < $1.start }
         }
         return resolvedByAttributes(entry, among: candidates, calendar: calendar)

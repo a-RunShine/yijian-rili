@@ -61,13 +61,14 @@ final class CreateSuccessOutcomes {
         }) else {
             return .noMatch
         }
-        let remaining = entry.createdEventIdentifiers.filter { !idSet.contains($0) }
-        if remaining.isEmpty {
+        let slots = entry.createdEventIdentifiers.map { idSet.contains($0) ? "" : $0 }
+        let survivors = slots.filter { !$0.isEmpty }
+        if survivors.isEmpty {
             discardRecorded(id: entry.id)
             return .discarded(id: entry.id)
         }
-        history.replace(entry.withCreatedEventIdentifiers(remaining))
-        return .updated(id: entry.id, remainingIdentifiers: remaining)
+        history.replace(entry.withCreatedEventIdentifiers(slots))
+        return .updated(id: entry.id, remainingIdentifiers: survivors)
     }
 
     func replaceCreatedEventIdentifiers(id: UUID, identifiers: [String]) {

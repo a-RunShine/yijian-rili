@@ -333,7 +333,7 @@ final class ReviewSessionTests: XCTestCase {
 
         let partial = session.removeEventsFromRecorded(ids: [ids[0]], reason: .userDeletedOccurrence)
         XCTAssertEqual(partial, .updated(id: batchID, remainingIdentifiers: Array(ids.dropFirst())))
-        XCTAssertEqual(history.load().first?.createdEventIdentifiers.count, 2)
+        XCTAssertEqual(history.load().first?.liveEventIdentifiers.count, 2)
         XCTAssertTrue(weekly.weeklyEntries.contains(where: { $0.id == batchID }))
 
         let rest = Array(ids.dropFirst())
@@ -443,7 +443,7 @@ final class ReviewSessionTests: XCTestCase {
         let entry = history.load().first
         XCTAssertEqual(entry?.sharedDetail, "课堂补充")
         XCTAssertEqual(entry?.createdEventIdentifiers, calendar.lastCreatedEventIdentifiers)
-        XCTAssertEqual(entry?.createdEventIdentifiers.count, 3)
+        XCTAssertEqual(entry?.liveEventIdentifiers.count, 3)
     }
 
     func testCreatePureSuccessPersistsIdsAndDetail_DuplicateDoesNot() async {
@@ -457,7 +457,7 @@ final class ReviewSessionTests: XCTestCase {
         await session.create()
         XCTAssertEqual(session.resultType, .success)
         XCTAssertEqual(history.load().count, 1)
-        XCTAssertEqual(history.load().first?.createdEventIdentifiers.count, 1)
+        XCTAssertEqual(history.load().first?.liveEventIdentifiers.count, 1)
         XCTAssertEqual(history.load().first?.sharedDetail, "首次详情")
         XCTAssertEqual(weekly.appendCallCount, 1)
 
@@ -540,7 +540,7 @@ final class ReviewSessionTests: XCTestCase {
         await session.create()
         XCTAssertEqual(session.resultType, .success)
         let entry = try XCTUnwrap(history.load().first)
-        XCTAssertEqual(entry.createdEventIdentifiers.count, 3)
+        XCTAssertEqual(entry.liveEventIdentifiers.count, 3)
         let weeklyBefore = weekly.appendCallCount
 
         let outcome = session.updateSharedDetail(for: entry, detail: "  修订后详情  ")
@@ -622,7 +622,7 @@ final class ReviewSessionTests: XCTestCase {
         await session.create()
         XCTAssertEqual(session.resultType, .success)
         let entry = try XCTUnwrap(history.load().first)
-        XCTAssertEqual(entry.createdEventIdentifiers.count, 3)
+        XCTAssertEqual(entry.liveEventIdentifiers.count, 3)
         XCTAssertEqual(weekly.appended.first?.title, "旧系列名")
 
         let outcome = session.updateSeriesTitle(for: entry, title: "  新系列名  ")

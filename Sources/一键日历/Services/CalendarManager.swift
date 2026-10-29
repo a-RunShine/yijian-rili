@@ -248,6 +248,71 @@ final class CalendarManager: ObservableObject, CalendarService, CalendarEventSto
             .first { candidates.contains($0.eventIdentifier) }
     }
 
+    func event(matching address: EventAddress) -> CalendarEventInfo? {
+        guard EKEventStore.authorizationStatus(for: .event) == .fullAccess else { return nil }
+        let dayStart = Calendar.current.startOfDay(for: address.day)
+        guard let dayEnd = Calendar.current.date(byAdding: .day, value: 1, to: dayStart) else {
+            return nil
+        }
+        let predicate = eventStore.predicateForEvents(
+            withStart: dayStart,
+            end: dayEnd,
+            calendars: nil
+        )
+        let candidates = eventStore.events(matching: predicate)
+            .filter { address.matches(Self.mapEvent($0)) }
+        guard let event = candidates.first else { return nil }
+        return Self.mapEvent(event)
+    }
+
+    func removeEvent(at address: EventAddress, preferredId: String?) -> EventRemovalOutcome {
+        guard EKEventStore.authorizationStatus(for: .event) == .fullAccess else {
+            return .refused(.noAccess)
+        }
+
+        if let preferredId, let hinted = resolveEvent(id: preferredId) {
+            return remove(resolved: hinted, address: address)
+        }
+
+        if let located = locateEvent(matching: address) {
+            return remove(resolved: located, address: address)
+        }
+
+        return .alreadyAbsent
+    }
+
+    private func locateEvent(matching address: EventAddress) -> EKEvent? {
+        let dayStart = Calendar.current.startOfDay(for: address.day)
+        guard let dayEnd = Calendar.current.date(byAdding: .day, value: 1, to: dayStart) else {
+            return nil
+        }
+        let predicate = eventStore.predicateForEvents(
+            withStart: dayStart,
+            end: dayEnd,
+            calendars: nil
+        )
+        return eventStore.events(matching: predicate)
+            .first { address.matches(Self.mapEvent($0)) }
+    }
+
+    private func remove(resolved event: EKEvent, address: EventAddress) -> EventRemovalOutcome {
+        guard let calendar = event.calendar else {
+            return .refused(.seamRefused("event has no calendar"))
+        }
+        guard calendar.allowsContentModifications else {
+            return .refused(.readOnlyCalendar)
+        }
+        do {
+            try eventStore.remove(event, span: .thisEvent)
+            try eventStore.commit()
+            logger.info("Deleted event for \(address.day.formattedChinese())")
+            return .removed(eventId: event.eventIdentifier ?? "")
+        } catch {
+            logger.error("Failed to delete event: \(error.localizedDescription)")
+            return .refused(.seamRefused(error.localizedDescription))
+        }
+    }
+
     private static func strippingSourcePrefix(_ id: String) -> String? {
         guard let colon = id.firstIndex(of: ":") else { return nil }
         return String(id[id.index(after: colon)...])

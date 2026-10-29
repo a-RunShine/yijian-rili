@@ -41,7 +41,7 @@ final class MainScreenDeleteSequenceTests: XCTestCase {
             )
             let still = viewModel.historyEntries.first { $0.id == batch.id }
             XCTAssertFalse(
-                still?.createdEventIdentifiers.contains(id) ?? false,
+                still?.liveEventIdentifiers.contains(id) ?? false,
                 "第 \(index + 1) 条删掉后，记录里不该还留着它的 id"
             )
         }
@@ -73,6 +73,6 @@ final class MainScreenDeleteSequenceTests: XCTestCase {
         XCTAssertEqual(outcome.deletedCount, 2)
         XCTAssertEqual(outcome.missingCount, 0)
         let remaining = viewModel.historyEntries.first { $0.id == batch.id }
-        XCTAssertEqual(remaining?.createdEventIdentifiers, [ids[2]])
+        XCTAssertEqual(remaining?.liveEventIdentifiers, [ids[2]])
     }
 }
