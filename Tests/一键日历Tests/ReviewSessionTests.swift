@@ -186,7 +186,7 @@ final class ReviewSessionTests: XCTestCase {
 
         XCTAssertEqual(session.resultType, .success)
         XCTAssertTrue(session.canUndo)
-        XCTAssertEqual(calendar.lastCreatedEventIdentifiers.count, 3)
+        XCTAssertEqual(history.load().first?.liveEventIdentifiers.count, 3)
         XCTAssertEqual(history.load().count, 1)
         XCTAssertEqual(history.load().first?.title, "会话创建")
         XCTAssertEqual(weekly.appendCallCount, 1)
@@ -363,7 +363,7 @@ final class ReviewSessionTests: XCTestCase {
         await session.create()
 
         let batchID = try XCTUnwrap(history.load().first?.id)
-        let eventID = try XCTUnwrap(calendar.lastCreatedEventIdentifiers.first)
+        let eventID = try XCTUnwrap(history.load().first?.liveEventIdentifiers.first)
         XCTAssertEqual(session.todayCreatedEntries().map(\.id), [batchID])
         XCTAssertTrue(weekly.weeklyEntries.contains(where: { $0.id == batchID }))
 
@@ -409,7 +409,6 @@ final class ReviewSessionTests: XCTestCase {
 
         XCTAssertFalse(session.canUndo)
         XCTAssertEqual(session.resultType, .success)
-        XCTAssertTrue(calendar.lastCreatedEventIdentifiers.isEmpty)
         XCTAssertTrue(history.load().isEmpty, "undo must remove 今日所建 batch from history")
         XCTAssertTrue(session.todayCreatedEntries().isEmpty)
         XCTAssertFalse(
@@ -442,7 +441,6 @@ final class ReviewSessionTests: XCTestCase {
         XCTAssertEqual(NormalizeNotes.normalize(events[0].notes), "第1次复习")
         let entry = history.load().first
         XCTAssertEqual(entry?.sharedDetail, "课堂补充")
-        XCTAssertEqual(entry?.createdEventIdentifiers, calendar.lastCreatedEventIdentifiers)
         XCTAssertEqual(entry?.liveEventIdentifiers.count, 3)
     }
 

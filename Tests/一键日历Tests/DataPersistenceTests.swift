@@ -455,7 +455,6 @@ final class GatedCalendarService: CalendarService {
     var authorizationStatus: CalendarAccessStatus { inner.authorizationStatus }
     var availableCalendars: [CalendarInfo] { inner.availableCalendars }
     var hasCloudCalendar: Bool { inner.hasCloudCalendar }
-    var lastCreatedEventIdentifiers: [String] { inner.lastCreatedEventIdentifiers }
 
     func requestAccess() async -> Bool { await inner.requestAccess() }
     func refreshAvailableCalendars() { inner.refreshAvailableCalendars() }
@@ -499,7 +498,9 @@ final class GatedCalendarService: CalendarService {
         try await inner.createSingleEvent(title: title, date: date, calendarId: calendarId, detail: detail)
     }
 
-    func undoLastCreation() async -> UndoResult { await inner.undoLastCreation() }
+    func undoLastCreation(eventIds: [String]) async -> UndoResult {
+        await inner.undoLastCreation(eventIds: eventIds)
+    }
     func fetchEvents(on date: Date) -> [CalendarEventInfo] { inner.fetchEvents(on: date) }
     func fetchEvents(from start: Date, to end: Date) -> [CalendarEventInfo] { inner.fetchEvents(from: start, to: end) }
     func event(withId id: String) -> CalendarEventInfo? { inner.event(withId: id) }

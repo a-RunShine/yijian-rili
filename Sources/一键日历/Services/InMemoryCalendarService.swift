@@ -36,8 +36,6 @@ final class InMemoryCalendarService: CalendarService, CalendarEventStore {
         }
         return mapping
     }
-    private(set) var lastCreatedEventIdentifiers: [String] = []
-    private(set) var lastCreatedPairs: [(date: Date, id: String)] = []
 
     var availableCalendars: [CalendarInfo] {
         authorizationStatus == .fullAccess ? Self.sortCalendars(calendars) : []
@@ -110,8 +108,6 @@ final class InMemoryCalendarService: CalendarService, CalendarEventStore {
         )
         if !outcome.createdEventIds.isEmpty {
             lastCreated = outcome.createdEventIds
-            lastCreatedEventIdentifiers = outcome.createdEventIds
-            lastCreatedPairs = outcome.createdPairs
         }
         return outcome.result
     }
@@ -133,8 +129,6 @@ final class InMemoryCalendarService: CalendarService, CalendarEventStore {
         )
         if !outcome.createdEventIds.isEmpty {
             lastCreated = outcome.createdEventIds
-            lastCreatedEventIdentifiers = outcome.createdEventIds
-            lastCreatedPairs = outcome.createdPairs
         }
         return outcome.result
     }
@@ -178,10 +172,10 @@ final class InMemoryCalendarService: CalendarService, CalendarEventStore {
         return id
     }
 
-    func undoLastCreation() async -> UndoResult {
+    func undoLastCreation(eventIds: [String]) async -> UndoResult {
         var deleted = 0
         var missing = 0
-        for id in lastCreated {
+        for id in eventIds {
             let before = events.count
             events.removeAll { $0.id == id }
             if events.count < before {
@@ -191,8 +185,6 @@ final class InMemoryCalendarService: CalendarService, CalendarEventStore {
             }
         }
         lastCreated = []
-        lastCreatedEventIdentifiers = []
-        lastCreatedPairs = []
         return UndoResult(
             success: deleted > 0,
             deletedCount: deleted,

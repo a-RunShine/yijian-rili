@@ -51,6 +51,25 @@ struct CreateEventsResult: Sendable {
     var created: [Date] = []
     var duplicates: [Date] = []
     var failed: [(date: Date, message: String)] = []
+    var landed: [LandedEvent] = []
+}
+
+struct LandedEvent: Equatable, Sendable {
+    enum Outcome: Equatable, Sendable {
+        case written
+        case duplicate
+        case failed(String)
+    }
+
+    var address: EventAddress
+    let eventId: String?
+    let outcome: Outcome
+
+    var day: Date { address.day }
+
+    var wasWritten: Bool { outcome == .written }
+
+    var wasDuplicate: Bool { outcome == .duplicate }
 }
 
 struct UndoResult: Sendable {

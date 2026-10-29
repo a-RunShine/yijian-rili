@@ -46,6 +46,7 @@ final class ReviewSession {
 
     private var lastCreatedTitle: String?
     private var lastCreatedBaseDate: Date?
+    private var lastCreatedEventIds: [String] = []
     private var lastRecordedHistoryEntryID: UUID?
 
     private(set) var shouldPlayHaptic: Bool = false
@@ -558,11 +559,11 @@ final class ReviewSession {
                 let dupDates = createResult.duplicates.map { $0.formattedChinese() }.joined(separator: "、")
                 resultMessage = String(format: NSLocalizedString("warning_message", comment: ""), dupDates)
                 resultType = .warning
-                let written = Self.datesWrittenDespiteDuplicates(createResult)
+                let written = Self.writtenEvents(in: createResult)
                 if !written.isEmpty {
                     onCreateSuccess(
                         trimmed: trimmedTitle,
-                        created: written,
+                        landed: written,
                         sharedDetail: detailForWrite,
                         baseDate: frozenBaseDate,
                         mode: frozenMode
@@ -576,7 +577,7 @@ final class ReviewSession {
                 resultType = .success
                 onCreateSuccess(
                     trimmed: trimmedTitle,
-                    created: createResult.created,
+                    landed: Self.writtenEvents(in: createResult),
                     sharedDetail: detailForWrite,
                     baseDate: frozenBaseDate,
                     mode: frozenMode
@@ -589,7 +590,7 @@ final class ReviewSession {
     }
 
     func undo() async {
-        let undo = await calendar.undoLastCreation()
+        let undo = await calendar.undoLastCreation(eventIds: lastCreatedEventIds)
         let recordedID = lastRecordedHistoryEntryID
 
         if undo.success {
@@ -609,33 +610,40 @@ final class ReviewSession {
             }
             outcomes.discardRecorded(id: recordedID)
             lastRecordedHistoryEntryID = nil
+            lastCreatedEventIds = []
             canUndo = false
             canRecreate = false
         }
     }
 
+    private static func writtenEvents(in result: CreateEventsResult) -> [LandedEvent] {
+        let duplicateDays = Set(result.duplicates.map { Calendar.current.startOfDay(for: $0) })
+        return result.landed.filter { landed in
+            landed.wasWritten && !duplicateDays.contains(landed.address.day)
+        }
+    }
+
     private func onCreateSuccess(
         trimmed: String,
-        created: [Date],
+        landed: [LandedEvent],
         sharedDetail: String?,
         baseDate writtenBaseDate: Date,
         mode writtenMode: ScheduleMode
     ) {
         shouldPlayHaptic = true
+        let ordered = landed.sorted { $0.address.day < $1.address.day }
         lastCreatedTitle = trimmed
         lastCreatedBaseDate = writtenBaseDate
+        lastCreatedEventIds = ordered.compactMap(\.eventId)
         canRecreate = true
         canUndo = true
         let entry = HistoryEntry(
             title: trimmed,
             baseDate: writtenBaseDate,
-            reviewDates: created,
+            reviewDates: ordered.map(\.address.day),
             creationDate: Date(),
             type: writtenMode == .single ? .single : .review,
-            createdEventIdentifiers: Self.effectiveIdentifiers(
-                created: created,
-                calendar: calendar
-            ),
+            createdEventIdentifiers: ordered.map { $0.eventId ?? "" },
             sharedDetail: sharedDetail
         )
         outcomes.record(entry)
@@ -643,23 +651,6 @@ final class ReviewSession {
         title = ""
         detail = ""
         updateReviewDates()
-    }
-
-    private static func effectiveIdentifiers(
-        created: [Date],
-        calendar: CalendarService
-    ) -> [String] {
-        let pairs = calendar.lastCreatedPairs
-        guard !pairs.isEmpty else { return calendar.lastCreatedEventIdentifiers }
-        return created.compactMap { day in
-            pairs.first { Calendar.current.isDate($0.date, inSameDayAs: day) }?.id
-        }
-    }
-
-    private static func datesWrittenDespiteDuplicates(_ result: CreateEventsResult) -> [Date] {
-        result.created.filter { day in
-            !result.duplicates.contains { Calendar.current.isDate($0, inSameDayAs: day) }
-        }
     }
 
     private static func optionalDetail(from raw: String) -> String? {

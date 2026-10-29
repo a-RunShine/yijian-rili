@@ -267,7 +267,7 @@ final class ReviewBoardTests: XCTestCase {
         await viewModel.createReviewSchedule()
 
         XCTAssertEqual(viewModel.resultType, .error)
-        XCTAssertTrue(calendar.lastCreatedEventIdentifiers.isEmpty)
+        XCTAssertTrue(viewModel.historyEntries.isEmpty)
         XCTAssertEqual(viewModel.baseDate, date(2026, 10, 20))
     }
 
@@ -304,7 +304,7 @@ final class ReviewBoardTests: XCTestCase {
 
         XCTAssertEqual(viewModel.resultType, .error)
         XCTAssertEqual(viewModel.reviewIntervals, [3, 7, 30])
-        XCTAssertTrue(calendar.lastCreatedEventIdentifiers.isEmpty)
+        XCTAssertTrue(viewModel.historyEntries.isEmpty)
         XCTAssertEqual(viewModel.customIntervalDraft, "abc")
         XCTAssertEqual(viewModel.baseDate, date(2026, 10, 20))
     }
@@ -443,7 +443,6 @@ final class RangeQueryCalendar: CalendarService {
     var authorizationStatus: CalendarAccessStatus { inner.authorizationStatus }
     var availableCalendars: [CalendarInfo] { inner.availableCalendars }
     var hasCloudCalendar: Bool { inner.hasCloudCalendar }
-    var lastCreatedEventIdentifiers: [String] { inner.lastCreatedEventIdentifiers }
 
     func requestAccess() async -> Bool { await inner.requestAccess() }
     func refreshAvailableCalendars() { inner.refreshAvailableCalendars() }
@@ -476,7 +475,9 @@ final class RangeQueryCalendar: CalendarService {
         try await inner.createSingleEvent(title: title, date: date, calendarId: calendarId, detail: detail)
     }
 
-    func undoLastCreation() async -> UndoResult { await inner.undoLastCreation() }
+    func undoLastCreation(eventIds: [String]) async -> UndoResult {
+        await inner.undoLastCreation(eventIds: eventIds)
+    }
 
     func fetchEvents(on date: Date) -> [CalendarEventInfo] {
         dayFetches += 1

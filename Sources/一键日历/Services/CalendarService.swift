@@ -2,11 +2,9 @@ import Foundation
 
 @MainActor
 protocol CalendarService: AnyObject {
-    var lastCreatedPairs: [(date: Date, id: String)] { get }
     var authorizationStatus: CalendarAccessStatus { get }
     var availableCalendars: [CalendarInfo] { get }
     var hasCloudCalendar: Bool { get }
-    var lastCreatedEventIdentifiers: [String] { get }
     func calendar(withIdentifier identifier: String) -> CalendarInfo?
     func defaultCalendar() -> CalendarInfo?
 
@@ -30,7 +28,7 @@ protocol CalendarService: AnyObject {
         detail: String?
     ) async throws -> CreateEventsResult
 
-    func undoLastCreation() async -> UndoResult
+    func undoLastCreation(eventIds: [String]) async -> UndoResult
 
     func fetchEvents(on date: Date) -> [CalendarEventInfo]
     func fetchEvents(from start: Date, to end: Date) -> [CalendarEventInfo]
@@ -46,8 +44,4 @@ protocol CalendarService: AnyObject {
     func updateEventNotes(id: String, notes: String) -> Bool
     @discardableResult
     func updateEventTitle(id: String, title: String) -> Bool
-}
-
-extension CalendarService {
-    var lastCreatedPairs: [(date: Date, id: String)] { [] }
 }

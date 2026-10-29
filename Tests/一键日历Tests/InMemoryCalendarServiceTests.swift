@@ -29,7 +29,7 @@ final class InMemoryCalendarServiceTests: XCTestCase {
             calendarId: nil
         )
         XCTAssertEqual(result.created.count, 1)
-        let id = try XCTUnwrap(calendar.lastCreatedEventIdentifiers.first)
+        let id = try XCTUnwrap(result.landed.first?.eventId)
 
         XCTAssertTrue(calendar.updateEventTitle(id: id, title: "新标题"))
         XCTAssertEqual(calendar.event(withId: id)?.title, "新标题")
@@ -48,7 +48,7 @@ final class InMemoryCalendarServiceTests: XCTestCase {
         XCTAssertEqual(result.created.count, 3)
         XCTAssertTrue(result.duplicates.isEmpty)
         XCTAssertTrue(result.failed.isEmpty)
-        XCTAssertEqual(calendar.lastCreatedEventIdentifiers.count, 3)
+        XCTAssertEqual(result.landed.filter { $0.wasWritten }.count, 3)
 
         let day = try await calendar.createReviewEvents(
             title: "Swift",
@@ -67,7 +67,7 @@ final class InMemoryCalendarServiceTests: XCTestCase {
         XCTAssertEqual(created.created.count, 1)
         XCTAssertEqual(calendar.fetchEvents(on: day).count, 1)
 
-        let undo = await calendar.undoLastCreation()
+        let undo = await calendar.undoLastCreation(eventIds: created.landed.compactMap(\.eventId))
         XCTAssertTrue(undo.success)
         XCTAssertEqual(undo.deletedCount, 1)
         XCTAssertTrue(calendar.fetchEvents(on: day).isEmpty)
@@ -304,7 +304,7 @@ final class ReviewViewModelCalendarInjectionTests: XCTestCase {
 
         XCTAssertEqual(viewModel.resultType, .success)
         XCTAssertTrue(viewModel.canUndo)
-        XCTAssertEqual(calendar.lastCreatedEventIdentifiers.count, 3)
+        XCTAssertEqual(viewModel.historyEntries.first?.liveEventIdentifiers.count, 3)
         XCTAssertFalse(viewModel.historyEntries.isEmpty)
         XCTAssertEqual(viewModel.historyEntries.first?.title, "注入日历 seam")
         XCTAssertEqual(

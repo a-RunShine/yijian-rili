@@ -12,8 +12,6 @@ final class CalendarManager: ObservableObject, CalendarService, CalendarEventSto
     @Published private(set) var authorizationStatus: CalendarAccessStatus = .notDetermined
     @Published private(set) var availableCalendars: [CalendarInfo] = []
     @Published private(set) var hasCloudCalendar: Bool = false
-    private(set) var lastCreatedEventIdentifiers: [String] = []
-    private(set) var lastCreatedPairs: [(date: Date, id: String)] = []
 
     private init() {
         authorizationStatus = Self.mapAccess(EKEventStore.authorizationStatus(for: .event))
@@ -74,10 +72,6 @@ final class CalendarManager: ObservableObject, CalendarService, CalendarEventSto
             store: self,
             detail: detail
         )
-        if !outcome.createdEventIds.isEmpty {
-            lastCreatedEventIdentifiers = outcome.createdEventIds
-            lastCreatedPairs = outcome.createdPairs
-        }
         return outcome.result
     }
 
@@ -95,10 +89,6 @@ final class CalendarManager: ObservableObject, CalendarService, CalendarEventSto
             store: self,
             detail: detail
         )
-        if !outcome.createdEventIds.isEmpty {
-            lastCreatedEventIdentifiers = outcome.createdEventIds
-            lastCreatedPairs = outcome.createdPairs
-        }
         return outcome.result
     }
 
@@ -147,28 +137,27 @@ final class CalendarManager: ObservableObject, CalendarService, CalendarEventSto
         return event.eventIdentifier ?? UUID().uuidString
     }
 
-    func undoLastCreation() async -> UndoResult {
+    func undoLastCreation(eventIds: [String]) async -> UndoResult {
         var deletedCount = 0
         var alreadyDeletedCount = 0
 
-        for identifier in lastCreatedEventIdentifiers {
-            if let event = eventStore.event(withIdentifier: identifier) {
-                do {
-                    try eventStore.remove(event, span: .thisEvent)
-                    try eventStore.commit()
-                    deletedCount += 1
-                    logger.info("Undo: deleted event with identifier \(identifier)")
-                } catch {
-                    logger.error("Undo: failed to delete event \(identifier): \(error.localizedDescription)")
-                }
-            } else {
+        for identifier in eventIds {
+            guard let event = resolveEvent(id: identifier) else {
                 alreadyDeletedCount += 1
                 logger.warning("Undo: event \(identifier) already deleted or not found")
+                continue
+            }
+            do {
+                try eventStore.remove(event, span: .thisEvent)
+                try eventStore.commit()
+                deletedCount += 1
+                logger.info("Undo: deleted event with identifier \(identifier)")
+            } catch {
+                alreadyDeletedCount += 1
+                logger.error("Undo: failed to delete event \(identifier): \(error.localizedDescription)")
             }
         }
 
-        lastCreatedEventIdentifiers = []
-        lastCreatedPairs = []
         return UndoResult(
             success: deletedCount > 0,
             deletedCount: deletedCount,
