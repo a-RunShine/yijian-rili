@@ -4,7 +4,6 @@ import Foundation
 final class InMemoryCalendarService: CalendarService, CalendarEventStore {
     private var calendars: [CalendarInfo]
     private var events: [CalendarEventInfo] = []
-    private var lastCreated: [String] = []
     private var seq = 0
 
     private(set) var authorizationStatus: CalendarAccessStatus
@@ -106,9 +105,6 @@ final class InMemoryCalendarService: CalendarService, CalendarEventStore {
             store: self,
             detail: detail
         )
-        if !outcome.createdEventIds.isEmpty {
-            lastCreated = outcome.createdEventIds
-        }
         return outcome.result
     }
 
@@ -127,9 +123,6 @@ final class InMemoryCalendarService: CalendarService, CalendarEventStore {
             store: self,
             detail: detail
         )
-        if !outcome.createdEventIds.isEmpty {
-            lastCreated = outcome.createdEventIds
-        }
         return outcome.result
     }
 
@@ -170,26 +163,6 @@ final class InMemoryCalendarService: CalendarService, CalendarEventStore {
             )
         )
         return id
-    }
-
-    func undoLastCreation(eventIds: [String]) async -> UndoResult {
-        var deleted = 0
-        var missing = 0
-        for id in eventIds {
-            let before = events.count
-            events.removeAll { $0.id == id }
-            if events.count < before {
-                deleted += before - events.count
-            } else {
-                missing += 1
-            }
-        }
-        lastCreated = []
-        return UndoResult(
-            success: deleted > 0,
-            deletedCount: deleted,
-            alreadyDeletedCount: missing
-        )
     }
 
     func fetchEvents(on date: Date) -> [CalendarEventInfo] {

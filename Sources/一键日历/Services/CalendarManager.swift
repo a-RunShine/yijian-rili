@@ -137,34 +137,6 @@ final class CalendarManager: ObservableObject, CalendarService, CalendarEventSto
         return event.eventIdentifier ?? UUID().uuidString
     }
 
-    func undoLastCreation(eventIds: [String]) async -> UndoResult {
-        var deletedCount = 0
-        var alreadyDeletedCount = 0
-
-        for identifier in eventIds {
-            guard let event = resolveEvent(id: identifier) else {
-                alreadyDeletedCount += 1
-                logger.warning("Undo: event \(identifier) already deleted or not found")
-                continue
-            }
-            do {
-                try eventStore.remove(event, span: .thisEvent)
-                try eventStore.commit()
-                deletedCount += 1
-                logger.info("Undo: deleted event with identifier \(identifier)")
-            } catch {
-                alreadyDeletedCount += 1
-                logger.error("Undo: failed to delete event \(identifier): \(error.localizedDescription)")
-            }
-        }
-
-        return UndoResult(
-            success: deletedCount > 0,
-            deletedCount: deletedCount,
-            alreadyDeletedCount: alreadyDeletedCount
-        )
-    }
-
     func fetchEvents(from start: Date, to end: Date) -> [CalendarEventInfo] {
         let status = EKEventStore.authorizationStatus(for: .event)
         guard status == .fullAccess else {

@@ -277,7 +277,7 @@ final class UndoAndPruneIdMismatchTests: XCTestCase {
         return (session, history, statuses)
     }
 
-    func testUndoThatDeletesNothingStillDiscardsHistory() async throws {
+    func testUndoSurvivesIdentifierReassignment() async throws {
         let (defaults, name) = suite("no-delete")
         defer { defaults.removePersistentDomain(forName: name) }
         let calendar = InMemoryCalendarService(grantAccessByDefault: true)
@@ -298,6 +298,42 @@ final class UndoAndPruneIdMismatchTests: XCTestCase {
         _ = calendar.reassignAllEventIdentifiersForTesting()
         await session.undo()
 
+        XCTAssertEqual(
+            session.resultType,
+            .success,
+            "撤销现在按事件地址定位，id 被重分配也能删掉"
+        )
+        XCTAssertEqual(
+            calendar.fetchEvents(
+                from: Date().addingTimeInterval(-86_400),
+                to: Date().addingTimeInterval(86_400 * 40)
+            ).count,
+            0,
+            "三条都该被撤销掉"
+        )
+        XCTAssertTrue(
+            history.load().isEmpty,
+            "全部删掉后历史应清空，不留指向已删事件的记录"
+        )
+    }
+
+    func testUndoThatCannotDeleteAnythingKeepsHistory() async throws {
+        let (defaults, name) = suite("undo-refused")
+        defer { defaults.removePersistentDomain(forName: name) }
+        let calendar = InMemoryCalendarService(grantAccessByDefault: true)
+        let (session, history, _) = makeSession(calendar: calendar, defaults: defaults)
+
+        session.title = "撤销被拒"
+        session.baseDate = Date()
+        session.scheduleMode = .review
+        session.reviewIntervals = [3, 7, 30]
+        session.updateReviewDates()
+        await session.create()
+
+        let ids = try XCTUnwrap(history.load().first?.liveEventIdentifiers)
+        calendar.deleteShouldFailForTest = Set(ids)
+        await session.undo()
+
         XCTAssertEqual(session.resultType, .warning)
         XCTAssertEqual(
             calendar.fetchEvents(
@@ -305,7 +341,7 @@ final class UndoAndPruneIdMismatchTests: XCTestCase {
                 to: Date().addingTimeInterval(86_400 * 40)
             ).count,
             3,
-            "重分配后撤销事件数为 0"
+            "一条都删不掉时日历应原样不动"
         )
         XCTAssertFalse(
             history.load().isEmpty,
@@ -498,9 +534,6 @@ final class GatedCalendarService: CalendarService {
         try await inner.createSingleEvent(title: title, date: date, calendarId: calendarId, detail: detail)
     }
 
-    func undoLastCreation(eventIds: [String]) async -> UndoResult {
-        await inner.undoLastCreation(eventIds: eventIds)
-    }
     func fetchEvents(on date: Date) -> [CalendarEventInfo] { inner.fetchEvents(on: date) }
     func fetchEvents(from start: Date, to end: Date) -> [CalendarEventInfo] { inner.fetchEvents(from: start, to: end) }
     func event(withId id: String) -> CalendarEventInfo? { inner.event(withId: id) }

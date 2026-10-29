@@ -72,12 +72,6 @@ struct LandedEvent: Equatable, Sendable {
     var wasDuplicate: Bool { outcome == .duplicate }
 }
 
-struct UndoResult: Sendable {
-    var success: Bool
-    var deletedCount: Int
-    var alreadyDeletedCount: Int
-}
-
 enum SharedDetailUpdateOutcome: Equatable, Sendable {
     case unavailable
     case updated(updated: Int, missing: Int)

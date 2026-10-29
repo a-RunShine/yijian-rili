@@ -46,7 +46,7 @@ final class ReviewSession {
 
     private var lastCreatedTitle: String?
     private var lastCreatedBaseDate: Date?
-    private var lastCreatedEventIds: [String] = []
+    private var lastCreatedRequests: [EventRemovalRequest] = []
     private var lastRecordedHistoryEntryID: UUID?
 
     private(set) var shouldPlayHaptic: Bool = false
@@ -590,30 +590,60 @@ final class ReviewSession {
     }
 
     func undo() async {
-        let undo = await calendar.undoLastCreation(eventIds: lastCreatedEventIds)
         let recordedID = lastRecordedHistoryEntryID
+        let report = DeletionPlan(calendar: calendar).execute(requests: lastCreatedRequests)
 
-        if undo.success {
+        if report.isSuccess {
             resultMessage = String(
                 format: NSLocalizedString("undo_success_count", comment: ""),
-                undo.deletedCount
+                report.removedCount
             )
             resultType = .success
-        } else {
-            resultMessage = String(format: NSLocalizedString("undo_partial", comment: ""), "\(undo.alreadyDeletedCount)")
-            resultType = .warning
+            discardUndoneRecord(recordedID)
+            return
         }
 
-        if let recordedID, undo.deletedCount > 0 || undo.success {
-            if let entry = outcomes.recordedEntries().first(where: { $0.id == recordedID }) {
-                occurrenceStatuses.clear(ids: statusKeys(for: entry))
-            }
-            outcomes.discardRecorded(id: recordedID)
-            lastRecordedHistoryEntryID = nil
-            lastCreatedEventIds = []
-            canUndo = false
-            canRecreate = false
+        if report.removedCount == 0 {
+            presentUndoRefusal(report)
+            return
         }
+
+        resultMessage = String(
+            format: NSLocalizedString("undo_partial", comment: ""),
+            "\(report.refused.count)"
+        )
+        resultType = .warning
+        keepUnremovedForRetry(report, recordedID: recordedID)
+    }
+
+    private func discardUndoneRecord(_ recordedID: UUID?) {
+        if let recordedID,
+           let entry = outcomes.recordedEntries().first(where: { $0.id == recordedID }) {
+            occurrenceStatuses.clear(ids: statusKeys(for: entry))
+            outcomes.discardRecorded(id: recordedID)
+        }
+        lastRecordedHistoryEntryID = nil
+        lastCreatedRequests = []
+        canUndo = false
+        canRecreate = false
+    }
+
+    private func keepUnremovedForRetry(_ report: DeletionPlan.Report, recordedID: UUID?) {
+        let refused = Set(report.refusedStoredIds)
+        lastCreatedRequests = report.refused
+            .map { EventRemovalRequest(storedId: $0.target.storedId, address: $0.target.address) }
+        guard let recordedID,
+              let entry = outcomes.recordedEntries().first(where: { $0.id == recordedID }) else {
+            return
+        }
+        let kept = entry.createdEventIdentifiers.filter { refused.contains($0) || $0.isEmpty }
+        outcomes.replaceCreatedEventIdentifiers(id: recordedID, identifiers: kept)
+    }
+
+    private func presentUndoRefusal(_ report: DeletionPlan.Report) {
+        guard let reason = report.refusalReasons.first else { return }
+        resultMessage = reason.message
+        resultType = .warning
     }
 
     private static func writtenEvents(in result: CreateEventsResult) -> [LandedEvent] {
@@ -634,7 +664,10 @@ final class ReviewSession {
         let ordered = landed.sorted { $0.address.day < $1.address.day }
         lastCreatedTitle = trimmed
         lastCreatedBaseDate = writtenBaseDate
-        lastCreatedEventIds = ordered.compactMap(\.eventId)
+        lastCreatedRequests = ordered.compactMap { landed in
+            guard let id = landed.eventId else { return nil }
+            return EventRemovalRequest(storedId: id, address: landed.address)
+        }
         canRecreate = true
         canUndo = true
         let entry = HistoryEntry(

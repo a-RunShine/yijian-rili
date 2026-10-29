@@ -60,16 +60,19 @@ final class InMemoryCalendarServiceTests: XCTestCase {
         XCTAssertEqual(day.created.count, 3)
     }
 
-    func testCreateSingleAndUndo() async throws {
+    func testCreateSingleThenDeleteByAddressRestoresEmptyDay() async throws {
         let calendar = InMemoryCalendarService()
         let day = date(2026, 3, 1)
         let created = try await calendar.createSingleEvent(title: "Meeting", date: day, calendarId: nil)
         XCTAssertEqual(created.created.count, 1)
         XCTAssertEqual(calendar.fetchEvents(on: day).count, 1)
 
-        let undo = await calendar.undoLastCreation(eventIds: created.landed.compactMap(\.eventId))
-        XCTAssertTrue(undo.success)
-        XCTAssertEqual(undo.deletedCount, 1)
+        let landed = try XCTUnwrap(created.landed.first)
+        let report = DeletionPlan(calendar: calendar)
+            .execute(requests: [
+                EventRemovalRequest(storedId: landed.eventId, address: landed.address)
+            ])
+        XCTAssertEqual(report.removedCount, 1)
         XCTAssertTrue(calendar.fetchEvents(on: day).isEmpty)
     }
 

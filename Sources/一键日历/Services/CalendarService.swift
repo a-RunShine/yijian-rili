@@ -28,8 +28,6 @@ protocol CalendarService: AnyObject {
         detail: String?
     ) async throws -> CreateEventsResult
 
-    func undoLastCreation(eventIds: [String]) async -> UndoResult
-
     func fetchEvents(on date: Date) -> [CalendarEventInfo]
     func fetchEvents(from start: Date, to end: Date) -> [CalendarEventInfo]
     func event(withId id: String) -> CalendarEventInfo?

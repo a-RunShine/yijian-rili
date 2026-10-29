@@ -475,9 +475,6 @@ final class RangeQueryCalendar: CalendarService {
         try await inner.createSingleEvent(title: title, date: date, calendarId: calendarId, detail: detail)
     }
 
-    func undoLastCreation(eventIds: [String]) async -> UndoResult {
-        await inner.undoLastCreation(eventIds: eventIds)
-    }
 
     func fetchEvents(on date: Date) -> [CalendarEventInfo] {
         dayFetches += 1
