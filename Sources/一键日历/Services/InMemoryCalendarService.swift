@@ -187,9 +187,8 @@ final class InMemoryCalendarService: CalendarService, CalendarEventStore {
     }
 
     @discardableResult
-    func deleteEvent(id: String) -> Bool {
+    func removeExternally(id: String) -> Bool {
         if eventsUnreadable { return false }
-        if deleteShouldFailForTest.contains(id) { return false }
         let before = events.count
         events.removeAll { $0.id == id }
         return events.count < before

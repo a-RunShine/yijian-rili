@@ -487,7 +487,6 @@ final class RangeQueryCalendar: CalendarService {
     }
 
     func event(withId id: String) -> CalendarEventInfo? { inner.event(withId: id) }
-    func deleteEvent(id: String) -> Bool { inner.deleteEvent(id: id) }
     func event(matching address: EventAddress) -> CalendarEventInfo? { inner.event(matching: address) }
     func removeEvent(at address: EventAddress, preferredId: String?) -> EventRemovalOutcome {
         inner.removeEvent(at: address, preferredId: preferredId)

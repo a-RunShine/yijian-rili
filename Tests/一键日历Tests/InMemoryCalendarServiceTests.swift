@@ -81,7 +81,7 @@ final class InMemoryCalendarServiceTests: XCTestCase {
         _ = try await calendar.createSingleEvent(title: "Alpha Beta", date: Date(), calendarId: nil)
         let hits = calendar.searchEvents(query: "alpha", daysAhead: 90)
         XCTAssertEqual(hits.count, 1)
-        XCTAssertTrue(calendar.deleteEvent(id: hits[0].id))
+        XCTAssertTrue(calendar.removeExternally(id: hits[0].id))
         XCTAssertTrue(calendar.searchEvents(query: "alpha", daysAhead: 90).isEmpty)
     }
 
@@ -529,7 +529,7 @@ final class ReviewViewModelCalendarInjectionTests: XCTestCase {
         let ids = batch.createdEventIdentifiers
         XCTAssertEqual(ids.count, 3)
         for id in ids {
-            XCTAssertTrue(calendar.deleteEvent(id: id))
+            XCTAssertTrue(calendar.removeExternally(id: id))
         }
 
         viewModel.searchText = marker
@@ -556,7 +556,7 @@ final class ReviewViewModelCalendarInjectionTests: XCTestCase {
 
         let batch = try XCTUnwrap(viewModel.historyEntries.first(where: { $0.title == marker }))
         let ids = batch.createdEventIdentifiers
-        XCTAssertTrue(calendar.deleteEvent(id: ids[0]))
+        XCTAssertTrue(calendar.removeExternally(id: ids[0]))
 
         let listed = viewModel.todayCreatedEntries
         let after = try XCTUnwrap(listed.first(where: { $0.title == marker }))
@@ -582,7 +582,7 @@ final class ReviewViewModelCalendarInjectionTests: XCTestCase {
         let batch = try XCTUnwrap(viewModel.historyEntries.first(where: { $0.title == marker }))
         let ids = batch.createdEventIdentifiers
         for id in ids {
-            XCTAssertTrue(calendar.deleteEvent(id: id))
+            XCTAssertTrue(calendar.removeExternally(id: id))
         }
 
         viewModel.loadDisplayedDayEvents()
@@ -1242,8 +1242,8 @@ final class ReviewViewModelCalendarInjectionTests: XCTestCase {
 
         let batch = try XCTUnwrap(viewModel.historyEntries.first(where: { $0.title == marker }))
         let ids = batch.createdEventIdentifiers
-        XCTAssertTrue(calendar.deleteEvent(id: ids[1]))
-        XCTAssertTrue(calendar.deleteEvent(id: ids[2]))
+        XCTAssertTrue(calendar.removeExternally(id: ids[1]))
+        XCTAssertTrue(calendar.removeExternally(id: ids[2]))
 
         viewModel.loadDisplayedDayEvents()
 

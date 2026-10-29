@@ -170,23 +170,6 @@ final class CalendarManager: ObservableObject, CalendarService, CalendarEventSto
         return Self.mapEvent(event)
     }
 
-    @discardableResult
-    func deleteEvent(id: String) -> Bool {
-        guard let event = resolveEvent(id: id) else {
-            logger.warning("deleteEvent: event \(id) not found after refresh")
-            return false
-        }
-        do {
-            try eventStore.remove(event, span: .thisEvent)
-            try eventStore.commit()
-            logger.info("Deleted event \(id) for \(event.startDate.formattedChinese())")
-            return true
-        } catch {
-            logger.error("Failed to delete event: \(error.localizedDescription)")
-            return false
-        }
-    }
-
     private func resolveEvent(id: String) -> EKEvent? {
         if let direct = eventStore.event(withIdentifier: id) {
             return direct

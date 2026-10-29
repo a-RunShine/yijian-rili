@@ -31,8 +31,6 @@ protocol CalendarService: AnyObject {
     func fetchEvents(on date: Date) -> [CalendarEventInfo]
     func fetchEvents(from start: Date, to end: Date) -> [CalendarEventInfo]
     func event(withId id: String) -> CalendarEventInfo?
-    @discardableResult
-    func deleteEvent(id: String) -> Bool
     func removeEvent(at address: EventAddress, preferredId: String?) -> EventRemovalOutcome
     func event(matching address: EventAddress) -> CalendarEventInfo?
     func searchEvents(query: String, daysAhead: Int) -> [CalendarEventInfo]

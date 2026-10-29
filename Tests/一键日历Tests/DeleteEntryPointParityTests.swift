@@ -115,7 +115,7 @@ final class DeleteEntryPointParityTests: XCTestCase {
         let batch = try await makeSeries(viewModel, marker: marker)
         let ids = batch.createdEventIdentifiers
 
-        XCTAssertTrue(calendar.deleteEvent(id: ids[1]))
+        XCTAssertTrue(calendar.removeExternally(id: ids[1]))
 
         let outcome = viewModel.deleteSearchHitMembers(ids: ids)
         XCTAssertEqual(outcome.deletedCount, 2, "另两条应正常删掉")

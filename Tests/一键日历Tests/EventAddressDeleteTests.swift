@@ -88,7 +88,7 @@ final class EventAddressDeleteTests: XCTestCase {
         let victim = try XCTUnwrap(batch.createdEventIdentifiers.first)
         let hit = try XCTUnwrap(viewModel.projectedHit(forEventId: victim, on: day))
 
-        XCTAssertTrue(calendar.deleteEvent(id: victim), "先在外部删掉这条")
+        XCTAssertTrue(calendar.removeExternally(id: victim), "先在外部删掉这条")
 
         XCTAssertTrue(
             viewModel.deleteSearchHit(hit),

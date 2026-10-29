@@ -365,7 +365,7 @@ final class UndoAndPruneIdMismatchTests: XCTestCase {
 
         let remapped = calendar.reassignAllEventIdentifiersForTesting()
         let fresh = try XCTUnwrap(remapped[ids[0]])
-        XCTAssertTrue(calendar.deleteEvent(id: fresh))
+        XCTAssertTrue(calendar.removeExternally(id: fresh))
 
         let outcome = session.removeEventsFromRecorded(ids: [fresh], reason: .userDeletedOccurrence)
 
@@ -537,7 +537,6 @@ final class GatedCalendarService: CalendarService {
     func fetchEvents(on date: Date) -> [CalendarEventInfo] { inner.fetchEvents(on: date) }
     func fetchEvents(from start: Date, to end: Date) -> [CalendarEventInfo] { inner.fetchEvents(from: start, to: end) }
     func event(withId id: String) -> CalendarEventInfo? { inner.event(withId: id) }
-    func deleteEvent(id: String) -> Bool { inner.deleteEvent(id: id) }
     func event(matching address: EventAddress) -> CalendarEventInfo? { inner.event(matching: address) }
     func removeEvent(at address: EventAddress, preferredId: String?) -> EventRemovalOutcome {
         inner.removeEvent(at: address, preferredId: preferredId)
