@@ -4,12 +4,12 @@ import Foundation
 final class InMemoryCalendarService: CalendarService, CalendarEventStore {
     private var calendars: [CalendarInfo]
     private var events: [CalendarEventInfo] = []
-    private var lastCreated: [String] = []
     private var seq = 0
 
     private(set) var authorizationStatus: CalendarAccessStatus
     var eventsUnreadable = false
     var deleteShouldFailForTest: Set<String> = []
+    var readOnlyCalendarIds: Set<String> = []
 
     func setAuthorizationStatusForTesting(_ status: CalendarAccessStatus) {
         authorizationStatus = status
@@ -35,8 +35,6 @@ final class InMemoryCalendarService: CalendarService, CalendarEventStore {
         }
         return mapping
     }
-    private(set) var lastCreatedEventIdentifiers: [String] = []
-    private(set) var lastCreatedPairs: [(date: Date, id: String)] = []
 
     var availableCalendars: [CalendarInfo] {
         authorizationStatus == .fullAccess ? Self.sortCalendars(calendars) : []
@@ -107,11 +105,6 @@ final class InMemoryCalendarService: CalendarService, CalendarEventStore {
             store: self,
             detail: detail
         )
-        if !outcome.createdEventIds.isEmpty {
-            lastCreated = outcome.createdEventIds
-            lastCreatedEventIdentifiers = outcome.createdEventIds
-            lastCreatedPairs = outcome.createdPairs
-        }
         return outcome.result
     }
 
@@ -130,11 +123,6 @@ final class InMemoryCalendarService: CalendarService, CalendarEventStore {
             store: self,
             detail: detail
         )
-        if !outcome.createdEventIds.isEmpty {
-            lastCreated = outcome.createdEventIds
-            lastCreatedEventIdentifiers = outcome.createdEventIds
-            lastCreatedPairs = outcome.createdPairs
-        }
         return outcome.result
     }
 
@@ -177,28 +165,6 @@ final class InMemoryCalendarService: CalendarService, CalendarEventStore {
         return id
     }
 
-    func undoLastCreation() async -> UndoResult {
-        var deleted = 0
-        var missing = 0
-        for id in lastCreated {
-            let before = events.count
-            events.removeAll { $0.id == id }
-            if events.count < before {
-                deleted += before - events.count
-            } else {
-                missing += 1
-            }
-        }
-        lastCreated = []
-        lastCreatedEventIdentifiers = []
-        lastCreatedPairs = []
-        return UndoResult(
-            success: deleted > 0,
-            deletedCount: deleted,
-            alreadyDeletedCount: missing
-        )
-    }
-
     func fetchEvents(on date: Date) -> [CalendarEventInfo] {
         let start = Calendar.current.startOfDay(for: date)
         guard let end = Calendar.current.date(byAdding: .day, value: 1, to: start) else { return [] }
@@ -221,12 +187,44 @@ final class InMemoryCalendarService: CalendarService, CalendarEventStore {
     }
 
     @discardableResult
-    func deleteEvent(id: String) -> Bool {
+    func removeExternally(id: String) -> Bool {
         if eventsUnreadable { return false }
-        if deleteShouldFailForTest.contains(id) { return false }
         let before = events.count
         events.removeAll { $0.id == id }
         return events.count < before
+    }
+
+    func event(matching address: EventAddress) -> CalendarEventInfo? {
+        if eventsUnreadable { return nil }
+        return events.first { address.matches($0) }
+    }
+
+    func removeEvent(at address: EventAddress, preferredId: String?) -> EventRemovalOutcome {
+        if authorizationStatus != .fullAccess { return .refused(.noAccess) }
+        if eventsUnreadable { return .refused(.seamRefused("events unreadable")) }
+
+        let target: CalendarEventInfo
+        if let preferredId,
+           let hinted = events.first(where: { $0.id == preferredId }),
+           address.matches(hinted) {
+            target = hinted
+        } else {
+            let matches = events.filter { address.matches($0) }
+            switch matches.count {
+            case 0: return .alreadyAbsent
+            case 1: target = matches[0]
+            default: return .refused(.ambiguousMatch(matches.count))
+            }
+        }
+
+        if let calendarId = target.calendarId, readOnlyCalendarIds.contains(calendarId) {
+            return .refused(.readOnlyCalendar)
+        }
+        if deleteShouldFailForTest.contains(target.id) {
+            return .refused(.seamRefused("injected delete failure"))
+        }
+        events.removeAll { $0.id == target.id }
+        return .removed(eventId: target.id)
     }
 
     func eventNotes(id: String) -> String? {

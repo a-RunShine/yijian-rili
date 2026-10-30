@@ -6,7 +6,7 @@ final class SearchHitDeleteFlow: ObservableObject {
     private var historyEntryPendingDelete: HistoryEntry?
 
     func request(_ hit: SearchHit, in viewModel: ReviewViewModel) {
-        guard !hit.needsSelectiveDelete else {
+        guard !hit.asksForDeleteScope else {
             viewModel.beginSeriesDelete(hit)
             return
         }
@@ -16,7 +16,7 @@ final class SearchHitDeleteFlow: ObservableObject {
     func requestDeletingHistory(_ entry: HistoryEntry, in viewModel: ReviewViewModel) {
         historyEntryPendingDelete = entry
         let hit = viewModel.hit(forHistoryEntry: entry)
-        guard !hit.needsSelectiveDelete else {
+        guard !hit.asksForDeleteScope else {
             viewModel.beginSeriesDelete(hit)
             return
         }

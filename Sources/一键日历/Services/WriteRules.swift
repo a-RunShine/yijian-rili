@@ -54,6 +54,10 @@ enum ReviewNoteKey {
         "第\(zeroBasedIndex + 1)次复习"
     }
 
+    static func key(for slot: Int, of type: HistoryEntry.ScheduleType) -> String {
+        type == .review ? forIndex(slot) : single
+    }
+
     static let single = ""
 }
 

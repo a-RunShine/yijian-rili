@@ -12,8 +12,6 @@ final class CalendarManager: ObservableObject, CalendarService, CalendarEventSto
     @Published private(set) var authorizationStatus: CalendarAccessStatus = .notDetermined
     @Published private(set) var availableCalendars: [CalendarInfo] = []
     @Published private(set) var hasCloudCalendar: Bool = false
-    private(set) var lastCreatedEventIdentifiers: [String] = []
-    private(set) var lastCreatedPairs: [(date: Date, id: String)] = []
 
     private init() {
         authorizationStatus = Self.mapAccess(EKEventStore.authorizationStatus(for: .event))
@@ -74,10 +72,6 @@ final class CalendarManager: ObservableObject, CalendarService, CalendarEventSto
             store: self,
             detail: detail
         )
-        if !outcome.createdEventIds.isEmpty {
-            lastCreatedEventIdentifiers = outcome.createdEventIds
-            lastCreatedPairs = outcome.createdPairs
-        }
         return outcome.result
     }
 
@@ -95,10 +89,6 @@ final class CalendarManager: ObservableObject, CalendarService, CalendarEventSto
             store: self,
             detail: detail
         )
-        if !outcome.createdEventIds.isEmpty {
-            lastCreatedEventIdentifiers = outcome.createdEventIds
-            lastCreatedPairs = outcome.createdPairs
-        }
         return outcome.result
     }
 
@@ -147,35 +137,6 @@ final class CalendarManager: ObservableObject, CalendarService, CalendarEventSto
         return event.eventIdentifier ?? UUID().uuidString
     }
 
-    func undoLastCreation() async -> UndoResult {
-        var deletedCount = 0
-        var alreadyDeletedCount = 0
-
-        for identifier in lastCreatedEventIdentifiers {
-            if let event = eventStore.event(withIdentifier: identifier) {
-                do {
-                    try eventStore.remove(event, span: .thisEvent)
-                    try eventStore.commit()
-                    deletedCount += 1
-                    logger.info("Undo: deleted event with identifier \(identifier)")
-                } catch {
-                    logger.error("Undo: failed to delete event \(identifier): \(error.localizedDescription)")
-                }
-            } else {
-                alreadyDeletedCount += 1
-                logger.warning("Undo: event \(identifier) already deleted or not found")
-            }
-        }
-
-        lastCreatedEventIdentifiers = []
-        lastCreatedPairs = []
-        return UndoResult(
-            success: deletedCount > 0,
-            deletedCount: deletedCount,
-            alreadyDeletedCount: alreadyDeletedCount
-        )
-    }
-
     func fetchEvents(from start: Date, to end: Date) -> [CalendarEventInfo] {
         let status = EKEventStore.authorizationStatus(for: .event)
         guard status == .fullAccess else {
@@ -209,23 +170,6 @@ final class CalendarManager: ObservableObject, CalendarService, CalendarEventSto
         return Self.mapEvent(event)
     }
 
-    @discardableResult
-    func deleteEvent(id: String) -> Bool {
-        guard let event = resolveEvent(id: id) else {
-            logger.warning("deleteEvent: event \(id) not found after refresh")
-            return false
-        }
-        do {
-            try eventStore.remove(event, span: .thisEvent)
-            try eventStore.commit()
-            logger.info("Deleted event \(id) for \(event.startDate.formattedChinese())")
-            return true
-        } catch {
-            logger.error("Failed to delete event: \(error.localizedDescription)")
-            return false
-        }
-    }
-
     private func resolveEvent(id: String) -> EKEvent? {
         if let direct = eventStore.event(withIdentifier: id) {
             return direct
@@ -246,6 +190,87 @@ final class CalendarManager: ObservableObject, CalendarService, CalendarEventSto
         let candidates = Set([id, Self.strippingSourcePrefix(id)].compactMap { $0 })
         return eventStore.events(matching: predicate)
             .first { candidates.contains($0.eventIdentifier) }
+    }
+
+    func event(matching address: EventAddress) -> CalendarEventInfo? {
+        guard EKEventStore.authorizationStatus(for: .event) == .fullAccess else { return nil }
+        let dayStart = Calendar.current.startOfDay(for: address.day)
+        guard let dayEnd = Calendar.current.date(byAdding: .day, value: 1, to: dayStart) else {
+            return nil
+        }
+        let predicate = eventStore.predicateForEvents(
+            withStart: dayStart,
+            end: dayEnd,
+            calendars: nil
+        )
+        let candidates = eventStore.events(matching: predicate)
+            .filter { address.matches(Self.mapEvent($0)) }
+        guard let event = candidates.first else { return nil }
+        return Self.mapEvent(event)
+    }
+
+    func removeEvent(at address: EventAddress, preferredId: String?) -> EventRemovalOutcome {
+        guard EKEventStore.authorizationStatus(for: .event) == .fullAccess else {
+            return .refused(.noAccess)
+        }
+
+        if let preferredId,
+           let hinted = resolveEvent(id: preferredId),
+           address.matches(Self.mapEvent(hinted)) {
+            return remove(resolved: hinted, address: address)
+        }
+
+        switch locateEvents(matching: address) {
+        case .none:
+            return .alreadyAbsent
+        case .one(let located):
+            return remove(resolved: located, address: address)
+        case .many(let matches):
+            return .refused(.ambiguousMatch(matches.count))
+        }
+    }
+
+    private enum LocationResult {
+        case none
+        case one(EKEvent)
+        case many([EKEvent])
+    }
+
+    private func locateEvents(matching address: EventAddress) -> LocationResult {
+        let dayStart = Calendar.current.startOfDay(for: address.day)
+        guard let dayEnd = Calendar.current.date(byAdding: .day, value: 1, to: dayStart) else {
+            return .none
+        }
+        let predicate = eventStore.predicateForEvents(
+            withStart: dayStart,
+            end: dayEnd,
+            calendars: nil
+        )
+        let matches = eventStore.events(matching: predicate)
+            .filter { address.matches(Self.mapEvent($0)) }
+        switch matches.count {
+        case 0: return .none
+        case 1: return .one(matches[0])
+        default: return .many(matches)
+        }
+    }
+
+    private func remove(resolved event: EKEvent, address: EventAddress) -> EventRemovalOutcome {
+        guard let calendar = event.calendar else {
+            return .refused(.seamRefused("event has no calendar"))
+        }
+        guard calendar.allowsContentModifications else {
+            return .refused(.readOnlyCalendar)
+        }
+        do {
+            try eventStore.remove(event, span: .thisEvent)
+            try eventStore.commit()
+            logger.info("Deleted event for \(address.day.formattedChinese())")
+            return .removed(eventId: event.eventIdentifier ?? "")
+        } catch {
+            logger.error("Failed to delete event: \(error.localizedDescription)")
+            return .refused(.seamRefused(error.localizedDescription))
+        }
     }
 
     private static func strippingSourcePrefix(_ id: String) -> String? {

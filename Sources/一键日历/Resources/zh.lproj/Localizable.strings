@@ -245,6 +245,10 @@
 "series_day_row_member_hint" = "系列共 %@ 次复习";
 "delete_failed_all" = "删除没有成功。日程可能正在同步，稍后再试一次。";
 "delete_failed_partial" = "已删除 %@ 条，%@ 条没删掉。稍后再试一次。";
+"delete_failed_read_only" = "这个日历不允许修改，无法删除。换一个可写的日历再试。";
+"delete_failed_no_access" = "没有日历访问权限，无法删除。请在系统设置里允许访问日历。";
+"delete_failed_seam" = "系统拒绝了这次删除：%@";
+"delete_failed_ambiguous" = "有 %@ 条日程同时对得上这条记录，无法确定删哪一条。请到系统的日历应用里手动处理。";
 "series_delete_title" = "选择要删除的复习";
 "series_delete_subtitle" = "「%@」";
 "series_delete_confirm" = "删除所选";

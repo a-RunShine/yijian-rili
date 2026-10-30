@@ -69,9 +69,14 @@ final class HistoryDeleteReportsFailureTests: XCTestCase {
 
         let remaining = try XCTUnwrap(viewModel.historyEntries.first(where: { $0.title == marker }))
         XCTAssertEqual(
-            remaining.createdEventIdentifiers,
+            remaining.liveEventIdentifiers,
             [stuck],
             "只有删不掉的那条该留在记录里"
+        )
+        XCTAssertEqual(
+            remaining.createdEventIdentifiers.count,
+            remaining.reviewDates.count,
+            "记录里的槽位数量必须与复习日数量一致"
         )
     }
 

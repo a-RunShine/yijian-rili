@@ -267,7 +267,11 @@ final class ReviewBoardTests: XCTestCase {
         await viewModel.createReviewSchedule()
 
         XCTAssertEqual(viewModel.resultType, .error)
-        XCTAssertTrue(calendar.lastCreatedEventIdentifiers.isEmpty)
+        XCTAssertTrue(viewModel.historyEntries.isEmpty)
+        XCTAssertTrue(
+            calendar.fetchEvents(from: date(2026, 10, 1), to: date(2026, 10, 31)).isEmpty,
+            "标题为空时不该往日历里写任何东西"
+        )
         XCTAssertEqual(viewModel.baseDate, date(2026, 10, 20))
     }
 
@@ -304,7 +308,11 @@ final class ReviewBoardTests: XCTestCase {
 
         XCTAssertEqual(viewModel.resultType, .error)
         XCTAssertEqual(viewModel.reviewIntervals, [3, 7, 30])
-        XCTAssertTrue(calendar.lastCreatedEventIdentifiers.isEmpty)
+        XCTAssertTrue(viewModel.historyEntries.isEmpty)
+        XCTAssertTrue(
+            calendar.fetchEvents(from: date(2026, 10, 1), to: date(2026, 10, 31)).isEmpty,
+            "间隔草稿非法时不该往日历里写任何东西"
+        )
         XCTAssertEqual(viewModel.customIntervalDraft, "abc")
         XCTAssertEqual(viewModel.baseDate, date(2026, 10, 20))
     }
@@ -325,7 +333,7 @@ final class ReviewBoardTests: XCTestCase {
 
         let target = try XCTUnwrap(viewModel.eventsByDay[today]?.first)
         let hit = try XCTUnwrap(viewModel.projectedHit(forEventId: target.id, on: today))
-        XCTAssertFalse(hit.needsSelectiveDelete)
+        XCTAssertFalse(hit.asksForDeleteScope)
         XCTAssertTrue(viewModel.deleteSearchHit(hit))
 
         let monthStart = try XCTUnwrap(
@@ -352,7 +360,7 @@ final class ReviewBoardTests: XCTestCase {
         let firstReviewDay = date(2026, 10, 23)
         let member = try XCTUnwrap(viewModel.eventsByDay[firstReviewDay]?.first)
         let hit = try XCTUnwrap(viewModel.projectedHit(forEventId: member.id, on: firstReviewDay))
-        XCTAssertTrue(hit.needsSelectiveDelete)
+        XCTAssertTrue(hit.asksForDeleteScope)
         XCTAssertEqual(hit.members.count, 3)
 
         viewModel.beginSeriesDelete(hit)
@@ -443,7 +451,6 @@ final class RangeQueryCalendar: CalendarService {
     var authorizationStatus: CalendarAccessStatus { inner.authorizationStatus }
     var availableCalendars: [CalendarInfo] { inner.availableCalendars }
     var hasCloudCalendar: Bool { inner.hasCloudCalendar }
-    var lastCreatedEventIdentifiers: [String] { inner.lastCreatedEventIdentifiers }
 
     func requestAccess() async -> Bool { await inner.requestAccess() }
     func refreshAvailableCalendars() { inner.refreshAvailableCalendars() }
@@ -476,7 +483,6 @@ final class RangeQueryCalendar: CalendarService {
         try await inner.createSingleEvent(title: title, date: date, calendarId: calendarId, detail: detail)
     }
 
-    func undoLastCreation() async -> UndoResult { await inner.undoLastCreation() }
 
     func fetchEvents(on date: Date) -> [CalendarEventInfo] {
         dayFetches += 1
@@ -489,7 +495,10 @@ final class RangeQueryCalendar: CalendarService {
     }
 
     func event(withId id: String) -> CalendarEventInfo? { inner.event(withId: id) }
-    func deleteEvent(id: String) -> Bool { inner.deleteEvent(id: id) }
+    func event(matching address: EventAddress) -> CalendarEventInfo? { inner.event(matching: address) }
+    func removeEvent(at address: EventAddress, preferredId: String?) -> EventRemovalOutcome {
+        inner.removeEvent(at: address, preferredId: preferredId)
+    }
     func searchEvents(query: String, daysAhead: Int) -> [CalendarEventInfo] {
         inner.searchEvents(query: query, daysAhead: daysAhead)
     }

@@ -80,39 +80,6 @@ final class DayBrowseModel {
         searchResults = calendar.searchEvents(query: trimmed, daysAhead: 90)
     }
 
-    @discardableResult
-    func deleteSearchResult(_ event: CalendarEventInfo) -> Bool {
-        deleteEvents(ids: [event.id]).deletedCount > 0
-    }
-
-    @discardableResult
-    func deleteEvents(ids: [String]) -> (deletedCount: Int, missingCount: Int) {
-        let outcome = deleteEventsDetail(ids: ids)
-        return (outcome.deletedIDs.count, outcome.failedIDs.count)
-    }
-
-    func deleteEventsDetail(ids: [String]) -> (deletedIDs: [String], failedIDs: [String]) {
-        var deletedIDs: [String] = []
-        var failedIDs: [String] = []
-        let idSet = Set(ids)
-        for id in idSet {
-            if calendar.deleteEvent(id: id) {
-                deletedIDs.append(id)
-            } else {
-                failedIDs.append(id)
-            }
-        }
-        if !deletedIDs.isEmpty {
-            let deletedSet = Set(deletedIDs)
-            searchResults.removeAll { deletedSet.contains($0.id) }
-            if let selected = selectedSearchResult, deletedSet.contains(selected.id) {
-                selectedSearchResult = nil
-            }
-            loadDisplayedDayEvents()
-        }
-        return (deletedIDs, failedIDs)
-    }
-
     func reloadAfterExternalDeletion(deletedIDs: [String]) {
         guard !deletedIDs.isEmpty else {
             loadDisplayedDayEvents()

@@ -61,7 +61,7 @@ final class SeriesDeleteSingleMemberTests: XCTestCase {
         viewModel.deleteSearchHitMembers(ids: [victim.id])
 
         let remaining = try XCTUnwrap(viewModel.historyEntries.first(where: { $0.title == marker }))
-        XCTAssertEqual(remaining.createdEventIdentifiers.count, 2)
+        XCTAssertEqual(remaining.liveEventIdentifiers.count, 2)
         XCTAssertTrue(
             viewModel.canMarkOccurrence(eventId: survivor.id),
             "剩下的成员应仍能被识别为复习系列"
@@ -105,7 +105,7 @@ final class SeriesDeleteSingleMemberTests: XCTestCase {
 
         let remaining = try XCTUnwrap(viewModel.historyEntries.first(where: { $0.title == marker }))
         XCTAssertEqual(
-            remaining.createdEventIdentifiers.count,
+            remaining.liveEventIdentifiers.count,
             before - 1,
             "历史只应修剪真正删掉的事件，未删成功的不应被记录成已删除"
         )
@@ -126,7 +126,7 @@ final class SeriesDeleteSingleMemberTests: XCTestCase {
         let remaining = try XCTUnwrap(viewModel.historyEntries.first(where: { $0.title == marker }))
         XCTAssertEqual(outcome.deletedCount, 0, "日历删不掉时不应报告已删")
         XCTAssertEqual(
-            remaining.createdEventIdentifiers.count,
+            remaining.liveEventIdentifiers.count,
             3,
             "日历没删成功时，历史不应把这个 id 当作已删除修剪掉"
         )

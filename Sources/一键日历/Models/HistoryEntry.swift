@@ -77,6 +77,20 @@ struct HistoryEntry: Identifiable, Codable {
         )
     }
 
+    var liveEventIdentifiers: [String] {
+        createdEventIdentifiers.filter { !$0.isEmpty }
+    }
+
+    var hasLiveEventIdentifiers: Bool {
+        createdEventIdentifiers.contains { !$0.isEmpty }
+    }
+
+    func eventIdentifier(forSlot slot: Int) -> String? {
+        guard createdEventIdentifiers.indices.contains(slot) else { return nil }
+        let value = createdEventIdentifiers[slot]
+        return value.isEmpty ? nil : value
+    }
+
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         id = try c.decode(UUID.self, forKey: .id)

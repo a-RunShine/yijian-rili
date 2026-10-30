@@ -55,14 +55,21 @@ enum CalendarWriteOrchestrator {
 
         for item in items {
             let day = Calendar.current.startOfDay(for: item.date)
+            let address = EventAddress(
+                day: day,
+                title: title,
+                notesKey: item.notesKey,
+                calendarId: calendarId
+            )
             do {
                 let existing = try store.events(calendarId: calendarId, day: day)
-                if DuplicateMatch.isDuplicate(
+                let duplicated = DuplicateMatch.isDuplicate(
                     title: title,
                     day: day,
                     notesKey: item.notesKey,
                     existing: existing
-                ) {
+                )
+                if duplicated {
                     result.duplicates.append(day)
                 }
                 let notes = ReviewNotes.compose(key: item.notesKey, detail: detail)
@@ -74,8 +81,22 @@ enum CalendarWriteOrchestrator {
                 )
                 result.created.append(day)
                 createdIds.append(id)
+                result.landed.append(
+                    LandedEvent(
+                        address: address,
+                        eventId: id,
+                        outcome: duplicated ? .duplicate : .written
+                    )
+                )
             } catch {
                 result.failed.append((day, error.localizedDescription))
+                result.landed.append(
+                    LandedEvent(
+                        address: address,
+                        eventId: nil,
+                        outcome: .failed(error.localizedDescription)
+                    )
+                )
             }
         }
 

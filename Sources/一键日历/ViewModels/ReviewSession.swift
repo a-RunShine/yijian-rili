@@ -46,6 +46,7 @@ final class ReviewSession {
 
     private var lastCreatedTitle: String?
     private var lastCreatedBaseDate: Date?
+    private var lastCreatedRequests: [EventRemovalRequest] = []
     private var lastRecordedHistoryEntryID: UUID?
 
     private(set) var shouldPlayHaptic: Bool = false
@@ -108,8 +109,7 @@ final class ReviewSession {
         let series = entry.reviewDates.indices.map {
             HistorySeriesLookup.seriesKey(entryID: entry.id, index: $0)
         }
-        let legacy = (eventIds + entry.createdEventIdentifiers)
-            .filter { !$0.isEmpty }
+        let legacy = (eventIds + entry.liveEventIdentifiers)
             .map { HistorySeriesLookup.legacyKey(for: $0) }
         return series + legacy
     }
@@ -159,8 +159,8 @@ final class ReviewSession {
     private func resolvedEvent(for entry: HistoryEntry, index: Int) -> CalendarEventInfo? {
         guard index < entry.reviewDates.count else { return nil }
         let day = entry.reviewDates[index]
-        if index < entry.createdEventIdentifiers.count,
-           let exact = calendar.event(withId: entry.createdEventIdentifiers[index]) {
+        if let stored = entry.eventIdentifier(forSlot: index),
+           let exact = calendar.event(withId: stored) {
             return exact
         }
         let start = Calendar.current.startOfDay(for: day)
@@ -181,7 +181,7 @@ final class ReviewSession {
         Set(
             outcomes.recordedEntries()
                 .filter { $0.type == .review }
-                .flatMap(\.createdEventIdentifiers)
+                .flatMap(\.liveEventIdentifiers)
         )
     }
 
@@ -329,14 +329,42 @@ final class ReviewSession {
         ids: [String],
         reason: RecordedPruneReason
     ) -> RemoveEventsFromRecordedOutcome {
+        let wanted = Set(ids)
+        let affected = outcomes.recordedEntries().first { entry in
+            entry.createdEventIdentifiers.contains(where: wanted.contains)
+        }
+        let removedKeys = affected.map {
+            removedStatusKeys(entry: $0, removedIds: ids)
+        } ?? ids.map { HistorySeriesLookup.legacyKey(for: $0) }
+
         let outcome = outcomes.removeEventsFromRecorded(ids: ids, reason: reason)
         switch outcome {
         case .updated, .discarded:
-            occurrenceStatuses.clear(ids: ids.map { statusKey(for: $0) })
+            occurrenceStatuses.clear(ids: removedKeys)
         case .noMatch, .refusedNoAuthority:
             break
         }
         return outcome
+    }
+
+    func clearOccurrenceStatusesForRemovedSlots(
+        entryID: UUID,
+        slots: [Int],
+        removedIds: [String]
+    ) {
+        var keys = slots.map { HistorySeriesLookup.seriesKey(entryID: entryID, index: $0) }
+        keys.append(contentsOf: removedIds.map { HistorySeriesLookup.legacyKey(for: $0) })
+        occurrenceStatuses.clear(ids: keys)
+    }
+
+    private func removedStatusKeys(entry: HistoryEntry, removedIds: [String]) -> [String] {
+        let removed = Set(removedIds)
+        var keys: [String] = []
+        for (index, id) in entry.createdEventIdentifiers.enumerated() where removed.contains(id) {
+            keys.append(HistorySeriesLookup.seriesKey(entryID: entry.id, index: index))
+        }
+        keys.append(contentsOf: removedIds.map { HistorySeriesLookup.legacyKey(for: $0) })
+        return keys
     }
 
     @discardableResult
@@ -347,7 +375,7 @@ final class ReviewSession {
         migrateLegacyStatusKeys()
         var unmatched = 0
         for entry in outcomes.recordedEntries() {
-            let identifiers = entry.createdEventIdentifiers
+            let identifiers = entry.liveEventIdentifiers
             guard !identifiers.isEmpty else { continue }
             unmatched += identifiers.filter { calendar.event(withId: $0) == nil }.count
         }
@@ -380,7 +408,7 @@ final class ReviewSession {
         resultMessage = nil
         resultType = nil
 
-        let identifiers = entry.createdEventIdentifiers
+        let identifiers = entry.liveEventIdentifiers
         guard !identifiers.isEmpty else {
             resultMessage = NSLocalizedString("shared_detail_unavailable", comment: "")
             resultType = .warning
@@ -559,11 +587,12 @@ final class ReviewSession {
                 let dupDates = createResult.duplicates.map { $0.formattedChinese() }.joined(separator: "、")
                 resultMessage = String(format: NSLocalizedString("warning_message", comment: ""), dupDates)
                 resultType = .warning
-                let written = Self.datesWrittenDespiteDuplicates(createResult)
+                let written = Self.writtenEvents(in: createResult)
                 if !written.isEmpty {
                     onCreateSuccess(
                         trimmed: trimmedTitle,
-                        created: written,
+                        landed: written,
+                        undoable: Self.undoableRequests(in: createResult),
                         sharedDetail: detailForWrite,
                         baseDate: frozenBaseDate,
                         mode: frozenMode
@@ -577,7 +606,8 @@ final class ReviewSession {
                 resultType = .success
                 onCreateSuccess(
                     trimmed: trimmedTitle,
-                    created: createResult.created,
+                    landed: Self.writtenEvents(in: createResult),
+                    undoable: Self.undoableRequests(in: createResult),
                     sharedDetail: detailForWrite,
                     baseDate: frozenBaseDate,
                     mode: frozenMode
@@ -590,53 +620,98 @@ final class ReviewSession {
     }
 
     func undo() async {
-        let undo = await calendar.undoLastCreation()
         let recordedID = lastRecordedHistoryEntryID
+        let report = DeletionPlan(calendar: calendar).execute(requests: lastCreatedRequests)
 
-        if undo.success {
+        if report.isSuccess {
             resultMessage = String(
                 format: NSLocalizedString("undo_success_count", comment: ""),
-                undo.deletedCount
+                report.removedCount
             )
             resultType = .success
-        } else {
-            resultMessage = String(format: NSLocalizedString("undo_partial", comment: ""), "\(undo.alreadyDeletedCount)")
-            resultType = .warning
+            discardUndoneRecord(recordedID)
+            return
         }
 
-        if let recordedID, undo.deletedCount > 0 || undo.success {
-            if let entry = outcomes.recordedEntries().first(where: { $0.id == recordedID }) {
-                occurrenceStatuses.clear(ids: statusKeys(for: entry))
-            }
+        if report.removedCount == 0 {
+            presentUndoRefusal(report)
+            return
+        }
+
+        resultMessage = String(
+            format: NSLocalizedString("undo_partial", comment: ""),
+            "\(report.refused.count)"
+        )
+        resultType = .warning
+        keepUnremovedForRetry(report, recordedID: recordedID)
+    }
+
+    private func discardUndoneRecord(_ recordedID: UUID?) {
+        if let recordedID,
+           let entry = outcomes.recordedEntries().first(where: { $0.id == recordedID }) {
+            occurrenceStatuses.clear(ids: statusKeys(for: entry))
             outcomes.discardRecorded(id: recordedID)
-            lastRecordedHistoryEntryID = nil
-            canUndo = false
-            canRecreate = false
+        }
+        lastRecordedHistoryEntryID = nil
+        lastCreatedRequests = []
+        canUndo = false
+        canRecreate = false
+    }
+
+    private func keepUnremovedForRetry(_ report: DeletionPlan.Report, recordedID: UUID?) {
+        let refused = Set(report.refusedStoredIds)
+        lastCreatedRequests = report.refused
+            .map { EventRemovalRequest(storedId: $0.target.storedId, address: $0.target.address) }
+        guard let recordedID,
+              let entry = outcomes.recordedEntries().first(where: { $0.id == recordedID }) else {
+            return
+        }
+        let kept = entry.createdEventIdentifiers.filter { refused.contains($0) || $0.isEmpty }
+        outcomes.replaceCreatedEventIdentifiers(id: recordedID, identifiers: kept)
+    }
+
+    private func presentUndoRefusal(_ report: DeletionPlan.Report) {
+        guard let reason = report.refusalReasons.first else { return }
+        resultMessage = reason.message
+        resultType = .warning
+    }
+
+    private static func writtenEvents(in result: CreateEventsResult) -> [LandedEvent] {
+        let duplicateDays = Set(result.duplicates.map { Calendar.current.startOfDay(for: $0) })
+        return result.landed.filter { landed in
+            landed.wasWritten && !duplicateDays.contains(landed.address.day)
+        }
+    }
+
+    private static func undoableRequests(in result: CreateEventsResult) -> [EventRemovalRequest] {
+        result.landed.compactMap { landed in
+            guard let id = landed.eventId else { return nil }
+            return EventRemovalRequest(storedId: id, address: landed.address)
         }
     }
 
     private func onCreateSuccess(
         trimmed: String,
-        created: [Date],
+        landed: [LandedEvent],
+        undoable: [EventRemovalRequest],
         sharedDetail: String?,
         baseDate writtenBaseDate: Date,
         mode writtenMode: ScheduleMode
     ) {
         shouldPlayHaptic = true
+        let ordered = landed.sorted { $0.address.day < $1.address.day }
         lastCreatedTitle = trimmed
         lastCreatedBaseDate = writtenBaseDate
+        lastCreatedRequests = undoable
         canRecreate = true
         canUndo = true
         let entry = HistoryEntry(
             title: trimmed,
             baseDate: writtenBaseDate,
-            reviewDates: created,
+            reviewDates: ordered.map(\.address.day),
             creationDate: Date(),
             type: writtenMode == .single ? .single : .review,
-            createdEventIdentifiers: Self.effectiveIdentifiers(
-                created: created,
-                calendar: calendar
-            ),
+            createdEventIdentifiers: ordered.map { $0.eventId ?? "" },
             sharedDetail: sharedDetail
         )
         outcomes.record(entry)
@@ -644,23 +719,6 @@ final class ReviewSession {
         title = ""
         detail = ""
         updateReviewDates()
-    }
-
-    private static func effectiveIdentifiers(
-        created: [Date],
-        calendar: CalendarService
-    ) -> [String] {
-        let pairs = calendar.lastCreatedPairs
-        guard !pairs.isEmpty else { return calendar.lastCreatedEventIdentifiers }
-        return created.compactMap { day in
-            pairs.first { Calendar.current.isDate($0.date, inSameDayAs: day) }?.id
-        }
-    }
-
-    private static func datesWrittenDespiteDuplicates(_ result: CreateEventsResult) -> [Date] {
-        result.created.filter { day in
-            !result.duplicates.contains { Calendar.current.isDate($0, inSameDayAs: day) }
-        }
     }
 
     private static func optionalDetail(from raw: String) -> String? {

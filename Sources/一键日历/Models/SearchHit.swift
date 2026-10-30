@@ -11,10 +11,10 @@ struct SearchHit: Identifiable, Equatable {
     let title: String
     let members: [CalendarEventInfo]
 
-    var representative: CalendarEventInfo { members[0] }
+    var representative: CalendarEventInfo? { members.first }
 
-    var focusedEvent: CalendarEventInfo {
-        members.first(where: { $0.id == id }) ?? representative
+    var focusedEvent: CalendarEventInfo? {
+        members.first(where: { $0.id == id }) ?? members.first
     }
 
     var isSeries: Bool {
@@ -22,7 +22,12 @@ struct SearchHit: Identifiable, Equatable {
         return false
     }
 
-    var needsSelectiveDelete: Bool { members.count > 1 }
+    var spansMultipleOccurrences: Bool {
+        if case .series = kind { return members.count > 1 }
+        return false
+    }
+
+    var asksForDeleteScope: Bool { spansMultipleOccurrences }
 }
 
 enum RemoveEventsFromRecordedOutcome: Equatable {

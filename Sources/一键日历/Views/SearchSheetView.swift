@@ -10,7 +10,9 @@ struct SearchSheetView: View {
             if let hit = viewModel.selectedSearchHit {
                 Group {
                     detailHeader(for: hit)
-                    SearchResultDetailView(viewModel: viewModel, event: hit.representative)
+                    if let event = hit.representative {
+                        SearchResultDetailView(viewModel: viewModel, event: event)
+                    }
                     if hit.isSeries {
                         seriesMembersHint(hit)
                     }
@@ -171,9 +173,15 @@ struct SearchSheetView: View {
         }
     }
 
+    @ViewBuilder
     private func searchRow(_ hit: SearchHit) -> some View {
-        let event = hit.representative
-        return HStack(spacing: 4) {
+        if let event = hit.representative {
+            searchRowBody(hit, event: event)
+        }
+    }
+
+    private func searchRowBody(_ hit: SearchHit, event: CalendarEventInfo) -> some View {
+        HStack(spacing: 4) {
             Button {
                 withAnimation(.spring(response: 0.4, dampingFraction: 0.85)) {
                     viewModel.selectSearchHit(hit)

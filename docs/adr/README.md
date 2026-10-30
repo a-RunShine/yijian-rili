@@ -38,3 +38,4 @@ ADR 是历史记录，不是现状描述。事实变化时**新增**一条 ADR �
 | [0003](0003-full-access-permission.md) | 申请 Full Access 日历权限 | 已采纳 |
 | [0004](0004-all-day-events.md) | 创建全天日程而非定时日程 | 已采纳 |
 | [0005](0005-allow-duplicate-with-warning.md) | 允许重复创建但给出警告 | 已采纳 |
+| [0006](0006-event-address-identity.md) | 日程身份用事件地址，不用 eventIdentifier | 已采纳 |

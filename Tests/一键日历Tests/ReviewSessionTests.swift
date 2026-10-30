@@ -186,7 +186,7 @@ final class ReviewSessionTests: XCTestCase {
 
         XCTAssertEqual(session.resultType, .success)
         XCTAssertTrue(session.canUndo)
-        XCTAssertEqual(calendar.lastCreatedEventIdentifiers.count, 3)
+        XCTAssertEqual(history.load().first?.liveEventIdentifiers.count, 3)
         XCTAssertEqual(history.load().count, 1)
         XCTAssertEqual(history.load().first?.title, "会话创建")
         XCTAssertEqual(weekly.appendCallCount, 1)
@@ -333,7 +333,7 @@ final class ReviewSessionTests: XCTestCase {
 
         let partial = session.removeEventsFromRecorded(ids: [ids[0]], reason: .userDeletedOccurrence)
         XCTAssertEqual(partial, .updated(id: batchID, remainingIdentifiers: Array(ids.dropFirst())))
-        XCTAssertEqual(history.load().first?.createdEventIdentifiers.count, 2)
+        XCTAssertEqual(history.load().first?.liveEventIdentifiers.count, 2)
         XCTAssertTrue(weekly.weeklyEntries.contains(where: { $0.id == batchID }))
 
         let rest = Array(ids.dropFirst())
@@ -363,11 +363,11 @@ final class ReviewSessionTests: XCTestCase {
         await session.create()
 
         let batchID = try XCTUnwrap(history.load().first?.id)
-        let eventID = try XCTUnwrap(calendar.lastCreatedEventIdentifiers.first)
+        let eventID = try XCTUnwrap(history.load().first?.liveEventIdentifiers.first)
         XCTAssertEqual(session.todayCreatedEntries().map(\.id), [batchID])
         XCTAssertTrue(weekly.weeklyEntries.contains(where: { $0.id == batchID }))
 
-        XCTAssertTrue(calendar.deleteEvent(id: eventID))
+        XCTAssertTrue(calendar.removeExternally(id: eventID))
         let discarded = session.discardRecordedContainingEvent(id: eventID)
 
         XCTAssertEqual(discarded, batchID)
@@ -409,7 +409,13 @@ final class ReviewSessionTests: XCTestCase {
 
         XCTAssertFalse(session.canUndo)
         XCTAssertEqual(session.resultType, .success)
-        XCTAssertTrue(calendar.lastCreatedEventIdentifiers.isEmpty)
+        XCTAssertTrue(
+            calendar.fetchEvents(
+                from: Date().addingTimeInterval(-86_400),
+                to: Date().addingTimeInterval(86_400 * 3)
+            ).isEmpty,
+            "撤销后日历里不该还剩刚写进去的事件"
+        )
         XCTAssertTrue(history.load().isEmpty, "undo must remove 今日所建 batch from history")
         XCTAssertTrue(session.todayCreatedEntries().isEmpty)
         XCTAssertFalse(
@@ -442,8 +448,7 @@ final class ReviewSessionTests: XCTestCase {
         XCTAssertEqual(NormalizeNotes.normalize(events[0].notes), "第1次复习")
         let entry = history.load().first
         XCTAssertEqual(entry?.sharedDetail, "课堂补充")
-        XCTAssertEqual(entry?.createdEventIdentifiers, calendar.lastCreatedEventIdentifiers)
-        XCTAssertEqual(entry?.createdEventIdentifiers.count, 3)
+        XCTAssertEqual(entry?.liveEventIdentifiers.count, 3)
     }
 
     func testCreatePureSuccessPersistsIdsAndDetail_DuplicateDoesNot() async {
@@ -457,7 +462,7 @@ final class ReviewSessionTests: XCTestCase {
         await session.create()
         XCTAssertEqual(session.resultType, .success)
         XCTAssertEqual(history.load().count, 1)
-        XCTAssertEqual(history.load().first?.createdEventIdentifiers.count, 1)
+        XCTAssertEqual(history.load().first?.liveEventIdentifiers.count, 1)
         XCTAssertEqual(history.load().first?.sharedDetail, "首次详情")
         XCTAssertEqual(weekly.appendCallCount, 1)
 
@@ -540,7 +545,7 @@ final class ReviewSessionTests: XCTestCase {
         await session.create()
         XCTAssertEqual(session.resultType, .success)
         let entry = try XCTUnwrap(history.load().first)
-        XCTAssertEqual(entry.createdEventIdentifiers.count, 3)
+        XCTAssertEqual(entry.liveEventIdentifiers.count, 3)
         let weeklyBefore = weekly.appendCallCount
 
         let outcome = session.updateSharedDetail(for: entry, detail: "  修订后详情  ")
@@ -573,7 +578,7 @@ final class ReviewSessionTests: XCTestCase {
         await session.create()
         let entry = try XCTUnwrap(history.load().first)
         let firstId = entry.createdEventIdentifiers[0]
-        XCTAssertTrue(calendar.deleteEvent(id: firstId))
+        XCTAssertTrue(calendar.removeExternally(id: firstId))
 
         let outcome = session.updateSharedDetail(for: entry, detail: "新详情")
 
@@ -622,7 +627,7 @@ final class ReviewSessionTests: XCTestCase {
         await session.create()
         XCTAssertEqual(session.resultType, .success)
         let entry = try XCTUnwrap(history.load().first)
-        XCTAssertEqual(entry.createdEventIdentifiers.count, 3)
+        XCTAssertEqual(entry.liveEventIdentifiers.count, 3)
         XCTAssertEqual(weekly.appended.first?.title, "旧系列名")
 
         let outcome = session.updateSeriesTitle(for: entry, title: "  新系列名  ")
@@ -653,7 +658,7 @@ final class ReviewSessionTests: XCTestCase {
         await session.create()
         let entry = try XCTUnwrap(history.load().first)
         let firstId = entry.createdEventIdentifiers[0]
-        XCTAssertTrue(calendar.deleteEvent(id: firstId))
+        XCTAssertTrue(calendar.removeExternally(id: firstId))
 
         let outcome = session.updateSeriesTitle(for: entry, title: "改后名")
 
@@ -697,7 +702,7 @@ final class ReviewSessionTests: XCTestCase {
         session.updateReviewDates()
         await session.create()
         let entry = try XCTUnwrap(history.load().first)
-        XCTAssertTrue(calendar.deleteEvent(id: entry.createdEventIdentifiers[0]))
+        XCTAssertTrue(calendar.removeExternally(id: entry.createdEventIdentifiers[0]))
 
         let outcome = session.updateSeriesTitle(for: entry, title: "不会落库")
 
@@ -728,7 +733,7 @@ final class ReviewSessionTests: XCTestCase {
         let batchID = try XCTUnwrap(history.load().first?.id)
         let ids = try XCTUnwrap(history.load().first?.createdEventIdentifiers)
         XCTAssertEqual(ids.count, 3)
-        XCTAssertTrue(calendar.deleteEvent(id: ids[0]))
+        XCTAssertTrue(calendar.removeExternally(id: ids[0]))
         session.resultMessage = nil
         session.resultType = nil
 
@@ -764,7 +769,7 @@ final class ReviewSessionTests: XCTestCase {
         let batchID = try XCTUnwrap(history.load().first?.id)
         let ids = try XCTUnwrap(history.load().first?.createdEventIdentifiers)
         for id in ids {
-            XCTAssertTrue(calendar.deleteEvent(id: id))
+            XCTAssertTrue(calendar.removeExternally(id: id))
         }
         session.resultMessage = nil
         session.resultType = nil
@@ -816,7 +821,7 @@ final class ReviewSessionTests: XCTestCase {
 
 @MainActor
 final class DayBrowseModelTests: XCTestCase {
-    func testFetchSearchAndDelete() async throws {
+    func testFetchAndSearch() async throws {
         let calendar = InMemoryCalendarService()
         _ = try await calendar.createSingleEvent(title: "Browse Me", date: Date(), calendarId: nil)
         let browse = DayBrowseModel(calendar: calendar)
@@ -826,11 +831,22 @@ final class DayBrowseModelTests: XCTestCase {
         browse.searchText = "browse"
         browse.performSearch()
         XCTAssertEqual(browse.searchResults.count, 1)
+    }
 
-        let event = browse.searchResults[0]
-        XCTAssertTrue(browse.deleteSearchResult(event))
-        browse.performSearch()
-        XCTAssertTrue(browse.searchResults.isEmpty)
+    func testDeletingSoleSearchResultThroughFacadeLeavesSearchEmpty() async throws {
+        let calendar = InMemoryCalendarService()
+        _ = try await calendar.createSingleEvent(title: "Browse Delete", date: Date(), calendarId: nil)
+        let (viewModel, isolated) = makeIsolatedViewModel(calendar: calendar)
+        addTeardownBlock { isolated.cleanUp() }
+
+        viewModel.searchText = "browse delete"
+        viewModel.performSearch()
+        let hit = try XCTUnwrap(viewModel.searchHits.first)
+
+        XCTAssertTrue(viewModel.deleteSearchHit(hit))
+
+        viewModel.performSearch()
+        XCTAssertTrue(viewModel.searchHits.isEmpty)
     }
 
     func testDisplayedEventsExposeExtractableNotesDetailForEachDay() async throws {
@@ -1085,7 +1101,7 @@ final class OccurrenceStatusTests: XCTestCase {
         let ids = try XCTUnwrap(history.load().first?.createdEventIdentifiers)
         session.setOccurrenceStatus(eventId: ids[0], status: .done)
         session.setOccurrenceStatus(eventId: ids[1], status: .skipped)
-        XCTAssertTrue(calendar.deleteEvent(id: ids[0]))
+        XCTAssertTrue(calendar.removeExternally(id: ids[0]))
 
         session.reconcileRecordedWithCalendar()
 
@@ -1193,7 +1209,7 @@ final class OccurrenceStatusTests: XCTestCase {
 
         calendar.setAuthorizationStatusForTesting(.fullAccess)
         session.authorizationStatus = .fullAccess
-        XCTAssertTrue(calendar.deleteEvent(id: ids[0]))
+        XCTAssertTrue(calendar.removeExternally(id: ids[0]))
         let outcome = session.reconcileRecordedWithCalendar()
 
         XCTAssertEqual(outcome, .unmatched(count: 1))
